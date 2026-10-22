@@ -75,6 +75,45 @@ impl IndexedScreen {
         }
     }
 
+    /// Draws an unmasked sprite: colour 0 is drawn too.
+    pub fn draw_opaque(&mut self, src: &IndexedImage, x: i32, y: i32) {
+        for sy in 0..src.height {
+            let dy = y + sy as i32;
+            if dy < 0 || dy >= self.image.height as i32 {
+                continue;
+            }
+            for sx in 0..src.width {
+                let dx = x + sx as i32;
+                if dx >= 0 && dx < self.image.width as i32 {
+                    self.image.pixels[dy as usize * self.image.width + dx as usize] =
+                        src.pixel(sx, sy);
+                }
+            }
+        }
+    }
+
+    /// XORs `value` into the colours along a rectangle's edge (the
+    /// blitter's XOR lines: drawing it twice takes it away).
+    pub fn xor_outline(&mut self, x: i32, y: i32, width: i32, height: i32, value: u8) {
+        let mut flip = |px: i32, py: i32| {
+            if px >= 0
+                && py >= 0
+                && (px as usize) < self.image.width
+                && (py as usize) < self.image.height
+            {
+                self.image.pixels[py as usize * self.image.width + px as usize] ^= value;
+            }
+        };
+        for px in x..x + width {
+            flip(px, y);
+            flip(px, y + height - 1);
+        }
+        for py in y + 1..y + height - 1 {
+            flip(x, py);
+            flip(x + width - 1, py);
+        }
+    }
+
     /// Fills a rectangle with one colour, clipped to the screen.
     pub fn fill(&mut self, x: usize, y: usize, width: usize, height: usize, color: u8) {
         let (right, bottom) = (

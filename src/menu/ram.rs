@@ -3,6 +3,7 @@
 
 use crate::data::bytes::BigEndian;
 use crate::game::career::{TeamId, TeamRecord, LEAGUE_TEAMS};
+use crate::game::squad::{MarketPlayer, Squad, SquadPlayer, Upgrade, MARKET_SIZE, SQUAD_SIZE};
 
 /// Amiga RAM addresses the menu code uses, named as in the disassembly.
 pub mod addr {
@@ -27,6 +28,8 @@ pub mod addr {
 
     pub const STR_MATCH: usize = 0x36A7;
     pub const STR_PLAYER_WINS: usize = 0x36B1;
+    /// "PLAYER 0", before each player's turn in the gym.
+    pub const STR_PLAYER_0: usize = 0x36C1;
     pub const STR_SECOND_LEG: usize = 0x3733;
     pub const STR_SCORE: usize = 0x3772;
     pub const STR_TOTAL: usize = 0x3785;
@@ -50,6 +53,18 @@ pub mod addr {
     pub const STR_LEAGUE_TEAM_DETAILS: usize = 0x2E2D;
     pub const STR_LEAGUE_MATCH_RESULT: usize = 0x3205;
     pub const STR_PLAY: usize = 0x2976;
+    pub const TITLE_STATISTICS: usize = 0x2884;
+    pub const TITLE_FIXTURE_LIST: usize = 0x288C;
+    pub const STRINGS_STATISTICS: usize = 0x33FE;
+    pub const STRINGS_FIXTURE_LIST: usize = 0x3454;
+    pub const STR_SHOTS_AT_GOAL: usize = 0x2F68;
+    pub const STR_GOALS_SCORED: usize = 0x2F94;
+    pub const STR_GOALS_SAVED: usize = 0x2FC0;
+    pub const STR_TIME_IN_POSSESSION: usize = 0x2FEC;
+    pub const STR_TIME_IN_OPPONENTS_HALF: usize = 0x3018;
+    pub const STR_SUCCESSFUL_TACKLES: usize = 0x3044;
+    pub const STR_SUBSTITUTIONS: usize = 0x3070;
+    pub const STR_BONUS_POINTS: usize = 0x309C;
     // The next-fixture lines with numbers in them.
     pub const STR_PWDLP_NUMS: usize = 0x2A46;
     pub const STR_LEAGUE_PLACING: usize = 0x2ADF;
@@ -59,6 +74,18 @@ pub mod addr {
     pub const STR_MIDFIELD: usize = 0x2BAB;
     pub const STR_ATTACK: usize = 0x2BDE;
     pub const STR_SUBSTITUTES: usize = 0x2C11;
+
+    // The manager's data.
+    /// Twelve squad places: stats pointer, name pointer, face, and the
+    /// place's position in the squad table.
+    pub const TEAM_INFO_TABLE: usize = 0x5A64;
+    pub const TEAM_INFO_TABLE_OTHER: usize = 0x5B3C;
+    /// The squad's names and faces, restored at the main menu.
+    pub const BASE_TEAM_SPRITE_OFFSETS: usize = 0x3F74;
+    pub const BASE_TEAM_NAMES: usize = 0x3FB0;
+    pub const PLAYERS_MARKET: usize = 0x5D76;
+    /// The gym's eight upgrades, in four rows of two.
+    pub const UPGRADES_TABLE: usize = 0x3B4E;
 
     /// Four tables of 16x16 results for matches the player is not in.
     pub const SCORES_TABLE: usize = 0x5D51C;
@@ -82,6 +109,21 @@ pub mod addr {
     /// 8x8 letters for the victory and defeat pictures.
     pub const SPRITES_FONTS_WHITE: usize = 0x475DC;
     pub const WHITE_LENGTH: usize = 1440;
+    // The manager screens' graphics.
+    pub const PALETTE_MANAGEMENT_A: usize = 0x132;
+    pub const SPRITES_MGMT_BACKGROUND: usize = 0x3D744;
+    pub const MANAGER_TRANSFER_TILE_MAP: usize = 0x5DE20;
+    pub const GYM_TILE_MAP: usize = 0x5DD1C;
+    pub const SPRITES_PLAYER_FACES: usize = 0x531FC;
+    pub const SPRITES_GROUP_LOGO: usize = 0x5B8FC;
+    pub const SPRITES_MGMT_LIGHTS: usize = 0x47B7C;
+    pub const SPRITES_MGMT_BUTTONS: usize = 0x4857C;
+    pub const SPRITES_MGMT_ARMOUR: usize = 0x4D57C;
+    pub const SPRITES_FONTS_SMALL_GREEN: usize = 0x4703C;
+    pub const SPRITES_FONTS_MGR_XFER_GYM: usize = 0x46BDC;
+    /// Eight glyphs of its own; its digits are the title letters' last ten.
+    pub const SPRITES_FONTS_CASH: usize = 0x46A9C;
+
     /// 8x8 letters, digits and table borders (`sprites_font_orange`).
     pub const SPRITES_FONT_ORANGE: usize = 0x44364;
     pub const ORANGE_LENGTH: usize = 2040;
@@ -220,6 +262,68 @@ impl MenuRam {
                 old_league_placing: self.bytes[team + 0x17],
             }
         })
+    }
+
+    /// A NUL-terminated string with no cursor bytes.
+    pub fn c_string(&self, address: usize) -> String {
+        let end = self.bytes[address..]
+            .iter()
+            .position(|&b| b == 0)
+            .map_or(self.bytes.len(), |n| address + n);
+        String::from_utf8_lossy(&self.bytes[address..end]).into_owned()
+    }
+
+    /// A squad (`team_info_table` or `team_info_table_other`).
+    pub fn squad(&self, table: usize) -> Squad {
+        std::array::from_fn(|i| self.person(self.pointer(table + i * 4)))
+    }
+
+    /// The squad names and faces `init_team_players_names_and_sprites`
+    /// restores.
+    pub fn base_identities(&self) -> [(String, u16); SQUAD_SIZE] {
+        std::array::from_fn(|i| {
+            let name = self.c_string(self.pointer(addr::BASE_TEAM_NAMES + i * 4));
+            (
+                name,
+                self.bytes.u16_at(addr::BASE_TEAM_SPRITE_OFFSETS + i * 2),
+            )
+        })
+    }
+
+    /// The players on the transfer market, as stored.
+    pub fn market(&self) -> Vec<MarketPlayer> {
+        (0..MARKET_SIZE)
+            .map(|i| {
+                let record = self.pointer(addr::PLAYERS_MARKET + i * 4);
+                MarketPlayer {
+                    player: self.person(record),
+                    change_time: self.bytes.u16_at(record + 0xE) as i16,
+                    buyable: self.bytes.u16_at(record + 0x10) != 0,
+                }
+            })
+            .collect()
+    }
+
+    /// The gym's upgrades: the skill each improves and its price.
+    pub fn upgrades(&self) -> [Upgrade; 8] {
+        std::array::from_fn(|i| {
+            let record = self.pointer(addr::UPGRADES_TABLE + i * 4);
+            Upgrade {
+                skill: usize::from(self.bytes.u16_at(record + 6) - 0x48),
+                price: self.bytes.u16_at(record + 8),
+            }
+        })
+    }
+
+    /// A person record: stats pointer, name pointer, face.
+    fn person(&self, record: usize) -> SquadPlayer {
+        let stats = self.pointer(record);
+        SquadPlayer {
+            name: self.c_string(self.pointer(record + 4)),
+            face: self.bytes.u16_at(record + 8),
+            position: self.bytes[stats + 2],
+            skills: std::array::from_fn(|skill| self.bytes[stats + 3 + skill]),
+        }
     }
 
     fn pointer(&self, address: usize) -> usize {

@@ -43,6 +43,7 @@ struct Moment<'a> {
     time: Duration,
     frame: &'a Canvas,
     banks: &'a [(Duration, SoundBank)],
+    sounds: &'a [(Duration, Sound)],
 }
 
 /// A host whose clock runs as fast as the game can go.
@@ -74,6 +75,7 @@ impl<F: FnMut(&Moment) -> Option<Vec<ButtonEvent>>> Host for ScriptedHost<F> {
             time: self.time,
             frame,
             banks: &self.banks,
+            sounds: &self.sounds,
         };
         let events = (self.script)(&moment).ok_or(Closed)?;
         self.time += wait;
@@ -100,6 +102,61 @@ fn press(button: Button) -> Vec<ButtonEvent> {
 
 const FIRE_1: Button = Button::Joystick(Side::Team1, Control::Fire);
 const DOWN_1: Button = Button::Joystick(Side::Team1, Control::Down);
+const UP_1: Button = Button::Joystick(Side::Team1, Control::Up);
+const FIRE_2: Button = Button::Joystick(Side::Team2, Control::Fire);
+const UP_2: Button = Button::Joystick(Side::Team2, Control::Up);
+
+/// Gets through the gyms of a two-player game: each player in turn
+/// presses up (onto the gym's exit key) and fire, every half second.
+fn two_player_autopilot(m: &Moment) -> Vec<ButtonEvent> {
+    let step = (m.time.as_millis() / 500) % 4;
+    if m.time.as_millis() % 500 >= 20 {
+        return vec![];
+    }
+    press([UP_1, FIRE_1, UP_2, FIRE_2][step as usize])
+}
+
+/// Gets through screens by pressing fire every 0.3 seconds. The manager
+/// screen's keypad must start on its exit key; when the transfer key
+/// flashes (players for sale), the cursor jumps to it, so it moves right
+/// twice back to the exit.
+#[derive(Default)]
+struct Autopilot {
+    flash: Option<Duration>,
+    rights_to_press: u8,
+}
+
+impl Autopilot {
+    const FLASH: u8 = 8;
+
+    fn step(&mut self, m: &Moment) -> Vec<ButtonEvent> {
+        // The same sound ticks down power-ups in a match; ignore those.
+        let in_match = m.banks.last().is_some_and(|b| b.1 == SoundBank::Match);
+        let latest_flash = m
+            .sounds
+            .iter()
+            .rev()
+            .find(|(_, s)| s.id == Self::FLASH && s.priority == 2)
+            .map(|(t, _)| *t);
+        if !in_match && latest_flash > self.flash.map(|f| f + Duration::from_secs(2)) {
+            self.flash = latest_flash;
+            self.rights_to_press = 2;
+        }
+        if let Some(flash) = self.flash {
+            if m.time.saturating_sub(flash) < Duration::from_millis(1200) {
+                return vec![];
+            }
+        }
+        if self.rights_to_press > 0 {
+            if m.time.as_millis() % 100 < 20 {
+                self.rights_to_press -= 1;
+                return press(Button::Joystick(Side::Team1, Control::Right));
+            }
+            return vec![];
+        }
+        keep_firing(m)
+    }
+}
 
 fn at(moment: &Moment, seconds: f64) -> bool {
     let t = Duration::from_secs_f64(seconds);
@@ -144,9 +201,12 @@ fn escape_leaves_a_match_for_the_main_menu() {
             // Back on the menus: done once the main menu is up again.
             return (m.time < m.banks[1].0 + Duration::from_secs(3)).then(Vec::new);
         }
-        let events = if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) {
-            // "1 PLAYER GAME", "KNOCKOUT", then past the next fixture.
+        let events = if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) || at(m, 10.0) {
+            // "1 PLAYER GAME", "KNOCKOUT", past the next fixture, then the
+            // gym's exit key (up from where it starts).
             press(FIRE_1)
+        } else if at(m, 9.5) {
+            press(UP_1)
         } else if m.banks.len() == 1
             && escaped.is_none()
             && m.time > m.banks[0].0 + Duration::from_secs(5)
@@ -182,11 +242,13 @@ fn two_player_matches_have_two_legs_with_ends_swapped() {
             // Two legs played (each switches the samples in and out).
             return None;
         }
-        // "2 PLAYER GAME", then "ONE MATCH".
+        // "2 PLAYER GAME", then "ONE MATCH"; then through the gyms.
         Some(if at(m, 2.0) {
             press(DOWN_1)
         } else if at(m, 4.0) || at(m, 6.0) {
             press(FIRE_1)
+        } else if m.time > Duration::from_secs(7) {
+            two_player_autopilot(m)
         } else {
             vec![]
         })
@@ -279,8 +341,11 @@ fn a_knockout_defeat_is_recorded_and_paid() {
         }
         // "1 PLAYER GAME", "KNOCKOUT", past the next fixture; then Brutal
         // Deluxe stand still.
-        Some(if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) {
+        Some(if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) || at(m, 10.0) {
             press(FIRE_1)
+        } else if at(m, 9.5) {
+            // Out of the gym: up to its exit key.
+            press(UP_1)
         } else {
             vec![]
         })
@@ -365,11 +430,13 @@ fn keep_firing(m: &Moment) -> Vec<ButtonEvent> {
 fn a_half_season_of_the_league_plays_every_team_seven_times() {
     use crate::game::career::TeamId;
     let Some(mut game) = load_game() else { return };
+    game.cursors.keypad = (2, 0);
+    let mut pilot = Autopilot::default();
     // Brutal Deluxe play one match a round: seven, each switching the
     // samples in and out.
     let mut host = ScriptedHost::new(3000, |m| {
         if m.banks.len() >= 14 {
-            return (m.time < m.banks[13].0 + Duration::from_secs(5)).then(|| keep_firing(m));
+            return (m.time < m.banks[13].0 + Duration::from_secs(5)).then(|| pilot.step(m));
         }
         // One player, league (down once), team manager (down once).
         Some(if at(m, 2.0) || at(m, 5.0) || at(m, 8.0) {
@@ -377,7 +444,7 @@ fn a_half_season_of_the_league_plays_every_team_seven_times() {
         } else if at(m, 4.0) || at(m, 7.0) {
             press(DOWN_1)
         } else if m.time > Duration::from_secs(10) {
-            keep_firing(m)
+            pilot.step(m)
         } else {
             vec![]
         })
@@ -405,12 +472,13 @@ fn a_half_season_of_the_league_plays_every_team_seven_times() {
 fn losing_a_cup_tie_ends_the_cup_and_restores_the_coins() {
     use crate::game::career::TeamId;
     let Some(mut game) = load_game() else { return };
+    game.cursors.keypad = (2, 0);
+    let mut pilot = Autopilot::default();
     let mut host = ScriptedHost::new(3000, |m| {
         if m.banks.len() >= 4 {
-            // Both legs played: past the aggregate, onto "GAME OVER".
             // Both legs played: stop once past the defeat picture (the
             // second leg is recorded after it), before another game.
-            return (m.time < m.banks[3].0 + Duration::from_secs(2)).then(|| keep_firing(m));
+            return (m.time < m.banks[3].0 + Duration::from_secs(2)).then(|| pilot.step(m));
         }
         // One player, cup (down twice), new game; then fire through.
         Some(if at(m, 2.0) || at(m, 6.0) || at(m, 9.0) {
@@ -418,7 +486,7 @@ fn losing_a_cup_tie_ends_the_cup_and_restores_the_coins() {
         } else if at(m, 4.0) || at(m, 5.0) {
             press(DOWN_1)
         } else if m.time > Duration::from_secs(11) {
-            keep_firing(m)
+            pilot.step(m)
         } else {
             vec![]
         })
@@ -456,7 +524,10 @@ fn dump_cup_frames() {
         }
         if m.banks.len() >= 4 {
             let since = (m.time - m.banks[3].0).as_secs_f64();
-            if (since - 1.4).abs() < 0.01 || (since - 2.4).abs() < 0.01 || (since - 3.9).abs() < 0.01 {
+            if (since - 1.4).abs() < 0.01
+                || (since - 2.4).abs() < 0.01
+                || (since - 3.9).abs() < 0.01
+            {
                 snap(&mut shot);
             }
             let fire = (since - 1.6).abs() < 0.01 || (since - 2.6).abs() < 0.01;
@@ -473,4 +544,91 @@ fn dump_cup_frames() {
         })
     });
     flow::run(&mut Ui::new(&mut host), &mut game);
+}
+
+/// Writes the manager screens to `SPEEDBALL_FRAMES_DIR`: a new league's
+/// manager screen, then the gym, buying an upgrade for the team.
+#[test]
+#[ignore = "writes images; run manually"]
+fn dump_manager_frames() {
+    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+        return;
+    };
+    let Some(mut game) = load_game() else { return };
+    let right = Button::Joystick(Side::Team1, Control::Right);
+    // (time, button) presses, then shots at the given times.
+    let presses: Vec<(f64, Button)> = vec![
+        (2.0, FIRE_1), // 1 player
+        (4.0, DOWN_1), // league
+        (5.0, FIRE_1),
+        (8.0, FIRE_1),  // new game
+        (11.0, FIRE_1), // past the next fixture
+        (16.0, DOWN_1), // to the gym key
+        (17.0, FIRE_1), // into the gym
+        (21.0, right),  // keypad: fixture -> right key
+        (22.0, right),  // off the keypad onto the upgrades
+        (23.0, FIRE_1), // choose it
+        (24.0, FIRE_1), // buy it
+    ];
+    let shots = [15.0, 20.5, 22.5, 23.5, 24.5];
+    let mut host = ScriptedHost::new(60, |m| {
+        if let Some(i) = shots.iter().position(|&s| at(m, s)) {
+            let path = format!("{dir}/manager_{i}.bmp");
+            std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+        }
+        if m.time > Duration::from_secs(25) {
+            return None;
+        }
+        Some(
+            presses
+                .iter()
+                .find(|(t, _)| at(m, *t))
+                .map_or(vec![], |&(_, b)| press(b)),
+        )
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+}
+
+#[test]
+fn the_knockout_gym_trains_the_squad_for_the_match() {
+    let Some(mut game) = load_game() else { return };
+    let right = Button::Joystick(Side::Team1, Control::Right);
+    let left = Button::Joystick(Side::Team1, Control::Left);
+    let presses: Vec<(f64, Button)> = vec![
+        (2.0, FIRE_1), // 1 player
+        (4.0, FIRE_1), // knockout
+        (7.0, FIRE_1), // past the next fixture
+        (10.0, right), // gym keypad: fixture -> right key
+        (10.5, right), // onto the upgrade buttons: power elbows
+        (11.0, FIRE_1),
+        (11.5, FIRE_1), // buy them for the team
+        (12.0, left),   // back onto the keypad
+        (12.5, left),
+        (13.0, UP_1), // to the exit key
+        (13.5, FIRE_1),
+    ];
+    let mut host = ScriptedHost::new(60, |m| {
+        if !m.banks.is_empty() {
+            // The match has started.
+            return None;
+        }
+        Some(
+            presses
+                .iter()
+                .find(|(t, _)| at(m, *t))
+                .map_or(vec![], |&(_, b)| press(b)),
+        )
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+    assert_eq!(host.banks.len(), 1, "on to the match");
+    // Power elbows (throwing, ten credits a player) for all twelve.
+    assert_eq!(game.career.money.cash.team1, 1100 - 120);
+    for player in &game.career.squads.team1 {
+        assert_eq!(player.skills[4], 110, "{player:?}");
+        assert_eq!(player.skills[0], 100);
+    }
+    assert!(
+        host.sounds.iter().any(|(_, s)| s.id == 0x22),
+        "the purchase sound"
+    );
 }

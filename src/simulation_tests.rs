@@ -418,3 +418,55 @@ fn firing_skips_the_replay() {
     game.step();
     assert!(!game.replay.is_playing());
 }
+
+#[test]
+fn substitutions_change_the_squad_for_good() {
+    use crate::game::geometry::Side;
+    use crate::game::setup::{MatchRules, SquadSkills};
+    use crate::game::squad::{SquadPlayer, SQUAD_SIZE};
+    let Some(h) = load(Platform::Atari) else {
+        return;
+    };
+    let squad: [SquadPlayer; SQUAD_SIZE] = std::array::from_fn(|i| SquadPlayer {
+        name: format!("P{i}"),
+        face: i as u16 * 3,
+        position: (i / 3) as u8,
+        skills: [104; 8],
+    });
+    // Find a match where Brutal Deluxe lose a player to injury (weak, and
+    // against Super Nashwan, that does not take long).
+    for seed in 0..40 {
+        let mut rules = MatchRules::one_player(&h.rom, 15);
+        rules.team1.skills = SquadSkills::Players(Box::new(squad.clone()));
+        rules.computer.team1 = true;
+        let mut game = Match::new(MatchSetup::new(&h.rom, rules, seed), Rc::clone(&h.rom));
+        for _ in 0..20_000 {
+            if game.step() {
+                break;
+            }
+        }
+        let after = game.squad_after(Side::Team1, &squad);
+        if game.statistics().team1.substitutions == 0 {
+            continue;
+        }
+        // Each injury sends the player to the end of the bench, skills
+        // rounded down to 100, and moves the bench up: the same twelve
+        // players, reordered, some of them weaker for good.
+        let mut names: Vec<_> = after.iter().map(|p| p.name.clone()).collect();
+        assert_ne!(
+            names,
+            squad.iter().map(|p| p.name.clone()).collect::<Vec<_>>()
+        );
+        names.sort_by_key(|n| n[1..].parse::<usize>().unwrap());
+        assert_eq!(names, (0..12).map(|i| format!("P{i}")).collect::<Vec<_>>());
+        assert!(after
+            .iter()
+            .all(|p| p.skills == [104; 8] || p.skills == [100; 8]));
+        assert!(
+            after[11].skills == [100; 8],
+            "the last injured is on the bench"
+        );
+        return;
+    }
+    panic!("no substitution in 40 matches");
+}

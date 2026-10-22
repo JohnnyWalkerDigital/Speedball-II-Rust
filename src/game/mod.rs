@@ -21,6 +21,7 @@ pub mod rng;
 pub mod roster;
 pub mod scene;
 pub mod setup;
+pub mod squad;
 pub mod state;
 pub mod statistics;
 pub mod text;

@@ -3,6 +3,7 @@
 
 use super::geometry::{PerTeam, Side};
 use super::player::{MatchStats, PlayerId};
+use super::squad::{Squad, SquadPlayer};
 use super::state::Match;
 
 /// One team's numbers for the statistics screen. Sums of the players'
@@ -29,6 +30,26 @@ impl Match {
             self.team_statistics(Side::Team1),
             self.team_statistics(Side::Team2),
         )
+    }
+
+    /// A human squad after the match: injured players have been swapped to
+    /// the bench, their skills rounded down, and that sticks (the original
+    /// worked on the squad's own records).
+    pub fn squad_after(&self, side: Side, before: &Squad) -> Squad {
+        let persons = match side {
+            Side::Team1 => &self.roster.persons_team1,
+            Side::Team2 => &self.roster.persons_team2,
+        };
+        std::array::from_fn(|slot| {
+            let person = &persons[slot];
+            let skills = self.roster.attributes(person.attributes).skills.to_array();
+            SquadPlayer {
+                name: person.name.clone(),
+                face: person.id as u16,
+                position: before[slot].position,
+                skills: skills.map(|s| s as u8),
+            }
+        })
     }
 
     /// What each team picked up from coins this match (`match_cash_p1`/`_p2`).

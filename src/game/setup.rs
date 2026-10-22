@@ -4,7 +4,8 @@
 use super::geometry::PerTeam;
 use super::player::{Player, PlayerId};
 use super::rng::Rng;
-use super::roster::{Attributes, Roster, Skills, Team};
+use super::roster::{Attributes, Person, Roster, Skills, Team};
+use super::squad;
 use super::text::{TextId, TextPanel};
 use crate::config::{Config, GameMode, TEAM_COUNT};
 use crate::data::{addr, AtariRom};
@@ -28,8 +29,8 @@ pub struct MatchSetup {
 /// What a game mode decides about a match.
 pub struct MatchRules {
     pub mode: GameMode,
-    pub team1: Squad,
-    pub team2: Squad,
+    pub team1: Lineup,
+    pub team2: Lineup,
     /// `match_half_length_seconds`.
     pub leg_duration: i32,
     /// `match_cash_start`: what each team has earned at kick-off.
@@ -46,7 +47,7 @@ pub struct MatchRules {
 }
 
 /// A team and how its players' skills are set.
-pub struct Squad {
+pub struct Lineup {
     pub team: Team,
     pub skills: SquadSkills,
 }
@@ -54,9 +55,9 @@ pub struct Squad {
 pub enum SquadSkills {
     /// Every skill the same (`init_player_stats`).
     Uniform(i32),
-    /// Each player's own skills (`player_1_player_stats_table`), in squad
-    /// order: three each of defence, midfield, attack and substitutes.
-    Given(Box<[Skills; 12]>),
+    /// A human manager's squad: each player's name, face and skills
+    /// (`team_info_table` and `player_1_player_stats_table`).
+    Players(Box<squad::Squad>),
     /// The team's skill templates (`populate_opposition_player_stats`).
     FromTeam,
 }
@@ -67,11 +68,11 @@ impl MatchRules {
     pub fn one_player(rom: &AtariRom, opponent: usize) -> Self {
         Self {
             mode: GameMode::Knockout,
-            team1: Squad {
+            team1: Lineup {
                 team: league_team(rom, BRUTAL_DELUXE),
                 skills: SquadSkills::Uniform(100),
             },
-            team2: Squad {
+            team2: Lineup {
                 team: league_team(rom, opponent),
                 skills: SquadSkills::FromTeam,
             },
@@ -88,11 +89,11 @@ impl MatchRules {
     pub fn practice(rom: &AtariRom) -> Self {
         Self {
             mode: GameMode::Practice,
-            team1: Squad {
+            team1: Lineup {
                 team: league_team(rom, BRUTAL_DELUXE),
                 skills: SquadSkills::Uniform(100),
             },
-            team2: Squad {
+            team2: Lineup {
                 team: league_team(rom, 1),
                 skills: SquadSkills::Uniform(100),
             },
@@ -113,11 +114,11 @@ impl MatchRules {
         team1.short_name = texts.text(TextId::Player1Short).clone();
         Self {
             mode: GameMode::TwoPlayers,
-            team1: Squad {
+            team1: Lineup {
                 team: team1,
                 skills: SquadSkills::Uniform(170),
             },
-            team2: Squad {
+            team2: Lineup {
                 team: Team::read(rom, addr::TEAM_PLAYER2),
                 skills: SquadSkills::Uniform(170),
             },
@@ -134,11 +135,11 @@ impl MatchRules {
     pub fn demo(rom: &AtariRom) -> Self {
         Self {
             mode: GameMode::Demo,
-            team1: Squad {
+            team1: Lineup {
                 team: league_team(rom, 14),
                 skills: SquadSkills::FromTeam,
             },
-            team2: Squad {
+            team2: Lineup {
                 team: league_team(rom, 13),
                 skills: SquadSkills::FromTeam,
             },
@@ -185,8 +186,16 @@ impl MatchSetup {
     fn assemble(rom: &AtariRom, rules: MatchRules, rng: Rng) -> Self {
         let mut players = read_players(rom);
         let mut roster = Roster::read(rom);
-        set_skills(&rules.team1, &mut roster.attributes_team1);
-        set_skills(&rules.team2, &mut roster.attributes_team2);
+        set_skills(
+            &rules.team1,
+            &mut roster.attributes_team1,
+            &mut roster.persons_team1,
+        );
+        set_skills(
+            &rules.team2,
+            &mut roster.attributes_team2,
+            &mut roster.persons_team2,
+        );
         if rules.mode == GameMode::Practice {
             for id in PlayerId::team(false) {
                 players[id.0].entity.flags.set_invisible(true);
@@ -209,19 +218,23 @@ impl MatchSetup {
     }
 }
 
-fn set_skills(squad: &Squad, attributes: &mut [Attributes]) {
-    match &squad.skills {
+fn set_skills(lineup: &Lineup, attributes: &mut [Attributes], persons: &mut [Person]) {
+    match &lineup.skills {
         &SquadSkills::Uniform(value) => {
             for member in attributes {
                 member.skills = Skills::uniform(value);
             }
         }
-        SquadSkills::Given(skills) => {
-            for (member, skills) in attributes.iter_mut().zip(skills.iter()) {
-                member.skills = *skills;
+        SquadSkills::Players(players) => {
+            // Each squad place keeps its own attribute record.
+            for ((member, person), player) in attributes.iter_mut().zip(persons).zip(players.iter())
+            {
+                member.skills = Skills::from_array(player.skills.map(i32::from));
+                person.name = player.name.clone();
+                person.id = i32::from(player.face);
             }
         }
-        SquadSkills::FromTeam => squad.team.apply_skills_to(attributes),
+        SquadSkills::FromTeam => lineup.team.apply_skills_to(attributes),
     }
 }
 
@@ -242,11 +255,11 @@ fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRul
     let (team1, team2) = random_distinct_teams(seeds, config);
     MatchRules {
         mode: GameMode::Knockout,
-        team1: Squad {
+        team1: Lineup {
             team: league_team(rom, team1),
             skills: SquadSkills::FromTeam,
         },
-        team2: Squad {
+        team2: Lineup {
             team: league_team(rom, team2),
             skills: SquadSkills::FromTeam,
         },
@@ -261,11 +274,11 @@ fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRul
 
 fn practice(rom: &AtariRom, config: &Config) -> MatchRules {
     MatchRules {
-        team1: Squad {
+        team1: Lineup {
             team: league_team(rom, config.team1.unwrap_or(0)),
             skills: SquadSkills::Uniform(100),
         },
-        team2: Squad {
+        team2: Lineup {
             team: league_team(rom, config.team2.unwrap_or(1)),
             skills: SquadSkills::Uniform(100),
         },

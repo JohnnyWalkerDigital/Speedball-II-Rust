@@ -45,6 +45,11 @@ pub struct Page {
 }
 
 impl Page {
+    /// A screen drawn elsewhere, shown in `palette`.
+    pub fn from_screen(screen: IndexedScreen, palette: ColorWords) -> Self {
+        Self { screen, palette }
+    }
+
     /// `display_splash`: a full-screen picture and its colours.
     pub fn picture(picture: &Picture) -> Self {
         let mut screen = IndexedScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT);

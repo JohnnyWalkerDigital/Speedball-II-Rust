@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 
 use super::geometry::PerTeam;
 use super::m68k::ext_divu_register;
-use super::roster::Skills;
+use super::squad::{Market, Squad};
 use super::statistics::TeamStatistics;
 
 /// The 16 league teams, in the original's order.
@@ -61,23 +61,37 @@ pub struct Career {
     pub money: Money,
     records: [TeamRecord; LEAGUE_TEAMS + 1],
     pub last_match: Option<LastMatch>,
-    /// `player_1_player_stats_table`, `player_2_...`: each human squad's
-    /// skills, kept between matches.
-    pub squads: PerTeam<[Skills; SQUAD_SIZE]>,
+    /// `team_info_table` and `team_info_table_other`: each human manager's
+    /// squad, kept between matches.
+    pub squads: PerTeam<Squad>,
+    pub market: Market,
 }
-
-/// Players in a squad: nine on the pitch and three substitutes.
-pub const SQUAD_SIZE: usize = 12;
 
 impl Career {
     /// The state at power-on: every variable zero, the records as stored.
-    pub fn new(records: [TeamRecord; LEAGUE_TEAMS + 1]) -> Self {
+    pub fn new(
+        records: [TeamRecord; LEAGUE_TEAMS + 1],
+        squads: PerTeam<Squad>,
+        market: Market,
+    ) -> Self {
         Self {
             money: Money::default(),
             records,
             last_match: None,
-            squads: PerTeam::default(),
+            squads,
+            market,
         }
+    }
+
+    /// A career with empty squads and market, for tests.
+    #[cfg(test)]
+    pub fn with_records(records: [TeamRecord; LEAGUE_TEAMS + 1]) -> Self {
+        let squad = || std::array::from_fn(|_| Default::default());
+        Self::new(
+            records,
+            PerTeam::new(squad(), squad()),
+            Market::new(Vec::new()),
+        )
     }
 
     pub fn record(&self, team: TeamId) -> &TeamRecord {
@@ -103,9 +117,22 @@ impl Career {
         self.last_match = None;
     }
 
+    /// `init_team_players_names_and_sprites`: both squads get their usual
+    /// names and faces back, at the main menu.
+    pub fn restore_identities(&mut self, identities: &[(String, u16)]) {
+        for squad in [&mut self.squads.team1, &mut self.squads.team2] {
+            for (player, (name, face)) in squad.iter_mut().zip(identities) {
+                player.name = name.clone();
+                player.face = *face;
+            }
+        }
+    }
+
     /// `init_player_stats`: every skill in a human squad set to `value`.
-    pub fn init_squad(&mut self, side: super::geometry::Side, value: i32) {
-        *self.squads.get_mut(side) = [Skills::uniform(value); SQUAD_SIZE];
+    pub fn init_squad(&mut self, side: super::geometry::Side, value: u8) {
+        for player in self.squads.get_mut(side).iter_mut() {
+            player.skills = [value; 8];
+        }
     }
 
     /// A game mode's cap per match, for both teams.
@@ -193,7 +220,7 @@ mod tests {
     use super::*;
 
     fn career() -> Career {
-        let mut career = Career::new([TeamRecord::default(); LEAGUE_TEAMS + 1]);
+        let mut career = Career::with_records([TeamRecord::default(); LEAGUE_TEAMS + 1]);
         career.start_main_menu();
         career
     }

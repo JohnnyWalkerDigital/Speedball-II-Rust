@@ -7,10 +7,11 @@ use super::ram::addr;
 use super::text::write_digits;
 use super::ui::{Page, PANEL_COLOUR};
 use crate::game::career::{TeamId, TeamRecord};
+use crate::game::cup::Cup;
 use crate::game::geometry::Side;
 use crate::game::league::{League, DIVISION_SIZE, MATCHES_PER_ROUND};
-use crate::game::roster::Skills;
 use crate::game::setup::league_team;
+use crate::game::squad;
 
 /// The kind of game, for what the fixture screen shows (`match_kind`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,6 +19,7 @@ pub enum Competition {
     Knockout,
     League,
     Cup,
+    TwoPlayers,
 }
 
 /// The next-fixture lines that hold numbers, in the order
@@ -82,7 +84,8 @@ fn fill_fixture_column(
     // Played, won, drawn, lost and league points; the cup shows "NA" for
     // the points.
     let mut at = end - 1;
-    if competition == Competition::Cup {
+    // Only the knockout and league show league points.
+    if !matches!(competition, Competition::Knockout | Competition::League) {
         for c in *b" AN " {
             pwdlp[at] = c;
             at -= 1;
@@ -131,17 +134,7 @@ fn skill_groups(game: &Game, team: TeamId) -> [[i32; 8]; 4] {
     };
     match (human, team) {
         (Some(side), _) => {
-            let squad = game.career.squads.get(side);
-            std::array::from_fn(|group| {
-                let players: Vec<[i32; 8]> = squad[group * 3..group * 3 + 3]
-                    .iter()
-                    .map(|s: &Skills| s.to_array())
-                    .collect();
-                std::array::from_fn(|skill| {
-                    let sum: i32 = players.iter().map(|p| p[skill] & 0xFF).sum();
-                    (sum / 3) & 0xFF
-                })
-            })
+            squad::group_averages(game.career.squads.get(side)).map(|g| g.map(i32::from))
         }
         (None, TeamId::League(index)) => league_team(&game.rom, index).groups(),
         (None, TeamId::PlayerTwo) => unreachable!("player 2 is human"),
@@ -234,6 +227,72 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
             write_digits(&mut text, 0x31, score2 as i16, 3);
             text[1] = row;
             page.alt_text(&game.assets, &text, SmallFont::Orange);
+        }
+    }
+    page
+}
+
+/// `display_statistics`: the last match's numbers for both teams.
+/// `None` before any match has been played.
+pub fn statistics(game: &Game) -> Option<Page> {
+    let last = game.career.last_match?;
+    let mut lines = game.ram.string_list(addr::STRINGS_STATISTICS);
+    for (statistics, end) in [(last.statistics.team1, 0x0C), (last.statistics.team2, 0x29)] {
+        for (address, value) in [
+            (addr::STR_SHOTS_AT_GOAL, statistics.shots_at_goal as i16),
+            (addr::STR_GOALS_SCORED, statistics.goals_scored as i16),
+            (addr::STR_GOALS_SAVED, statistics.goals_saved as i16),
+            (
+                addr::STR_TIME_IN_POSSESSION,
+                statistics.time_in_possession as i16,
+            ),
+            (
+                addr::STR_SUCCESSFUL_TACKLES,
+                statistics.successful_tackles as i16,
+            ),
+            (addr::STR_SUBSTITUTIONS, statistics.substitutions as i16),
+            (
+                addr::STR_TIME_IN_OPPONENTS_HALF,
+                statistics.time_in_opponents_half as i16,
+            ),
+            (addr::STR_BONUS_POINTS, statistics.bonus_points),
+        ] {
+            let position = game
+                .ram
+                .pointer_list(addr::STRINGS_STATISTICS)
+                .iter()
+                .position(|&p| p == address)
+                .expect("a statistics line");
+            write_digits(&mut lines[position], end, value, 3);
+        }
+    }
+    let mut page = game_page(game, addr::TITLE_STATISTICS);
+    page.string_list(&game.assets, &lines);
+    for (team, x) in [(last.teams.team1, 0x40), (last.teams.team2, 0xA6)] {
+        page.alt_text(
+            &game.assets,
+            &at(game.ram.team_name(team), x, 8),
+            SmallFont::Orange,
+        );
+    }
+    Some(page)
+}
+
+/// `display_fixture_list`: this cup round's ties.
+pub fn fixture_list(game: &Game, cup: &Cup) -> Page {
+    let mut page = game_page(game, addr::TITLE_FIXTURE_LIST);
+    page.string_list(
+        &game.assets,
+        &game.ram.string_list(addr::STRINGS_FIXTURE_LIST),
+    );
+    for (row, (first, second)) in cup.ties().enumerate() {
+        let row = (row * 4 + 0xA) as u8;
+        for (text, x) in [
+            (game.ram.team_name(cup.teams[first]), 0x10),
+            (game.ram.string(addr::STR_PLAY), 0x94),
+            (game.ram.team_name(cup.teams[second]), 0xB2),
+        ] {
+            page.alt_text(&game.assets, &at(text, x, row), SmallFont::Orange);
         }
     }
     page

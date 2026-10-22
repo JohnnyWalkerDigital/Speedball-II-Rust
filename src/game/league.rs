@@ -189,7 +189,7 @@ mod tests {
     use crate::game::geometry::PerTeam;
 
     fn career() -> Career {
-        Career::new([TeamRecord::default(); LEAGUE_TEAMS + 1])
+        Career::with_records([TeamRecord::default(); LEAGUE_TEAMS + 1])
     }
 
     #[test]

@@ -76,6 +76,29 @@ Ported:
   each round from the second.
 - The next-fixture screen before each of Brutal Deluxe's knockout, league
   and cup matches: both teams' records and average skills.
+- Manager screens (`menu/manager/`, `game/squad.rs`): before each league and
+  cup match, the manager screen; before each knockout match, and for each
+  player before each two-player leg, the gym; after the demo, a look at
+  both. Everything is worked from a keypad (moving off its sides goes into
+  the squad table or the gym's upgrade buttons, as the Amiga's one fire
+  button required):
+  - Gym: eight upgrades, each ten points on one skill, for a player, a
+    group of three or the whole squad. Skills can only be raised to 30 above
+    the weakest group's average (rounded down to ten), and no higher than
+    240 in a knockout, 220 otherwise (230 for a team manager in division 1).
+    Fire on an upgrade shows it; fire again buys it.
+  - Transfers: up to three of eighteen market players are for sale at a
+    time, coming and going over the management rounds; which ones depends on
+    their value and the division. Buying one costs the difference in value
+    from the player he replaces, and he can only play in his own position
+    (or on the bench). He can be trained back up to his market skills.
+  - Substitutions: swap any two of the squad's own players; market players
+    keep to their row or the bench.
+  - The league tables or cup fixture list, the next fixture, and the last
+    match's statistics.
+- Squads persist between matches. A player injured in a match goes to the
+  end of the bench with his skills rounded down to tens, and stays there,
+  as in the original (it changed the squad's own records).
 - Two players: one match or the best of three or five, each match two legs
   with ends swapped and extra legs while the aggregate is level.
 - The demo game.
@@ -94,11 +117,9 @@ the game's starting amount (0, or 300 in league games) and at most its cap
 fell short of the cap is added to its next cap. Coins stop appearing once
 team 1 reaches its cap (in two-player games, once both teams have).
 
-Not yet: the manager screens (the gym and transfers before matches, the
-statistics and cup fixture-list screens, the manager screens after the
-demo, and so anything to spend the money on), loading and saving games
-("LOAD GAME" goes back to the main menu), replay saving and the "REPLAY
-GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
+Not yet: loading and saving games ("LOAD GAME" goes back to the main menu;
+the manager's save key does nothing), replay saving and the "REPLAY GOALS"
+viewer (selecting it does nothing), and the intro. There is no team selection
 in the original: one-player games are always Brutal Deluxe.
 
 ## Sound
@@ -170,7 +191,7 @@ match, menu and result frames as BMPs.
 | `game/scene.rs` | The sprites on screen each frame, in drawing order | drawing code in `Match.cs` |
 | `game/replay.rs` | Recording and playing back the goal replay | none (new, from the disassembly) |
 | `game/setup.rs` | Building teams per game mode | `Game.cs` |
-| `game/career.rs`, `league.rs`, `cup.rs`, `statistics.rs` | Money, records, the league and cup rules, match statistics | none (new, from the disassembly) |
+| `game/career.rs`, `league.rs`, `cup.rs`, `squad.rs`, `statistics.rs` | Money, records, the league and cup rules, the squad, gym and market, match statistics | none (new, from the disassembly) |
 | `graphics/` | Palettes, bitplane decoding, sprite sheets, pitch assembly | `Palette`, `Sprite`, `SpriteManager`, `Field` |
 | `render.rs` | Draws a `Match` onto the screen | drawing code spread through `Match`/`Entity` |
 | `menu/` | Main menu, game modes, result screens | none (new, from the disassembly) |
@@ -269,6 +290,14 @@ Menus and results:
 - The league ends unless Brutal Deluxe are promoted: finishing a season in
   division 1 ends the game whatever the placing, with the trophy for first.
 - Play-off matches are not added to the records (`league_playoffs`).
+- A bought market player's value keeps the market premium (a quarter, or
+  half in the cup or for a team manager), so selling him back into a
+  transfer counts for more than the same skills on a squad player.
+- The gym's group and team purchases check the cash for the whole group
+  first, then buy for each player in turn; players already at their limit
+  are skipped without a message, and the money for them is not spent.
+- The save key shows as a blank key except every fourth management round
+  (`draw_keypad`), the only rounds the original let you save.
 - The statistics are bytes per player, so a player's possession count wraps
   after 255 frames. A substitute takes over the injured player's slot with
   its counters reset, so the injured player's goals and tackles drop out of

@@ -9,6 +9,8 @@ use std::rc::Rc;
 
 use super::assets::{MenuAssets, SmallFont};
 use super::host::{Button, Control};
+use super::manager::data::ManagerTables;
+use super::manager::{self, Cursors, Standings};
 use super::panels::{self, Competition};
 use super::play::{run_match, Controls};
 use super::ram::{addr, MenuRam, MenuSpec, Title};
@@ -21,6 +23,7 @@ use crate::game::geometry::{PerTeam, Side};
 use crate::game::league::ScoresTable;
 use crate::game::rng::Rng;
 use crate::game::setup::{MatchRules, SquadSkills, BRUTAL_DELUXE};
+use crate::game::squad::Market;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::ilbm::Picture;
 use crate::render::MatchRenderer;
@@ -71,6 +74,9 @@ pub struct Game {
     /// `misc_flags` bit 0: the computer plays Brutal Deluxe's matches
     /// ("TEAM MANAGER" in the league).
     pub manager_mode: bool,
+    pub manager_tables: ManagerTables,
+    /// Where the manager screens' cursors were left.
+    pub cursors: Cursors,
     seed: u64,
 }
 
@@ -82,7 +88,12 @@ impl Game {
         renderer: MatchRenderer,
         seed: u64,
     ) -> Self {
-        let career = Career::new(ram.team_records());
+        let squads = PerTeam::new(
+            ram.squad(addr::TEAM_INFO_TABLE),
+            ram.squad(addr::TEAM_INFO_TABLE_OTHER),
+        );
+        let career = Career::new(ram.team_records(), squads, Market::new(ram.market()));
+        let manager_tables = ManagerTables::read(&ram);
         let scores_table =
             ScoresTable::new(ram.slice(addr::SCORES_TABLE, addr::SCORES_TABLE_LENGTH));
         Self {
@@ -95,6 +106,8 @@ impl Game {
             scores_table,
             coin_value: 100,
             manager_mode: false,
+            manager_tables,
+            cursors: Cursors::default(),
             seed,
         }
     }
@@ -137,6 +150,7 @@ pub fn run(ui: &mut Ui, game: &mut Game) {
 /// `main_menu`: pick a game, play it, then "GAME OVER".
 fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.start_main_menu();
+    game.career.restore_identities(&game.ram.base_identities());
     let choice = select_game(ui, game)?;
     match choice {
         MainChoice::OnePlayer => one_player(ui, game)?,
@@ -280,16 +294,17 @@ fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
     }
 }
 
-/// `game_knockout`: beat the other fifteen teams one after another. A draw
-/// replays the round; a defeat ends the run. (The gym before each match
-/// comes with the manager screens.)
+/// `game_knockout`: beat the other fifteen teams one after another, with
+/// the gym before each match. A draw replays the round; a defeat ends the
+/// run.
 fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
     game.career.set_cash_cap(1100);
     let mut round = 1;
     while round <= KNOCKOUT_ROUNDS {
         let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(round));
-        let (score1, score2) = brutal_deluxe_match(ui, game, Competition::Knockout, round, 0)?;
+        let (score1, score2) =
+            brutal_deluxe_match(ui, game, Competition::Knockout, round, 0, Standings::None)?;
         let scores = PerTeam::new(score1, score2);
         game.career.record_result(teams, scores);
         match compare_scores(scores.team1, scores.team2) {
@@ -315,7 +330,7 @@ pub(super) fn win_shared(ui: &mut Ui, picture: &Picture) -> Flow {
 fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(10_000);
     let mut rules = MatchRules::practice(&game.rom);
-    rules.team1.skills = SquadSkills::Given(Box::new(game.career.squads.team1));
+    rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
     let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(1));
     play_match(ui, game, rules, teams, ResultScreen::None).map(|_| ())
 }
@@ -323,8 +338,8 @@ fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
 // -- Two players -----------------------------------------------------------------
 
 /// `game_two_player`: one match, or the best of three or five. Each match
-/// is two legs with ends swapped, and level aggregates go to another leg.
-/// (The gym before each leg comes with the manager screens.)
+/// is two legs with ends swapped, and level aggregates go to another leg;
+/// both players get the gym before every leg.
 fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
     game.career.set_cash_cap(2000);
@@ -340,6 +355,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         message(ui, game, addr::TITLE_TWO_PLAYER, &text)?;
 
         let mut initial_dir = 0;
+        gym_two_player(ui, game)?;
         let rules = two_player_rules(game, initial_dir);
         let mut total = play_match(ui, game, rules, teams, ResultScreen::Score)?;
         message(
@@ -350,6 +366,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         )?;
         loop {
             initial_dir ^= 4;
+            gym_two_player(ui, game)?;
             let rules = two_player_rules(game, initial_dir);
             let leg = play_match(ui, game, rules, teams, ResultScreen::Score)?;
             total = PerTeam::new(total.team1 + leg.team1, total.team2 + leg.team2);
@@ -374,10 +391,23 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     message(ui, game, addr::TITLE_TWO_PLAYER, &text)
 }
 
+/// `gym_two_player`: each player in turn gets the gym, with their own
+/// joystick and money.
+fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
+    let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
+    for (side, digit) in [(Side::Team1, 0x5C), (Side::Team2, 0x5D)] {
+        let mut text = game.ram.string(addr::STR_PLAYER_0);
+        text[9] = digit;
+        message(ui, game, addr::TITLE_TWO_PLAYER, &text)?;
+        manager::gym_screen(ui, game, side, Competition::TwoPlayers, teams)?;
+    }
+    Ok(())
+}
+
 fn two_player_rules(game: &Game, initial_dir: i32) -> MatchRules {
     let mut rules = MatchRules::two_players(&game.rom, initial_dir);
-    rules.team1.skills = SquadSkills::Given(Box::new(game.career.squads.team1));
-    rules.team2.skills = SquadSkills::Given(Box::new(game.career.squads.team2));
+    rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
+    rules.team2.skills = SquadSkills::Players(Box::new(game.career.squads.team2.clone()));
     rules
 }
 
@@ -391,12 +421,12 @@ pub(super) fn message(ui: &mut Ui, game: &Game, title: usize, text: &[u8]) -> Fl
 
 // -- Demo ------------------------------------------------------------------------
 
-/// The demo game. (The original then shows the manager and gym screens,
-/// which come in a later phase.)
+/// The demo game, then a look at the manager and gym screens.
 fn demo(ui: &mut Ui, game: &mut Game) -> Flow {
     let rules = MatchRules::demo(&game.rom);
     let teams = PerTeam::new(TeamId::League(14), TeamId::League(13));
-    play_match(ui, game, rules, teams, ResultScreen::Score).map(|_| ())
+    play_match(ui, game, rules, teams, ResultScreen::Score)?;
+    manager::show_off(ui, game)
 }
 
 // -- Matches and results ---------------------------------------------------------
@@ -410,6 +440,7 @@ pub(super) fn cup_league_match(
     competition: Competition,
     teams: (TeamId, TeamId),
     initial_dir: i32,
+    standings: Standings,
 ) -> Flow<(i32, i32)> {
     let opponent = |team: TeamId| match team {
         TeamId::League(index) => index,
@@ -417,30 +448,49 @@ pub(super) fn cup_league_match(
     };
     let brutal_deluxe = TeamId::League(BRUTAL_DELUXE);
     if teams.0 == brutal_deluxe {
-        brutal_deluxe_match(ui, game, competition, opponent(teams.1), initial_dir)
+        brutal_deluxe_match(
+            ui,
+            game,
+            competition,
+            opponent(teams.1),
+            initial_dir,
+            standings,
+        )
     } else if teams.1 == brutal_deluxe {
-        let (ours, theirs) =
-            brutal_deluxe_match(ui, game, competition, opponent(teams.0), initial_dir)?;
+        let (ours, theirs) = brutal_deluxe_match(
+            ui,
+            game,
+            competition,
+            opponent(teams.0),
+            initial_dir,
+            standings,
+        )?;
         Ok((theirs, ours))
     } else {
         Ok(game.scores_table.result(&mut game.rng, teams.0, teams.1))
     }
 }
 
-/// `cup_league_match_bd`: the next-fixture screen, then the match. (The
-/// manager screens in between come later.)
+/// `cup_league_match_bd`: the next-fixture screen, the manager screens
+/// (only the gym in a knockout), then the match.
 fn brutal_deluxe_match(
     ui: &mut Ui,
     game: &mut Game,
     competition: Competition,
     opponent: usize,
     initial_dir: i32,
+    standings: Standings,
 ) -> Flow<(i32, i32)> {
     let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::League(opponent));
     ui.transition(&panels::next_fixture(game, competition, teams))?;
     wait_fire(ui)?;
+    if competition == Competition::Knockout {
+        manager::gym_screen(ui, game, Side::Team1, competition, teams)?;
+    } else {
+        manager::manager_screen(ui, game, competition, teams, standings)?;
+    }
     let mut rules = MatchRules::one_player(&game.rom, opponent);
-    rules.team1.skills = SquadSkills::Given(Box::new(game.career.squads.team1));
+    rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
     rules.computer.team1 = game.manager_mode;
     rules.initial_dir_team1 = initial_dir;
     rules.coin_value = game.coin_value;
@@ -472,6 +522,10 @@ fn play_match(
     let money = game.career.money;
     rules.min_credits = i32::from(money.start);
     rules.max_credits = PerTeam::new(i32::from(money.cap.team1), i32::from(money.cap.team2));
+    let managed = PerTeam::new(
+        matches!(rules.team1.skills, SquadSkills::Players(_)),
+        matches!(rules.team2.skills, SquadSkills::Players(_)),
+    );
     let seed = game.next_seed();
     let setup = MatchSetup::new(&game.rom, rules, seed);
     let mut game_match = Match::new(setup, Rc::clone(&game.rom));
@@ -479,7 +533,15 @@ fn play_match(
         take_over_on_touch: false,
         hold_at_end: false,
     };
-    let scores = run_match(ui, &mut game_match, &game.renderer, controls)?;
+    let played = run_match(ui, &mut game_match, &game.renderer, controls);
+    // Substitutions change the squad for good, even in an abandoned match.
+    for (side, managed) in [(Side::Team1, managed.team1), (Side::Team2, managed.team2)] {
+        if managed {
+            let after = game_match.squad_after(side, game.career.squads.get(side));
+            *game.career.squads.get_mut(side) = after;
+        }
+    }
+    let scores = played?;
     if result == ResultScreen::None {
         return Ok(scores);
     }

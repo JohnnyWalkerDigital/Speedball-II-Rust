@@ -4,6 +4,7 @@
 
 use super::flow::{cup_league_match, list_menu, message, wait_fire, win_shared, Game};
 use super::host::{Button, Control};
+use super::manager::Standings;
 use super::panels::{self, Competition};
 use super::ram::addr;
 use super::ui::{Flow, Stop, Ui};
@@ -29,6 +30,7 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
         _ => return Err(Stop::Abort),
     }
     let mut league = League::new_game(&mut game.career);
+    game.career.market.init(&mut game.rng);
     league.update_placings(&mut game.career);
     loop {
         game.career.clear_records();
@@ -81,7 +83,9 @@ fn league_round(
         let own = League::division_of(placing(game));
         for division in [own, 1 - own] {
             let teams = league.fixture(division, round, game_index);
-            let scores = cup_league_match(ui, game, Competition::League, teams, initial_dir)?;
+            let standings = Standings::League(league);
+            let scores =
+                cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
             game.career.record_result(per_team(teams), per_team(scores));
             league.results[division][game_index] = scores;
         }
@@ -91,7 +95,7 @@ fn league_round(
 
 /// `show_league_placings`: a division's table with Brutal Deluxe's name
 /// blinking. Up and down switch division; fire carries on.
-fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) -> Flow {
+pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) -> Flow {
     const BLINK_VBLANKS: u32 = 16;
     let mut division = League::division_of(placing(game));
     let pages = |division| {
@@ -140,7 +144,9 @@ fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League) -> Flow {
     let mut initial_dir = 4;
     let scores = loop {
         initial_dir ^= 4;
-        let scores = cup_league_match(ui, game, Competition::League, teams, initial_dir)?;
+        let standings = Standings::League(league);
+        let scores =
+            cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
         if scores.0 != scores.1 {
             break scores;
         }

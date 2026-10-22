@@ -9,6 +9,7 @@ pub mod cup;
 pub mod flow;
 pub mod host;
 pub mod league;
+pub mod manager;
 pub mod panels;
 pub mod play;
 pub mod ram;
