@@ -6,7 +6,7 @@
 use super::entity::{is_in_view, Think};
 use super::events::Sound;
 use super::geometry::{Input, Point, Side};
-use super::player::PlayerId;
+use super::player::{count, PlayerId};
 use super::state::{EntityRef, Match};
 use crate::data::addr;
 
@@ -199,7 +199,7 @@ impl Match {
         if !is_opponent_ball {
             return;
         }
-        self.players[p.0].stats.goals_saved += 1;
+        count(&mut self.players[p.0].stats.goals_saved);
         self.props.ball.set_charged(false);
     }
 
@@ -234,7 +234,7 @@ impl Match {
         }
         self.play_sound(Sound::THROW);
         if is_opponent_ball {
-            self.players[p.0].stats.goals_saved += 1;
+            count(&mut self.players[p.0].stats.goals_saved);
             self.props.ball.set_charged(false);
         }
         let keeper = &self.players[p.0];
@@ -595,7 +595,7 @@ impl Match {
     fn land_tackle(&mut self, p: PlayerId, victim: PlayerId) {
         let victim_random = self.players[victim.0].random;
         self.play_sound(Sound::knocked_down(victim_random));
-        self.players[p.0].stats.successful_tackles += 1;
+        count(&mut self.players[p.0].stats.successful_tackles);
         self.hit_by_tackle(victim, p);
 
         let attacker = &self.players[p.0].entity;

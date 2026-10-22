@@ -6,10 +6,12 @@
 pub mod actions;
 pub mod ai;
 pub mod arena;
+pub mod career;
 pub mod entity;
 pub mod events;
 pub mod geometry;
 pub mod items;
+pub mod m68k;
 pub mod medic;
 pub mod player;
 pub mod replay;
@@ -18,6 +20,7 @@ pub mod roster;
 pub mod scene;
 pub mod setup;
 pub mod state;
+pub mod statistics;
 pub mod text;
 pub mod token;
 

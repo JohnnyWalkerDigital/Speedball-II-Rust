@@ -29,12 +29,19 @@ impl PlayerId {
 
 /// Statistics shown after the match.
 #[derive(Clone, Copy, Debug, Default)]
+/// One player's statistics for the match, as bytes in the sprite record
+/// (`0x3E`-`0x42`), so each wraps at 256.
 pub struct MatchStats {
-    pub time_in_possession: i32,
-    pub goals_scored: i32,
-    pub successful_tackles: i32,
-    pub goals_saved: i32,
-    pub substitutions: i32,
+    pub time_in_possession: u8,
+    pub goals_scored: u8,
+    pub successful_tackles: u8,
+    pub goals_saved: u8,
+    pub substitutions: u8,
+}
+
+/// Adds one to a statistic (`addq.b #1`).
+pub fn count(stat: &mut u8) {
+    *stat = stat.wrapping_add(1);
 }
 
 #[derive(Clone, Debug)]
@@ -85,11 +92,11 @@ impl Player {
             zone_min: Point::new(rom.u16(p + 14), rom.u16(p + 18)),
             zone_max: Point::new(rom.u16(p + 16), rom.u16(p + 20)),
             stats: MatchStats {
-                time_in_possession: byte(22),
-                goals_scored: byte(23),
-                successful_tackles: byte(24),
-                goals_saved: byte(25),
-                substitutions: byte(26),
+                time_in_possession: byte(22) as u8,
+                goals_scored: byte(23) as u8,
+                successful_tackles: byte(24) as u8,
+                goals_saved: byte(25) as u8,
+                substitutions: byte(26) as u8,
             },
             random: byte(27),
             jump_bonus: byte(28),

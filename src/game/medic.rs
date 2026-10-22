@@ -2,7 +2,7 @@
 
 use super::events::Sound;
 use super::geometry::{Point, Side};
-use super::player::PlayerId;
+use super::player::{count, PlayerId};
 use super::roster::PersonRef;
 use super::state::{EntityRef, Injury, Match, PITCH_CENTER};
 use super::text::TextId;
@@ -211,7 +211,8 @@ impl Match {
 
         // The substitute runs on from the touchline.
         let player = &mut self.players[injured.0];
-        player.stats.substitutions = substitutions + 1;
+        player.stats.substitutions = substitutions;
+        count(&mut player.stats.substitutions);
         player.entity.timer = 25;
         player.target = PITCH_CENTER;
         player.entity.flags.set_busy(false);

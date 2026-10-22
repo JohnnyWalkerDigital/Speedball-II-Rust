@@ -32,7 +32,10 @@ pub struct MatchRules {
     pub team2: Squad,
     /// `match_half_length_seconds`.
     pub leg_duration: i32,
-    /// `match_cash_max_p1` / `_p2`.
+    /// `match_cash_start`: what each team has earned at kick-off.
+    pub min_credits: i32,
+    /// `match_cash_max_p1` / `_p2`: no more coins appear once a team has
+    /// earned this much.
     pub max_credits: PerTeam<i32>,
     /// Which teams the computer plays (`misc_flags` bits 0 and 1).
     pub computer: PerTeam<bool>,
@@ -68,6 +71,7 @@ impl MatchRules {
                 skills: SquadSkills::FromTeam,
             },
             leg_duration: HALF_LENGTH_SECONDS,
+            min_credits: 0,
             max_credits: PerTeam::new(1100, 1100),
             computer: PerTeam::new(false, true),
             initial_dir_team1: 0,
@@ -87,6 +91,7 @@ impl MatchRules {
                 skills: SquadSkills::Uniform(100),
             },
             leg_duration: HALF_LENGTH_SECONDS,
+            min_credits: 0,
             max_credits: PerTeam::new(10_000, 10_000),
             computer: PerTeam::new(false, false),
             initial_dir_team1: 0,
@@ -110,6 +115,7 @@ impl MatchRules {
                 skills: SquadSkills::Uniform(170),
             },
             leg_duration: HALF_LENGTH_SECONDS,
+            min_credits: 0,
             max_credits: PerTeam::new(2000, 2000),
             computer: PerTeam::new(false, false),
             initial_dir_team1,
@@ -129,6 +135,7 @@ impl MatchRules {
                 skills: SquadSkills::FromTeam,
             },
             leg_duration: 20,
+            min_credits: 0,
             max_credits: PerTeam::new(0, 0),
             computer: PerTeam::new(true, true),
             initial_dir_team1: 0,
@@ -184,7 +191,7 @@ impl MatchSetup {
             team2: rules.team2.team,
             coins_credits: 100,
             leg_duration: rules.leg_duration,
-            min_credits: 0,
+            min_credits: rules.min_credits,
             max_credits: rules.max_credits,
             initial_dir_team1: rules.initial_dir_team1,
             computer: rules.computer,
@@ -230,6 +237,7 @@ fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRul
             skills: SquadSkills::FromTeam,
         },
         leg_duration: HALF_LENGTH_SECONDS,
+        min_credits: 0,
         max_credits: PerTeam::new(1100, 1100),
         computer: PerTeam::new(true, true),
         initial_dir_team1: 0,

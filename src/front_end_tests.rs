@@ -267,3 +267,45 @@ fn dump_result_frames() {
         flow::run(&mut Ui::new(&mut host), &mut game);
     }
 }
+
+#[test]
+fn a_knockout_defeat_is_recorded_and_paid() {
+    use crate::game::career::TeamId;
+    let Some(mut game) = load_game() else { return };
+    let mut host = ScriptedHost::new(600, |m| {
+        if m.banks.len() == 2 {
+            // Past the defeat picture, on "GAME OVER".
+            return (m.time < m.banks[1].0 + Duration::from_secs(8)).then(Vec::new);
+        }
+        // "1 PLAYER GAME", then "KNOCKOUT"; then Brutal Deluxe stand still.
+        Some(if at(m, 2.0) || at(m, 4.0) {
+            press(FIRE_1)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+
+    let career = &game.career;
+    let last = career.last_match.expect("the match was played to the end");
+    assert_eq!(last.teams.team2, TeamId::League(1));
+    let revolver = career.record(TeamId::League(1));
+    assert_eq!((revolver.played, revolver.won), (1, 1));
+    let brutal_deluxe = career.record(TeamId::League(0));
+    assert_eq!((brutal_deluxe.played, brutal_deluxe.lost), (1, 1));
+    assert_eq!(brutal_deluxe.points_against, revolver.points_for);
+    assert!(last.statistics.team2.goals_scored > 0);
+    assert!(last.statistics.team2.time_in_possession > 0);
+
+    // What each team earned (at most 1100) is banked; the cap for the next
+    // match grows by whatever it fell short.
+    for (cash, cap) in [
+        (career.money.cash.team1, career.money.cap.team1),
+        (career.money.cash.team2, career.money.cap.team2),
+    ] {
+        let prize = cash - 1100;
+        assert!(prize <= 1100 && prize % 100 == 0, "earned {prize}");
+        assert_eq!(cap, 1100 + (1100 - prize));
+    }
+    assert!(career.money.cash.team2 > 1100, "Revolver picked up coins");
+}

@@ -14,6 +14,7 @@ use super::ram::{addr, MenuRam, MenuSpec, Title};
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::AtariRom;
+use crate::game::career::{compare_scores, Career, LastMatch, TeamId};
 use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Side};
 use crate::game::setup::{MatchRules, BRUTAL_DELUXE};
@@ -57,6 +58,8 @@ pub struct Game {
     pub ram: MenuRam,
     pub assets: MenuAssets,
     pub renderer: MatchRenderer,
+    /// Money and results, kept across games like the original's globals.
+    pub career: Career,
     seed: u64,
 }
 
@@ -68,11 +71,13 @@ impl Game {
         renderer: MatchRenderer,
         seed: u64,
     ) -> Self {
+        let career = Career::new(ram.team_records());
         Self {
             rom,
             ram,
             assets,
             renderer,
+            career,
             seed,
         }
     }
@@ -114,6 +119,7 @@ pub fn run(ui: &mut Ui, game: &mut Game) {
 
 /// `main_menu`: pick a game, play it, then "GAME OVER".
 fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
+    game.career.start_main_menu();
     let choice = select_game(ui, game)?;
     match choice {
         MainChoice::OnePlayer => one_player(ui, game)?,
@@ -244,11 +250,15 @@ fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
 /// replays the round; a defeat ends the run. (The fixture screen and the
 /// gym before each match come with the manager screens.)
 fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
+    game.career.clear_records();
+    game.career.set_cash_cap(1100);
     let mut round = 1;
     while round <= KNOCKOUT_ROUNDS {
+        let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(round));
         let rules = MatchRules::one_player(&game.rom, round);
-        let scores = play_match(ui, game, rules, ResultScreen::BrutalDeluxeAgainst(round))?;
-        match scores.team1.cmp(&scores.team2) {
+        let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures)?;
+        game.career.record_result(teams, scores);
+        match compare_scores(scores.team1, scores.team2) {
             std::cmp::Ordering::Equal => continue,
             std::cmp::Ordering::Less => return Ok(()),
             std::cmp::Ordering::Greater => round += 1,
@@ -269,8 +279,10 @@ fn win_knockout(ui: &mut Ui, game: &Game) -> Flow {
 
 /// `game_practice`: Brutal Deluxe on their own, with no result screen.
 fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
+    game.career.set_cash_cap(10_000);
     let rules = MatchRules::practice(&game.rom);
-    play_match(ui, game, rules, ResultScreen::None).map(|_| ())
+    let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(1));
+    play_match(ui, game, rules, teams, ResultScreen::None).map(|_| ())
 }
 
 // -- Two players -----------------------------------------------------------------
@@ -279,8 +291,11 @@ fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
 /// is two legs with ends swapped, and level aggregates go to another leg.
 /// (The gym before each leg comes with the manager screens.)
 fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
+    game.career.clear_records();
+    game.career.set_cash_cap(2000);
     let menu = game.ram.menu(addr::MENU_SELECT_ONE_THREE_FIVE);
     let matches = list_menu(ui, game, &menu)? * 2 + 1;
+    let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
     let mut wins = PerTeam::new(0, 0);
     for number in 1..=matches {
         let mut text = game.ram.string(addr::STR_MATCH);
@@ -289,7 +304,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
 
         let mut initial_dir = 0;
         let rules = MatchRules::two_players(&game.rom, initial_dir);
-        let mut total = play_match(ui, game, rules, ResultScreen::Score)?;
+        let mut total = play_match(ui, game, rules, teams, ResultScreen::Score)?;
         message(
             ui,
             game,
@@ -299,14 +314,14 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         loop {
             initial_dir ^= 4;
             let rules = MatchRules::two_players(&game.rom, initial_dir);
-            let leg = play_match(ui, game, rules, ResultScreen::Score)?;
+            let leg = play_match(ui, game, rules, teams, ResultScreen::Score)?;
             total = PerTeam::new(total.team1 + leg.team1, total.team2 + leg.team2);
             display_total_match_result(ui, game, total)?;
             if total.team1 != total.team2 {
                 break;
             }
         }
-        if total.team2 > total.team1 {
+        if compare_scores(total.team2, total.team1).is_gt() {
             wins.team2 += 1;
         } else {
             wins.team1 += 1;
@@ -314,6 +329,8 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         if wins.team1 > matches / 2 || wins.team2 > matches / 2 {
             break;
         }
+        // Only matches that leave the series open are recorded.
+        game.career.record_result(teams, total);
     }
     let mut text = game.ram.string(addr::STR_PLAYER_WINS);
     text[9] = if wins.team1 < wins.team2 { 0x5D } else { 0x5C };
@@ -334,30 +351,35 @@ fn message(ui: &mut Ui, game: &Game, title: usize, text: &[u8]) -> Flow {
 /// which come in a later phase.)
 fn demo(ui: &mut Ui, game: &mut Game) -> Flow {
     let rules = MatchRules::demo(&game.rom);
-    play_match(ui, game, rules, ResultScreen::Score).map(|_| ())
+    let teams = PerTeam::new(TeamId::League(14), TeamId::League(13));
+    play_match(ui, game, rules, teams, ResultScreen::Score).map(|_| ())
 }
 
 // -- Matches and results ---------------------------------------------------------
 
 /// Which result screen follows a match (`display_match_result`).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ResultScreen {
     /// Practice has none.
     None,
     /// The score and who won.
     Score,
-    /// Brutal Deluxe against the league team with this index: a victory or
-    /// defeat picture, or the score for a draw.
-    BrutalDeluxeAgainst(usize),
+    /// Brutal Deluxe's games: a victory or defeat picture, or the score for
+    /// a draw.
+    Pictures,
 }
 
-/// `play_match`: the match, then its result screen.
+/// `play_match`: the match, its result screen, then the prize money.
 fn play_match(
     ui: &mut Ui,
     game: &mut Game,
-    rules: MatchRules,
+    mut rules: MatchRules,
+    teams: PerTeam<TeamId>,
     result: ResultScreen,
 ) -> Flow<PerTeam<i32>> {
+    let money = game.career.money;
+    rules.min_credits = i32::from(money.start);
+    rules.max_credits = PerTeam::new(i32::from(money.cap.team1), i32::from(money.cap.team2));
     let seed = game.next_seed();
     let setup = MatchSetup::new(&game.rom, rules, seed);
     let mut game_match = Match::new(setup, Rc::clone(&game.rom));
@@ -366,18 +388,23 @@ fn play_match(
         hold_at_end: false,
     };
     let scores = run_match(ui, &mut game_match, &game.renderer, controls)?;
-    match result {
-        ResultScreen::None => {}
-        ResultScreen::BrutalDeluxeAgainst(_) if scores.team1 > scores.team2 => {
-            victory(ui, game, scores)?;
-        }
-        ResultScreen::BrutalDeluxeAgainst(opponent) if scores.team1 < scores.team2 => {
-            defeat(ui, game, scores, opponent)?;
-        }
-        ResultScreen::Score | ResultScreen::BrutalDeluxeAgainst(_) => {
-            result_screen(ui, game, scores, addr::STR_SCORE)?;
-        }
+    if result == ResultScreen::None {
+        return Ok(scores);
     }
+    match compare_scores(scores.team1, scores.team2) {
+        std::cmp::Ordering::Greater if result == ResultScreen::Pictures => {
+            victory(ui, game, scores, teams.team1)?;
+        }
+        std::cmp::Ordering::Less if result == ResultScreen::Pictures => {
+            defeat(ui, game, scores, teams.team2)?;
+        }
+        _ => result_screen(ui, game, scores, addr::STR_SCORE)?,
+    }
+    game.career.last_match = Some(LastMatch {
+        teams,
+        statistics: game_match.statistics(),
+    });
+    game.career.settle_prize_money(game_match.credits_earned());
     Ok(scores)
 }
 
@@ -389,7 +416,7 @@ fn display_total_match_result(ui: &mut Ui, game: &Game, total: PerTeam<i32>) -> 
 fn result_screen(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, score_text: usize) -> Flow {
     let mut page = game.titled_page(addr::TITLE_SPEEDBALL_2_PUSH_START);
     page.big_text(&game.assets, &score_string(&game.ram, score_text, scores));
-    let verdict = match scores.team1.cmp(&scores.team2) {
+    let verdict = match compare_scores(scores.team1, scores.team2) {
         std::cmp::Ordering::Equal => addr::STR_MATCH_DRAWN,
         std::cmp::Ordering::Greater => addr::STR_BLUE_WIN,
         std::cmp::Ordering::Less => addr::STR_RED_WIN,
@@ -408,8 +435,8 @@ fn score_string(ram: &MenuRam, address: usize, scores: PerTeam<i32>) -> Vec<u8> 
 }
 
 /// `victory`: Brutal Deluxe won.
-fn victory(ui: &mut Ui, game: &Game, scores: PerTeam<i32>) -> Flow {
-    let page = win_picture(game, &game.assets.victory, scores, BRUTAL_DELUXE);
+fn victory(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flow {
+    let page = win_picture(game, &game.assets.victory, scores, winner);
     ui.transition(&page)?;
     ui.play_sound(VICTORY_CHEER);
     wait_any_fire(ui)?;
@@ -418,7 +445,7 @@ fn victory(ui: &mut Ui, game: &Game, scores: PerTeam<i32>) -> Flow {
 }
 
 /// `defeat`: the other team won; the picture names them.
-fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: usize) -> Flow {
+fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flow {
     let page = win_picture(game, &game.assets.defeat, scores, winner);
     ui.transition(&page)?;
     wait_any_fire(ui)
@@ -426,7 +453,7 @@ fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: usize) -> Flow
 
 /// The victory and defeat pictures: "SCORE 000 TO 000" and "A WIN FOR"
 /// the winners, centred, in the white font (`format_score_win`).
-fn win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: usize) -> Page {
+fn win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: TeamId) -> Page {
     const WIN_FOR_X: usize = 0x12;
     const NAME_ROW: u8 = 0x30;
     let mut page = Page::picture(picture);

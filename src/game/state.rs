@@ -10,7 +10,7 @@ use super::arena::Arena;
 use super::entity::{Entity, ScriptEvent};
 use super::events::Sound;
 use super::geometry::{DirBits, Input, PerTeam, Point, Side};
-use super::player::{Player, PlayerId};
+use super::player::{count, Player, PlayerId};
 use super::replay::Replay;
 use super::rng::Rng;
 use super::roster::{Roster, Team};
@@ -135,8 +135,8 @@ pub struct Match {
     pub(crate) blocking_dirs: [DirBits; 2],
 
     pub(crate) scores: PerTeam<i32>,
-    bonus_points: PerTeam<i32>,
-    time_in_opponents_half: PerTeam<i32>,
+    pub(crate) bonus_points: PerTeam<i32>,
+    pub(crate) time_in_opponents_half: PerTeam<i32>,
     pub(crate) credits_earned: PerTeam<i32>,
     pub(crate) max_credits: PerTeam<i32>,
     pub(crate) coins_credits: i32,
@@ -213,8 +213,8 @@ impl Match {
             bonus_points: PerTeam::default(),
             time_in_opponents_half: PerTeam::default(),
             credits_earned: PerTeam::new(setup.min_credits, setup.min_credits),
-            // The original copies team 1's limit to both teams.
-            max_credits: PerTeam::new(setup.max_credits.team1, setup.max_credits.team1),
+            // (The C# gave team 2 team 1's limit too.)
+            max_credits: setup.max_credits,
             coins_credits: setup.coins_credits,
             clock_paused: true,
             ball_in_multiplier: false,
@@ -720,7 +720,7 @@ impl Match {
         };
         *self.time_in_opponents_half.get_mut(side) += 1;
         if let Some(p) = self.holder_player() {
-            self.players[p.0].stats.time_in_possession += 1;
+            count(&mut self.players[p.0].stats.time_in_possession);
         }
     }
 
@@ -1030,7 +1030,7 @@ impl Match {
         self.play_sound(crowd);
         self.clock_paused = true;
         self.show_message(None);
-        self.players[self.thrower.0].stats.goals_scored += 1;
+        count(&mut self.players[self.thrower.0].stats.goals_scored);
         self.start_goal_celebration(self.thrower);
         self.scores_before_goal = None;
     }

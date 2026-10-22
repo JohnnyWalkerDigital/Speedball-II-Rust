@@ -62,12 +62,23 @@ Ported:
 - Result screens: score and winner, the aggregate after two legs, the
   victory and defeat pictures for Brutal Deluxe, "PLAYER n WINS" and
   "GAME OVER".
+- After each match (`game/career.rs`): prize money, the teams' records
+  (`update_match_stats`) and the match statistics for the statistics
+  screen (`game/statistics.rs`). These persist between games, as the
+  original's variables did: cash resets on the main menu, but each team's
+  earnings cap does not.
+
+Prize money: a team keeps what it picked up in coins (100 each), at least
+the game's starting amount (0, or 300 in league games) and at most its cap
+(1100 in a knockout, 2000 for two players, 10000 in practice). Whatever it
+fell short of the cap is added to its next cap. Coins stop appearing once
+team 1 reaches its cap (in two-player games, once both teams have).
 
 Not yet: league and cup (selecting them goes back to the main menu), the
 manager screens (the gym before knockout and two-player matches, the
-knockout fixture screen, the manager screens after the demo), match
-statistics and prize money, replay saving and the "REPLAY GOALS" viewer
-(selecting it does nothing), and the intro. There is no team selection
+knockout fixture screen, the statistics screen, the manager screens after
+the demo, and anything to spend the money on), replay saving and the
+"REPLAY GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
 in the original: one-player games are always Brutal Deluxe.
 
 ## Sound
@@ -178,6 +189,9 @@ Design choices:
   once the ball is in play (`step_prepare_ball_launch`, `step_ball_launch`).
 - The status bar's team 2 midfield light tests team 2's own player, as the
   original does (`green_light_active_player`); the C# tested team 1's.
+- Each team has its own earnings cap (`match_cash_max_p1`, `_p2`); the C#
+  gave team 2 team 1's. They only differ once caps carry over between
+  matches.
 - The menus are new (see Menus). Where they differ from the Amiga: Escape on
   the main menu quits (the original had nowhere to go); each match gets a
   seed from `--seed` instead of random numbers stirred while the menus wait
@@ -223,11 +237,25 @@ Crowd and sound:
 - The code's comments around the interception sounds (`get_ball`) contradict
   each other; the port follows the branches, not the comments.
 
-Menus:
+Menus and results:
 
 - A negative score on a result screen shows as "ZZZ": `format_decimal_digit`
   divides with `divu`, which gives up on a negative number and leaves the
   remainder as -1, one before the digit 0 in the font.
+- Scores are compared as unsigned 16-bit numbers, so a negative score
+  (possible through the wall stars) beats any positive one: on the result
+  screen, in the knockout, in a two-player series and in the records. In
+  the records it also counts in full rather than a tenth, for the same
+  `divu` reason.
+- In a two-player series, the deciding match is not added to the records;
+  only matches that leave the series open are (`game_two_player`).
+- The statistics are bytes per player, so a player's possession count wraps
+  after 255 frames. A substitute takes over the injured player's slot with
+  its counters reset, so the injured player's goals and tackles vanish
+  from the team's statistics; only the substitution count carries over.
+- `clear_match_stats` clears one team record too many: its eighteenth
+  pointer is the program's first instruction, which points into unused
+  memory.
 
 Sound driver:
 

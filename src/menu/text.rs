@@ -5,6 +5,8 @@
 //! rows. Letters are stored from `'A'`, with the digits straight after `'Z'`
 //! (so `'['` is 0 and `'\'` is 1).
 
+use crate::game::m68k::ext_divu_register;
+
 /// A character to draw: its index in the font and its top-left pixel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Glyph {
@@ -69,19 +71,12 @@ fn layout(text: &[u8], advance: impl Fn(u8, u8) -> (u8, u8)) -> Vec<Glyph> {
 /// not fit in 16 bits after dividing (any negative score) leaves the
 /// division undone, which shows as `'Z'`s.
 pub fn write_digits(text: &mut [u8], last: usize, value: i16, count: usize) {
-    let mut d1 = value as i32 as u32;
+    let mut d1 = value;
     for i in 0..count {
-        // `ext.l d1`, then `divu.w #10,d1`.
-        let dividend = (d1 & 0xFFFF) as u16 as i16 as i32 as u32;
-        let quotient = dividend / 10;
-        d1 = if quotient > 0xFFFF {
-            dividend
-        } else {
-            ((dividend % 10) << 16) | quotient
-        };
-        // The digit is the remainder, in the high word.
-        let digit = (d1 >> 16) as u8;
-        text[last - i] = digit.wrapping_add(DIGIT_ZERO);
+        let register = ext_divu_register(d1, 10);
+        // The digit is the remainder, in the high word; the quotient carries on.
+        text[last - i] = ((register >> 16) as u8).wrapping_add(DIGIT_ZERO);
+        d1 = register as u16 as i16;
     }
 }
 

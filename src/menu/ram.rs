@@ -2,6 +2,7 @@
 //! original addresses (see [`crate::data::amiga::menu_ram`]).
 
 use crate::data::bytes::BigEndian;
+use crate::game::career::{TeamId, TeamRecord, LEAGUE_TEAMS};
 
 /// Amiga RAM addresses the menu code uses, named as in the disassembly.
 pub mod addr {
@@ -28,8 +29,9 @@ pub mod addr {
     pub const STR_GAME_OVER: usize = 0x37E6;
 
     /// The 16 league teams, 0x40 bytes each; a team starts with pointers
-    /// to its full and short names.
+    /// to its full and short names, then its record.
     pub const TEAMS: usize = 0x7B50;
+    pub const TEAM_PLAYER_2: usize = 0x7B10;
     pub const TEAM_SIZE: usize = 0x40;
 
     // Fonts, all in overlay 1.
@@ -126,9 +128,38 @@ impl MenuRam {
             .collect()
     }
 
-    /// A league team's full name, cursor bytes included.
-    pub fn team_name(&self, team: usize) -> Vec<u8> {
-        self.string(self.pointer(addr::TEAMS + team * addr::TEAM_SIZE))
+    /// A team's full name, cursor bytes included.
+    pub fn team_name(&self, team: TeamId) -> Vec<u8> {
+        self.string(self.pointer(Self::team_address(team)))
+    }
+
+    fn team_address(team: TeamId) -> usize {
+        match team {
+            TeamId::League(index) => addr::TEAMS + index * addr::TEAM_SIZE,
+            TeamId::PlayerTwo => addr::TEAM_PLAYER_2,
+        }
+    }
+
+    /// The results stored with every team, league teams first.
+    pub fn team_records(&self) -> [TeamRecord; LEAGUE_TEAMS + 1] {
+        std::array::from_fn(|i| {
+            let team = Self::team_address(match i {
+                LEAGUE_TEAMS => TeamId::PlayerTwo,
+                i => TeamId::League(i),
+            });
+            let word = |offset: usize| self.bytes.u16_at(team + offset);
+            TeamRecord {
+                played: word(0x8),
+                won: word(0xA),
+                drawn: word(0xC),
+                lost: word(0xE),
+                points_for: word(0x10),
+                points_against: word(0x12),
+                league_points: word(0x14),
+                league_placing: self.bytes[team + 0x16],
+                old_league_placing: self.bytes[team + 0x17],
+            }
+        })
     }
 
     fn pointer(&self, address: usize) -> usize {
