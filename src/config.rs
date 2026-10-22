@@ -10,12 +10,12 @@ pub enum Platform {
     Amiga,
 }
 
-/// The kind of match to set up (the subset of the original menu that the
-/// engine supports).
+/// The kind of match to set up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameMode {
-    /// One-player knockout. Both teams are computer controlled until you
-    /// touch the controls (the original port's "work in progress" setup).
+    /// One player against the computer. From the command line, two random
+    /// teams, both computer controlled until you touch the controls (the
+    /// C# port's "work in progress" setup).
     Knockout,
     /// Two humans; team stats are all 170.
     TwoPlayers,
@@ -29,7 +29,8 @@ pub enum GameMode {
 pub struct Config {
     pub data_dir: PathBuf,
     pub platform: Platform,
-    pub mode: GameMode,
+    /// Skip the menus and play one match of this kind.
+    pub mode: Option<GameMode>,
     pub seed: u64,
     pub scale: u8,
     pub team1: Option<usize>,
@@ -49,9 +50,10 @@ USAGE:
 
 OPTIONS:
     --atari | --amiga      Graphics to use (default: amiga)
-    --mode <MODE>          knockout | two-players | practice | demo (default: knockout)
-    --team1 <0-15>         Team for player 1 (default: random)
-    --team2 <0-15>         Team for player 2 (default: random)
+    --mode <MODE>          Skip the menus and play one match:
+                           knockout | two-players | practice | demo
+    --team1 <0-15>         With --mode: team for player 1 (default: random)
+    --team2 <0-15>         With --mode: team for player 2 (default: random)
     --seed <N>             Random seed, for reproducible matches
     --scale <1|2|4|8>      Window scale (default: 4)
     --data <DIR>           Folder with the disk images (default: ../src/Resources)
@@ -61,10 +63,11 @@ OPTIONS:
     -h, --help             Show this help
 
 CONTROLS:
-    Player 1: arrow keys + Space / Right Ctrl
+    Player 1: arrow keys + Space / Right Ctrl (also drives the menus)
     Player 2: W A S D + Left Shift / Left Ctrl
-    Touching a team's controls takes it over from the computer.
-    P: pause    N: step one frame while paused    F: fast forward    Esc: quit";
+    With --mode, touching a team's controls takes it over from the computer.
+    In a match: P pause, N step one frame while paused, F fast forward.
+    Esc: leave a match or menu; on the main menu, quit.";
 
 impl Config {
     /// Parses arguments. `Ok(None)` means help was requested.
@@ -78,7 +81,7 @@ impl Config {
                 // The original accepted -Atari / -Amiga.
                 "--atari" | "-Atari" => config.platform = Platform::Atari,
                 "--amiga" | "-Amiga" => config.platform = Platform::Amiga,
-                "--mode" => config.mode = parse_mode(&value("--mode")?)?,
+                "--mode" => config.mode = Some(parse_mode(&value("--mode")?)?),
                 "--team1" => config.team1 = Some(parse_team(&value("--team1")?)?),
                 "--team2" => config.team2 = Some(parse_team(&value("--team2")?)?),
                 "--seed" => {
@@ -107,7 +110,7 @@ impl Default for Config {
         Self {
             data_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src/Resources"),
             platform: Platform::Amiga,
-            mode: GameMode::Knockout,
+            mode: None,
             seed: time_seed(),
             scale: 4,
             team1: None,
@@ -163,7 +166,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(config.platform, Platform::Atari);
-        assert_eq!(config.mode, GameMode::Demo);
+        assert_eq!(config.mode, Some(GameMode::Demo));
         assert_eq!(config.seed, 7);
         assert_eq!(config.team1, Some(3));
     }

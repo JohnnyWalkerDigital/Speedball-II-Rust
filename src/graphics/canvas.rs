@@ -1,7 +1,8 @@
-//! The 320x200 screen the match is drawn into.
+//! The 320x200 screen everything is drawn into.
 
 use super::image::{blit, Image};
 
+#[derive(Clone)]
 pub struct Canvas {
     width: usize,
     height: usize,
@@ -31,6 +32,10 @@ impl Canvas {
     /// Pixels as `0xAARRGGBB` (the window ignores alpha), row by row.
     pub fn pixels(&self) -> &[u32] {
         &self.pixels
+    }
+
+    pub fn pixels_mut(&mut self) -> &mut [u32] {
+        &mut self.pixels
     }
 
     /// Restricts drawing to the top `rows` rows (`None` for the whole screen).

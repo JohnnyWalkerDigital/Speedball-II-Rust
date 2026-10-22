@@ -11,8 +11,11 @@
 mod app;
 mod config;
 mod data;
+#[cfg(test)]
+mod front_end_tests;
 mod game;
 mod graphics;
+mod menu;
 mod render;
 #[cfg(test)]
 mod simulation_tests;

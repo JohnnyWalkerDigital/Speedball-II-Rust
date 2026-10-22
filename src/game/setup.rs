@@ -1,4 +1,5 @@
-//! Building the initial state for a match (what the menus would normally do).
+//! Building the initial state for a match: what the menus set up before
+//! `play_match`.
 
 use super::geometry::PerTeam;
 use super::player::{Player, PlayerId};
@@ -24,46 +25,182 @@ pub struct MatchSetup {
     pub rng: Rng,
 }
 
-/// The parts of the setup that differ between game modes.
-struct ModeRules {
-    team1: Team,
-    team2: Team,
-    leg_duration: i32,
-    max_credits: PerTeam<i32>,
-    computer: PerTeam<bool>,
+/// What a game mode decides about a match.
+pub struct MatchRules {
+    pub mode: GameMode,
+    pub team1: Squad,
+    pub team2: Squad,
+    /// `match_half_length_seconds`.
+    pub leg_duration: i32,
+    /// `match_cash_max_p1` / `_p2`.
+    pub max_credits: PerTeam<i32>,
+    /// Which teams the computer plays (`misc_flags` bits 0 and 1).
+    pub computer: PerTeam<bool>,
+    /// `initial_playing_direction`: 0 has team 1 attacking up first.
+    pub initial_dir_team1: i32,
+}
+
+/// A team and how its players' skills are set.
+pub struct Squad {
+    pub team: Team,
+    pub skills: SquadSkills,
+}
+
+pub enum SquadSkills {
+    /// Every skill the same (`init_player_stats`).
+    Uniform(i32),
+    /// The team's skill templates (`populate_opposition_player_stats`).
+    FromTeam,
+}
+
+impl MatchRules {
+    /// Team 1 is Brutal Deluxe on 100 in every skill, as `main_menu` sets
+    /// them up for one player; team 2 plays itself.
+    pub fn one_player(rom: &AtariRom, opponent: usize) -> Self {
+        Self {
+            mode: GameMode::Knockout,
+            team1: Squad {
+                team: league_team(rom, BRUTAL_DELUXE),
+                skills: SquadSkills::Uniform(100),
+            },
+            team2: Squad {
+                team: league_team(rom, opponent),
+                skills: SquadSkills::FromTeam,
+            },
+            leg_duration: HALF_LENGTH_SECONDS,
+            max_credits: PerTeam::new(1100, 1100),
+            computer: PerTeam::new(false, true),
+            initial_dir_team1: 0,
+        }
+    }
+
+    /// `game_practice`: Brutal Deluxe alone on the pitch.
+    pub fn practice(rom: &AtariRom) -> Self {
+        Self {
+            mode: GameMode::Practice,
+            team1: Squad {
+                team: league_team(rom, BRUTAL_DELUXE),
+                skills: SquadSkills::Uniform(100),
+            },
+            team2: Squad {
+                team: league_team(rom, 1),
+                skills: SquadSkills::Uniform(100),
+            },
+            leg_duration: HALF_LENGTH_SECONDS,
+            max_credits: PerTeam::new(10_000, 10_000),
+            computer: PerTeam::new(false, false),
+            initial_dir_team1: 0,
+        }
+    }
+
+    /// `game_two_player`: "PLAYER 1" against "PLAYER 2", all skills 170.
+    pub fn two_players(rom: &AtariRom, initial_dir_team1: i32) -> Self {
+        let texts = TextPanel::new(rom);
+        let mut team1 = league_team(rom, BRUTAL_DELUXE);
+        team1.full_name = texts.text(TextId::Player1Full).clone();
+        team1.short_name = texts.text(TextId::Player1Short).clone();
+        Self {
+            mode: GameMode::TwoPlayers,
+            team1: Squad {
+                team: team1,
+                skills: SquadSkills::Uniform(170),
+            },
+            team2: Squad {
+                team: Team::read(rom, addr::TEAM_PLAYER2),
+                skills: SquadSkills::Uniform(170),
+            },
+            leg_duration: HALF_LENGTH_SECONDS,
+            max_credits: PerTeam::new(2000, 2000),
+            computer: PerTeam::new(false, false),
+            initial_dir_team1,
+        }
+    }
+
+    /// The demo game: Fatal Justice against Turbo Hammers, 20 second halves.
+    pub fn demo(rom: &AtariRom) -> Self {
+        Self {
+            mode: GameMode::Demo,
+            team1: Squad {
+                team: league_team(rom, 14),
+                skills: SquadSkills::FromTeam,
+            },
+            team2: Squad {
+                team: league_team(rom, 13),
+                skills: SquadSkills::FromTeam,
+            },
+            leg_duration: 20,
+            max_credits: PerTeam::new(0, 0),
+            computer: PerTeam::new(true, true),
+            initial_dir_team1: 0,
+        }
+    }
+}
+
+/// The player's team in one-player games.
+pub const BRUTAL_DELUXE: usize = 0;
+const HALF_LENGTH_SECONDS: i32 = 90;
+
+/// One of the 16 league teams, in the original's order.
+pub fn league_team(rom: &AtariRom, index: usize) -> Team {
+    Team::read(rom, addr::TEAMS + index as i32 * Team::SIZE)
 }
 
 impl MatchSetup {
-    pub fn new(rom: &AtariRom, config: &Config) -> Self {
+    /// A match from the menus, seeded with `seed`.
+    pub fn new(rom: &AtariRom, rules: MatchRules, seed: u64) -> Self {
+        let mut seeds = SplitMix64(seed);
+        let rng = Rng::new(seeds.next_u31(), seeds.next_u31());
+        Self::assemble(rom, rules, rng)
+    }
+
+    /// A match straight from the command line (`--mode` and friends).
+    pub fn from_config(rom: &AtariRom, config: &Config) -> Self {
         let mut seeds = SplitMix64(config.seed);
         let rng = Rng::new(seeds.next_u31(), seeds.next_u31());
+        let rules = match config.mode.unwrap_or(GameMode::Knockout) {
+            GameMode::Knockout => knockout(rom, &mut seeds, config),
+            GameMode::Practice => practice(rom, config),
+            GameMode::TwoPlayers => two_players(rom, config),
+            GameMode::Demo => demo(rom, config),
+        };
+        Self::assemble(rom, rules, rng)
+    }
 
-        let teams: Vec<Team> = (0..TEAM_COUNT as i32)
-            .map(|i| Team::read(rom, addr::TEAMS + i * Team::SIZE))
-            .collect();
+    fn assemble(rom: &AtariRom, rules: MatchRules, rng: Rng) -> Self {
         let mut players = read_players(rom);
         let mut roster = Roster::read(rom);
-        let rules = match config.mode {
-            GameMode::Knockout => knockout(&teams, &mut roster, &mut seeds, config),
-            GameMode::Practice => practice(&teams, &mut roster, &mut players, config),
-            GameMode::TwoPlayers => two_players(rom, &teams, &mut roster, config),
-            GameMode::Demo => demo(&teams, &mut roster, config),
-        };
-
+        set_skills(&rules.team1, &mut roster.attributes_team1);
+        set_skills(&rules.team2, &mut roster.attributes_team2);
+        if rules.mode == GameMode::Practice {
+            for id in PlayerId::team(false) {
+                players[id.0].entity.flags.set_invisible(true);
+            }
+        }
         Self {
-            mode: config.mode,
+            mode: rules.mode,
             players,
             roster,
-            team1: rules.team1,
-            team2: rules.team2,
+            team1: rules.team1.team,
+            team2: rules.team2.team,
             coins_credits: 100,
             leg_duration: rules.leg_duration,
             min_credits: 0,
             max_credits: rules.max_credits,
-            initial_dir_team1: 0,
+            initial_dir_team1: rules.initial_dir_team1,
             computer: rules.computer,
             rng,
         }
+    }
+}
+
+fn set_skills(squad: &Squad, attributes: &mut [Attributes]) {
+    match squad.skills {
+        SquadSkills::Uniform(value) => {
+            for member in attributes {
+                member.skills = Skills::uniform(value);
+            }
+        }
+        SquadSkills::FromTeam => squad.team.apply_skills_to(attributes),
     }
 }
 
@@ -76,86 +213,62 @@ fn read_players(rom: &AtariRom) -> Vec<Player> {
         .collect()
 }
 
-fn knockout(
-    teams: &[Team],
-    roster: &mut Roster,
-    seeds: &mut SplitMix64,
-    config: &Config,
-) -> ModeRules {
+// -- Command-line modes ---------------------------------------------------------
+
+/// Two random teams, both on the computer until someone touches the
+/// controls (the C# port's work-in-progress setup).
+fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRules {
     let (team1, team2) = random_distinct_teams(seeds, config);
-    set_all_skills(&mut roster.attributes_team1, 100);
-    set_all_skills(&mut roster.attributes_team2, 100);
-    teams[team1].apply_skills_to(&mut roster.attributes_team1);
-    teams[team2].apply_skills_to(&mut roster.attributes_team2);
-    ModeRules {
-        team1: teams[team1].clone(),
-        team2: teams[team2].clone(),
-        leg_duration: 90,
+    MatchRules {
+        mode: GameMode::Knockout,
+        team1: Squad {
+            team: league_team(rom, team1),
+            skills: SquadSkills::FromTeam,
+        },
+        team2: Squad {
+            team: league_team(rom, team2),
+            skills: SquadSkills::FromTeam,
+        },
+        leg_duration: HALF_LENGTH_SECONDS,
         max_credits: PerTeam::new(1100, 1100),
-        // The original port leaves both teams to the computer until the
-        // player touches the controls.
         computer: PerTeam::new(true, true),
+        initial_dir_team1: 0,
     }
 }
 
-fn practice(
-    teams: &[Team],
-    roster: &mut Roster,
-    players: &mut [Player],
-    config: &Config,
-) -> ModeRules {
-    set_all_skills(&mut roster.attributes_team1, 100);
-    set_all_skills(&mut roster.attributes_team2, 100);
-    for id in PlayerId::team(false) {
-        players[id.0].entity.flags.set_invisible(true);
-    }
-    ModeRules {
-        team1: teams[config.team1.unwrap_or(0)].clone(),
-        team2: teams[config.team2.unwrap_or(1)].clone(),
-        leg_duration: 90,
+fn practice(rom: &AtariRom, config: &Config) -> MatchRules {
+    MatchRules {
+        team1: Squad {
+            team: league_team(rom, config.team1.unwrap_or(0)),
+            skills: SquadSkills::Uniform(100),
+        },
+        team2: Squad {
+            team: league_team(rom, config.team2.unwrap_or(1)),
+            skills: SquadSkills::Uniform(100),
+        },
         max_credits: PerTeam::new(0, 0),
-        computer: PerTeam::new(false, false),
+        ..MatchRules::practice(rom)
     }
 }
 
-fn two_players(rom: &AtariRom, teams: &[Team], roster: &mut Roster, config: &Config) -> ModeRules {
-    set_all_skills(&mut roster.attributes_team1, 170);
-    set_all_skills(&mut roster.attributes_team2, 170);
-    let texts = TextPanel::new(rom);
-    let mut team1 = teams[config.team1.unwrap_or(0)].clone();
-    team1.full_name = texts.text(TextId::Player1Full).clone();
-    team1.short_name = texts.text(TextId::Player1Short).clone();
-    let team2 = match config.team2 {
-        Some(i) => teams[i].clone(),
-        None => Team::read(rom, addr::TEAM_PLAYER2),
-    };
-    ModeRules {
-        team1,
-        team2,
-        leg_duration: 90,
-        max_credits: PerTeam::new(2000, 2000),
-        computer: PerTeam::new(false, false),
+fn two_players(rom: &AtariRom, config: &Config) -> MatchRules {
+    // Team 1 is always "PLAYER 1" on 170s, so `--team1` changes nothing.
+    let mut rules = MatchRules::two_players(rom, 0);
+    if let Some(team2) = config.team2 {
+        rules.team2.team = league_team(rom, team2);
     }
+    rules
 }
 
-fn demo(teams: &[Team], roster: &mut Roster, config: &Config) -> ModeRules {
-    let team1 = &teams[config.team1.unwrap_or(14)];
-    let team2 = &teams[config.team2.unwrap_or(13)];
-    team1.apply_skills_to(&mut roster.attributes_team1);
-    team2.apply_skills_to(&mut roster.attributes_team2);
-    ModeRules {
-        team1: team1.clone(),
-        team2: team2.clone(),
-        leg_duration: 20,
-        max_credits: PerTeam::new(0, 0),
-        computer: PerTeam::new(true, true),
+fn demo(rom: &AtariRom, config: &Config) -> MatchRules {
+    let mut rules = MatchRules::demo(rom);
+    if let Some(team1) = config.team1 {
+        rules.team1.team = league_team(rom, team1);
     }
-}
-
-fn set_all_skills(attributes: &mut [Attributes], value: i32) {
-    for member in attributes {
-        member.skills = Skills::uniform(value);
+    if let Some(team2) = config.team2 {
+        rules.team2.team = league_team(rom, team2);
     }
+    rules
 }
 
 fn random_distinct_teams(seeds: &mut SplitMix64, config: &Config) -> (usize, usize) {

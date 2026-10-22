@@ -34,7 +34,7 @@ fn load(platform: Platform) -> Option<Harness> {
 fn config(platform: Platform, mode: GameMode, seed: u64) -> Config {
     Config {
         platform,
-        mode,
+        mode: Some(mode),
         seed,
         ..Config::default()
     }
@@ -44,7 +44,7 @@ fn config(platform: Platform, mode: GameMode, seed: u64) -> Config {
 /// how many frames it took.
 fn play(h: &Harness, config: &Config, max_frames: usize) -> (Match, usize) {
     let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), config.platform);
-    let mut game = Match::new(MatchSetup::new(&h.rom, config), Rc::clone(&h.rom));
+    let mut game = Match::new(MatchSetup::from_config(&h.rom, config), Rc::clone(&h.rom));
     let renderer = MatchRenderer::new(assets, &h.rom);
     let mut canvas = Canvas::new(320, 200);
     for frame in 1..=max_frames {
@@ -156,7 +156,7 @@ fn dump_frames() {
         let Some(h) = load(platform) else { continue };
         let config = config(platform, GameMode::Knockout, 2);
         let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), platform);
-        let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+        let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
         let renderer = MatchRenderer::new(assets, &h.rom);
         let mut canvas = Canvas::new(320, 200);
         let mut replay_frames = 0;
@@ -167,7 +167,11 @@ fn dump_frames() {
             }
             if [1, 150, 400, 900, 1795, 1800].contains(&frame) || [2, 60].contains(&replay_frames) {
                 renderer.render(&game, &mut canvas);
-                let replaying = if game.replay.is_playing() { "_replay" } else { "" };
+                let replaying = if game.replay.is_playing() {
+                    "_replay"
+                } else {
+                    ""
+                };
                 let path = format!("{dir}/{platform:?}_{frame:05}{replaying}.bmp");
                 std::fs::write(path, bmp(&canvas)).unwrap();
             }
@@ -175,7 +179,7 @@ fn dump_frames() {
     }
 }
 
-fn bmp(canvas: &Canvas) -> Vec<u8> {
+pub(crate) fn bmp(canvas: &Canvas) -> Vec<u8> {
     let (w, h) = (canvas.width() as u32, canvas.height() as u32);
     let size = 54 + w * h * 4;
     let mut out = Vec::with_capacity(size as usize);
@@ -205,7 +209,7 @@ fn sounds_are_requested_where_the_original_plays_them() {
     let mut heard = std::collections::HashSet::new();
     for seed in 1..=6 {
         let config = config(Platform::Amiga, GameMode::Knockout, seed);
-        let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+        let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
         assert_eq!(game.take_sounds(), vec![Sound::GET_READY_KICK_OFF]);
         let mut was_injured = false;
         let mut second_crowd = None;
@@ -233,7 +237,11 @@ fn sounds_are_requested_where_the_original_plays_them() {
                 second_crowd = Some(crowd);
             } else if let Some(crowd) = second_crowd {
                 if !game.replay.is_playing() {
-                    assert_eq!(sounds.first(), Some(&crowd), "the crowd again after the replay");
+                    assert_eq!(
+                        sounds.first(),
+                        Some(&crowd),
+                        "the crowd again after the replay"
+                    );
                     second_crowd = None;
                 }
             }
@@ -306,7 +314,7 @@ fn warp_keeps_sideways_drift_only_when_moving_straight() {
         return;
     };
     let config = config(Platform::Atari, GameMode::Knockout, 1);
-    let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+    let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
     let mut warp = |dir: i32| {
         game.holder = None;
         let ball = &mut game.props.ball;
@@ -328,7 +336,7 @@ fn launcher_shows_during_the_launch_and_hides_after() {
         return;
     };
     let config = config(Platform::Atari, GameMode::Demo, 1);
-    let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+    let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
     let mut seen_during_launch = false;
     for _ in 0..2_000 {
         game.step();
@@ -354,7 +362,7 @@ fn goals_are_replayed_at_half_speed_then_play_resumes() {
         return;
     };
     let config = config(Platform::Atari, GameMode::Knockout, 1);
-    let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+    let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
     let mut replays = 0;
     for _ in 0..60_000 {
         let score = game.scores;
@@ -400,7 +408,7 @@ fn firing_skips_the_replay() {
         return;
     };
     let config = config(Platform::Atari, GameMode::Knockout, 1);
-    let mut game = Match::new(MatchSetup::new(&h.rom, &config), Rc::clone(&h.rom));
+    let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
     while !game.replay.is_playing() {
         game.step();
     }

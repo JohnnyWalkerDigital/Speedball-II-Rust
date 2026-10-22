@@ -294,6 +294,13 @@ impl Match {
         over
     }
 
+    /// Escape: the match stops where it is, with the same closing sounds
+    /// as a finished match (`play_match`).
+    pub fn abandon(&mut self) {
+        self.play_sound(Sound::SILENCE);
+        self.play_sound(Sound::END_OF_MATCH);
+    }
+
     /// Hands a team over to the keyboard (or back to the computer).
     pub fn set_computer_control(&mut self, side: Side, computer: bool) {
         *self.computer.get_mut(side) = computer;

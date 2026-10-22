@@ -21,12 +21,9 @@ pub struct SoundOutput {
 
 impl SoundOutput {
     /// Opens the default audio device and starts the driver.
-    pub fn start(match_dump: Vec<u8>) -> Result<Self, String> {
+    pub fn start(ram: Vec<u8>) -> Result<Self, String> {
         let (stream, handle) = OutputStream::try_default().map_err(|e| e.to_string())?;
-        let driver = Arc::new(Mutex::new(Driver::new(
-            Memory::new(match_dump),
-            SAMPLE_RATE,
-        )));
+        let driver = Arc::new(Mutex::new(Driver::new(Memory::new(ram), SAMPLE_RATE)));
         handle
             .play_raw(DriverSource::new(Arc::clone(&driver)))
             .map_err(|e| e.to_string())?;
@@ -38,6 +35,11 @@ impl SoundOutput {
 
     pub fn play(&self, sound: Sound) {
         lock(&self.driver).play(sound.id, sound.priority);
+    }
+
+    /// Plays from `ram` from now on (see [`Driver::set_memory`]).
+    pub fn set_ram(&self, ram: Vec<u8>) {
+        lock(&self.driver).set_memory(Memory::new(ram));
     }
 }
 

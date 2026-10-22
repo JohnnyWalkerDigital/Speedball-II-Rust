@@ -66,7 +66,9 @@ impl Replay {
     }
 
     fn entry(&self, at: usize) -> &Entry {
-        self.slots[at].as_ref().expect("entries between tail and head are written")
+        self.slots[at]
+            .as_ref()
+            .expect("entries between tail and head are written")
     }
 }
 
@@ -122,11 +124,15 @@ impl Match {
             let entry = self.replay.entry(cursor).clone();
             cursor = (cursor + 1) % CAPACITY;
             // A frame whose marker was overwritten is skipped.
-            let Entry::Frame(scroll) = entry else { continue };
+            let Entry::Frame(scroll) = entry else {
+                continue;
+            };
             self.scroll = scroll;
             self.scene.clear();
             while cursor != self.replay.head {
-                let Entry::Sprite(sprite) = self.replay.entry(cursor) else { break };
+                let Entry::Sprite(sprite) = self.replay.entry(cursor) else {
+                    break;
+                };
                 self.scene.push((**sprite).clone());
                 cursor = (cursor + 1) % CAPACITY;
             }
@@ -152,7 +158,9 @@ mod tests {
         // One slot always stays free: 764 entries fit.
         assert_eq!(replay.head, 0);
         assert_eq!(replay.tail, 1);
-        let Entry::Frame(oldest) = replay.entry(replay.tail) else { panic!() };
+        let Entry::Frame(oldest) = replay.entry(replay.tail) else {
+            panic!()
+        };
         assert_eq!(oldest.x, 1);
     }
 }

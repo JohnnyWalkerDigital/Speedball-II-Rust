@@ -55,7 +55,10 @@ impl MatchRenderer {
         for e in &m.scene {
             if e.is_electrobounce() {
                 self.draw_electrobounce(canvas, e, m.scroll);
-            } else if Self::is_dome(e) && self.assets.platform == Platform::Amiga && e.sprite != 0x88 {
+            } else if Self::is_dome(e)
+                && self.assets.platform == Platform::Amiga
+                && e.sprite != 0x88
+            {
                 // The Amiga bank only has the "hit" frame of the domes; the
                 // rest is part of the pitch tiles.
             } else {

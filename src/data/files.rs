@@ -19,8 +19,8 @@ const AMIGA_DUMP_SIZE: usize = 524_288;
 /// Raw bytes of every file the selected platform needs.
 ///
 /// The match logic always runs off the Atari ST disk (that is where the
-/// original port found its lookup tables); the Amiga files are only used for
-/// graphics.
+/// original port found its lookup tables); the Amiga files are used for
+/// graphics, sound and the menus.
 pub struct GameFiles {
     pub atari_disk: Vec<u8>,
     pub amiga: Option<AmigaFiles>,
@@ -71,13 +71,18 @@ impl GameFiles {
         let atari_disk = read_exact_size(&data_dir.join(ATARI_DISK), ATARI_DISK_SIZE)?;
         let amiga = match platform {
             Platform::Atari => None,
-            Platform::Amiga => Some(AmigaFiles {
-                disk: read_exact_size(&data_dir.join(AMIGA_DISK), AMIGA_DISK_SIZE)?,
-                match_dump: read_amiga_match_dump(data_dir)?,
-            }),
+            Platform::Amiga => Some(read_amiga_files(data_dir)?),
         };
         Ok(Self { atari_disk, amiga })
     }
+}
+
+/// The Amiga disk and match dump.
+pub fn read_amiga_files(data_dir: &Path) -> Result<AmigaFiles, LoadError> {
+    Ok(AmigaFiles {
+        disk: read_exact_size(&data_dir.join(AMIGA_DISK), AMIGA_DISK_SIZE)?,
+        match_dump: read_amiga_match_dump(data_dir)?,
+    })
 }
 
 /// The Amiga match RAM dump on its own; sound needs it on either platform.

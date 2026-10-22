@@ -30,13 +30,13 @@ impl Palette {
     }
 
     fn to_argb(word: u16, model: ColorModel) -> u32 {
-        let channel = |shift: u16| -> u32 {
-            match model {
-                ColorModel::AtariSt => Self::ST_LEVELS[usize::from((word >> shift) & 0x7)],
-                ColorModel::Amiga => u32::from((word >> shift) & 0xF) * 17,
+        match model {
+            ColorModel::Amiga => amiga_color(word),
+            ColorModel::AtariSt => {
+                let channel = |shift: u16| Self::ST_LEVELS[usize::from((word >> shift) & 0x7)];
+                0xFF00_0000 | (channel(8) << 16) | (channel(4) << 8) | channel(0)
             }
-        };
-        0xFF00_0000 | (channel(8) << 16) | (channel(4) << 8) | channel(0)
+        }
     }
 
     pub fn color(&self, index: usize) -> u32 {
@@ -50,6 +50,12 @@ impl Palette {
         copy.colors[target] = self.colors[source];
         copy
     }
+}
+
+/// An Amiga colour word (`0x0RGB`, 4 bits per channel) as ARGB.
+pub fn amiga_color(word: u16) -> u32 {
+    let channel = |shift: u16| u32::from((word >> shift) & 0xF) * 17;
+    0xFF00_0000 | (channel(8) << 16) | (channel(4) << 8) | channel(0)
 }
 
 #[cfg(test)]

@@ -1,8 +1,10 @@
-# Speedball 2 match engine (Rust)
+# Speedball 2 (Rust)
 
 A Rust port of the 2011 C# reimplementation of the Speedball 2 match engine
-in `../src`. Like the original, it reads graphics and the game's lookup
-tables straight from the Atari ST / Amiga disk images in `../src/Resources`.
+in `../src`, extended from the Amiga disassembly with sound, goal replays
+and the front-end menus. Like the original, it reads graphics and the game's
+lookup tables straight from the Atari ST / Amiga disk images in
+`../src/Resources`.
 
 ## Running
 
@@ -10,22 +12,63 @@ tables straight from the Atari ST / Amiga disk images in `../src/Resources`.
 cargo run --release
 ```
 
+starts at the main menu. `--mode` skips the menus and plays one match:
+
 ```bash
 cargo run --release -- --atari --mode two-players --team2 5
 ```
 
-Options (`--help` lists them all): `--atari`/`--amiga`, `--mode knockout|two-players|practice|demo`,
-`--team1/--team2 <0-15>`, `--seed <n>` (same seed, same match), `--scale 1|2|4|8`, `--data <dir>`.
+Options (`--help` lists them all): `--atari`/`--amiga` (match graphics),
+`--mode knockout|two-players|practice|demo`, `--team1/--team2 <0-15>` (with
+`--mode`), `--seed <n>` (same seed, same matches), `--scale 1|2|4|8`,
+`--data <dir>`.
 
 | Keys | Action |
 | --- | --- |
-| Arrows + Space / Right Ctrl | Team 1 |
+| Arrows + Space / Right Ctrl | Team 1 (and the menus) |
 | W A S D + Left Shift / Left Ctrl | Team 2 |
-| P / N / F | Pause / step one frame / fast forward |
-| Esc | Quit |
+| P / N / F | In a match: pause / step one frame / fast forward |
+| Esc | Leave a match or menu for the main menu; on the main menu, quit |
 
-Like the original, in knockout mode both teams are computer controlled until
-you touch a team's controls.
+With `--mode knockout`, both teams are computer controlled until you touch a
+team's controls, as in the C# port.
+
+## Menus
+
+`menu/` is a port of the Amiga front end (`main_menu` and the game-mode
+routines). It runs on the Amiga data whichever graphics the match uses:
+`data/amiga.rs` reads the disk's overlay directory and rebuilds the menus'
+memory from `Amiga.dmp` the way `load_mgmt_data` does, loading the menu
+graphics (overlay 1) and the menu sound samples (overlay 28) at their
+original addresses. The menu code then reads its strings, layouts and fonts
+from there, and the sound driver switches between the menu and match
+samples as the original did.
+
+The menu code is written like the original: straight-line code that waits
+for the next frame. `menu/host.rs` is the seam: the window implements it
+for play and a scripted player implements it for the tests. Screens are
+drawn as palette indices into a back buffer and brought up with the
+original's palette fades (15 steps, 40 ms apart).
+
+Ported:
+
+- Main menu ("SELECT GAME"), with the demo starting after 30 idle seconds.
+- One player: knockout (the 15 other teams in turn; a draw replays the
+  round, a defeat ends it; the knockout trophy screen after the last) and
+  practice.
+- Two players: one match or the best of three or five, each match two legs
+  with ends swapped and extra legs while the aggregate is level.
+- The demo game.
+- Result screens: score and winner, the aggregate after two legs, the
+  victory and defeat pictures for Brutal Deluxe, "PLAYER n WINS" and
+  "GAME OVER".
+
+Not yet: league and cup (selecting them goes back to the main menu), the
+manager screens (the gym before knockout and two-player matches, the
+knockout fixture screen, the manager screens after the demo), match
+statistics and prize money, replay saving and the "REPLAY GOALS" viewer
+(selecting it does nothing), and the intro. There is no team selection
+in the original: one-player games are always Brutal Deluxe.
 
 ## Sound
 
@@ -76,9 +119,11 @@ cargo test
 Unit tests cover the decoders, the RNG (bit-exact against the C#) and the
 geometry. `simulation_tests.rs` plays whole matches headlessly against the
 real disk images on both platforms, rendering every frame, and checks that a
-seed always replays identically. These are skipped when the images are
-missing. `cargo test dump_frames -- --ignored` with `SPEEDBALL_FRAMES_DIR` set
-writes sample frames as BMPs.
+seed always replays identically. `front_end_tests.rs` drives the menus with
+a scripted player: the demo after 30 idle seconds, Escape leaving a match,
+two-player legs. These are skipped when the images are missing.
+`cargo test dump_ -- --ignored` with `SPEEDBALL_FRAMES_DIR` set writes sample
+match, menu and result frames as BMPs.
 
 ## Layout
 
@@ -96,6 +141,7 @@ writes sample frames as BMPs.
 | `game/setup.rs` | Building teams per game mode | `Game.cs` |
 | `graphics/` | Palettes, bitplane decoding, sprite sheets, pitch assembly | `Palette`, `Sprite`, `SpriteManager`, `Field` |
 | `render.rs` | Draws a `Match` onto the screen | drawing code spread through `Match`/`Entity` |
+| `menu/` | Main menu, game modes, result screens | none (new, from the disassembly) |
 | `app.rs` | Window, keyboard, timing | `Main.cs`, `Program.cs` |
 
 Design choices:
@@ -132,6 +178,10 @@ Design choices:
   once the ball is in play (`step_prepare_ball_launch`, `step_ball_launch`).
 - The status bar's team 2 midfield light tests team 2's own player, as the
   original does (`green_light_active_player`); the C# tested team 1's.
+- The menus are new (see Menus). Where they differ from the Amiga: Escape on
+  the main menu quits (the original had nowhere to go); each match gets a
+  seed from `--seed` instead of random numbers stirred while the menus wait
+  for input; and the "insert disk" prompts are gone.
 
 ## Oddities kept on purpose
 
@@ -172,6 +222,12 @@ Crowd and sound:
   injured.
 - The code's comments around the interception sounds (`get_ball`) contradict
   each other; the port follows the branches, not the comments.
+
+Menus:
+
+- A negative score on a result screen shows as "ZZZ": `format_decimal_digit`
+  divides with `divu`, which gives up on a negative number and leaves the
+  remainder as -1, one before the digit 0 in the font.
 
 Sound driver:
 

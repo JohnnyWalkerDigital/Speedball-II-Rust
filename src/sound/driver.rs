@@ -273,6 +273,13 @@ impl Driver {
         }
     }
 
+    /// Swaps in different memory, as when the game loads the menu or match
+    /// samples over each other. Whatever is playing carries on reading the
+    /// new bytes, as it did on the Amiga.
+    pub fn set_memory(&mut self, memory: Memory) {
+        self.memory = memory;
+    }
+
     /// Fills `out` with interleaved stereo samples, stepping the driver at
     /// 50 Hz of audio time like the vertical-blank interrupt.
     pub fn render(&mut self, out: &mut [f32]) {

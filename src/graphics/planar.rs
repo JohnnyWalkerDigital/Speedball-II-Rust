@@ -4,6 +4,7 @@
 //! bitplanes; they differ only in how the planes are laid out in memory.
 
 use super::image::Image;
+use super::indexed::IndexedImage;
 use super::palette::Palette;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,6 +72,21 @@ pub fn decode_sprites(
     bytes
         .chunks_exact(format.bytes_per_sprite())
         .map(|sprite| decode_sprite(sprite, format, palette, mask))
+        .collect()
+}
+
+/// Decodes as many whole sprites as fit in `bytes`, keeping colour indices.
+pub fn decode_indexed_sprites(bytes: &[u8], format: SpriteFormat) -> Vec<IndexedImage> {
+    let strides = format.strides();
+    bytes
+        .chunks_exact(format.bytes_per_sprite())
+        .map(|sprite| {
+            let pixels = (0..format.height)
+                .flat_map(|y| (0..format.width).map(move |x| (x, y)))
+                .map(|(x, y)| color_index(sprite, &strides, format.planes, x, y) as u8)
+                .collect();
+            IndexedImage::new(format.width, format.height, pixels)
+        })
         .collect()
 }
 

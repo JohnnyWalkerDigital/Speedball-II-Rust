@@ -2,6 +2,7 @@
 //! lookup tables the 68000 code relies on.
 
 pub mod addr;
+pub mod amiga;
 pub mod bytes;
 pub mod files;
 pub mod rom;
