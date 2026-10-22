@@ -1,0 +1,18 @@
+[package]
+name = "speedball2-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Rust port of a reverse-engineered Speedball 2 match engine"
+
+[[bin]]
+name = "speedball2"
+path = "src/main.rs"
+
+[dependencies]
+minifb = "0.29.0"
+rodio = { version = "0.19", default-features = false }
+
+[profile.dev]
+# The engine decodes ~1 MB of bitplanes at startup; keep debug builds snappy.
+opt-level = 1
