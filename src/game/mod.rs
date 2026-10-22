@@ -22,6 +22,7 @@ pub mod roster;
 pub mod save;
 pub mod scene;
 pub mod setup;
+pub mod sprites;
 pub mod squad;
 pub mod state;
 pub mod statistics;

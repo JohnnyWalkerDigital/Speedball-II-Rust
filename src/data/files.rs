@@ -11,6 +11,7 @@ const ATARI_DISK: &str =
     "Speedball 2 - Brutal Deluxe (1990)(Bitmap Brothers)[!] - Track 00 filled.st";
 const AMIGA_DISK: &str = "Speedball 2 - Brutal Deluxe (1990)(ImageWorks)[cr DC].adf";
 const AMIGA_MATCH_DUMP: &str = "Amiga.dmp";
+const AMIGA_INTRO_DUMP: &str = "Intro - Amiga.dmp";
 
 const ATARI_DISK_SIZE: usize = 819_200;
 const AMIGA_DISK_SIZE: usize = 901_120;
@@ -88,6 +89,12 @@ pub fn read_amiga_files(data_dir: &Path) -> Result<AmigaFiles, LoadError> {
 /// The Amiga match RAM dump on its own; sound needs it on either platform.
 pub fn read_amiga_match_dump(data_dir: &Path) -> Result<Vec<u8>, LoadError> {
     read_exact_size(&data_dir.join(AMIGA_MATCH_DUMP), AMIGA_DUMP_SIZE)
+}
+
+/// The Amiga RAM dump taken during the intro: its pictures, font, text and
+/// music.
+pub fn read_amiga_intro_dump(data_dir: &Path) -> Result<Vec<u8>, LoadError> {
+    read_exact_size(&data_dir.join(AMIGA_INTRO_DUMP), AMIGA_DUMP_SIZE)
 }
 
 fn read_exact_size(path: &Path, expected: usize) -> Result<Vec<u8>, LoadError> {

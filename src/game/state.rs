@@ -181,6 +181,9 @@ pub struct Match {
     /// The status bar is only redrawn after the goal replay, so it shows
     /// the score from before the goal while the replay runs.
     scores_before_goal: Option<PerTeam<i32>>,
+    /// `misc_flags` bit 4: sped up, drawing nothing (F in a managed league
+    /// or cup match).
+    pub(crate) accelerated: bool,
 }
 
 impl Match {
@@ -252,6 +255,7 @@ impl Match {
             scene: Vec::new(),
             replay: Replay::default(),
             scores_before_goal: None,
+            accelerated: false,
         };
 
         // Item placement consumes random numbers in this exact order.
@@ -437,10 +441,23 @@ impl Match {
         let camera_target = self.carry_ball();
         self.follow_with_camera(camera_target);
         self.tick_clock();
-        // `match_tick` draws the frame, recording it for replays.
-        self.scene = self.compose_scene();
-        self.record_replay_frame();
+        // `match_tick` draws the frame, recording it for replays, unless
+        // the match is sped up.
+        if !self.accelerated {
+            self.scene = self.compose_scene();
+            self.record_replay_frame();
+        }
         self.update_panel_overlay();
+    }
+
+    /// Speeds the match up (F in a managed league or cup match): no frames
+    /// are drawn or recorded and goals are not replayed.
+    pub fn set_accelerated(&mut self, on: bool) {
+        self.accelerated = on;
+    }
+
+    pub fn is_accelerated(&self) -> bool {
+        self.accelerated
     }
 
     /// The score the status bar shows.
@@ -457,17 +474,19 @@ impl Match {
 
     /// `match_tick` builds the text panel while the clock is stopped.
     fn update_panel_overlay(&mut self) {
-        if !self.clock_paused {
-            return;
-        }
-        let text_panel_shown = if self.player_injured {
-            self.injury.stage > 1
-        } else {
-            self.text_panel.current.is_some()
-        };
-        if text_panel_shown {
+        if self.text_panel_shown() {
             self.build_panel_overlay();
         }
+    }
+
+    /// Whether `match_tick` builds a message on the panel this frame.
+    pub fn text_panel_shown(&self) -> bool {
+        self.clock_paused
+            && if self.player_injured {
+                self.injury.stage > 1
+            } else {
+                self.text_panel.current.is_some()
+            }
     }
 
     /// The bookkeeping in `build_text_overlay`: the panel's lines are drawn

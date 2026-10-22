@@ -12,6 +12,12 @@ pub struct Text {
 }
 
 impl Text {
+    /// A message from elsewhere (the menus' strings): the cursor, then the
+    /// text.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self { bytes }
+    }
+
     pub fn read(rom: &AtariRom, address: i32) -> Self {
         // The first two bytes are the initial cursor; the string ends at NUL.
         let mut length = 2;

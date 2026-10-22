@@ -12,7 +12,7 @@ use super::host::{Button, Control};
 use super::manager::data::ManagerTables;
 use super::manager::{self, Cursors, Standings};
 use super::panels::{self, Competition};
-use super::play::{run_match, Controls};
+use super::play::{run_match, Controls, ReplaySaves};
 use super::ram::{addr, MenuRam, MenuSpec, Title};
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
@@ -27,6 +27,7 @@ use crate::game::setup::{MatchRules, SquadSkills, BRUTAL_DELUXE};
 use crate::game::squad::Market;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::ilbm::Picture;
+use crate::graphics::Canvas;
 use crate::render::MatchRenderer;
 
 /// After this many frames on the main menu the demo starts (30 seconds).
@@ -75,6 +76,16 @@ pub struct Game {
     /// `misc_flags` bit 0: the computer plays Brutal Deluxe's matches
     /// ("TEAM MANAGER" in the league).
     pub manager_mode: bool,
+    /// `misc_flags` bit 1: a one-player game (set for the demo too).
+    /// Goal replays can only be saved in one-player games outside manager
+    /// mode; the flags outlast the game, so the same goes for the replay
+    /// viewer.
+    pub one_player: bool,
+    /// `misc_flags` bit 4: matches are sped up, until the next main menu.
+    pub sped_up: bool,
+    /// The status bar as the last match left it. The Amiga draws it once
+    /// at boot and matches draw over it, so the replay viewer shows it.
+    pub status_bar: Option<Canvas>,
     pub manager_tables: ManagerTables,
     /// Where the manager screens' cursors were left.
     pub cursors: Cursors,
@@ -109,6 +120,9 @@ impl Game {
             scores_table,
             coin_value: 100,
             manager_mode: false,
+            one_player: false,
+            sped_up: false,
+            status_bar: None,
             manager_tables,
             cursors: Cursors::default(),
             save_disk,
@@ -130,6 +144,16 @@ impl Game {
     pub(super) fn titled_page(&self, address: usize) -> Page {
         Page::titled(&self.assets, &self.title(address))
     }
+
+    fn may_save_replays(&self) -> bool {
+        self.one_player && !self.manager_mode
+    }
+
+    /// Saving goal replays, if `misc_flags` allow it (`save_replay`).
+    pub(super) fn replay_saves(&self) -> Option<ReplaySaves<'_>> {
+        self.may_save_replays()
+            .then(|| ReplaySaves::new(&self.save_disk, &self.ram))
+    }
 }
 
 /// What the main menu leads to.
@@ -139,6 +163,16 @@ enum MainChoice {
     TwoPlayers,
     Demo,
     ReplayGoals,
+}
+
+impl MainChoice {
+    /// What "GAME OVER" says afterwards.
+    fn game_over(self) -> usize {
+        match self {
+            MainChoice::ReplayGoals => addr::STR_REPLAYS_OVER,
+            _ => addr::STR_GAME_OVER,
+        }
+    }
 }
 
 /// `start`'s loop: the main menu, for ever. Returns when the player quits.
@@ -155,16 +189,16 @@ pub fn run(ui: &mut Ui, game: &mut Game) {
 fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.start_main_menu();
     game.career.restore_identities(&game.ram.base_identities());
+    game.sped_up = false;
     let choice = select_game(ui, game)?;
     match choice {
         MainChoice::OnePlayer => one_player(ui, game)?,
         MainChoice::TwoPlayers => two_players(ui, game)?,
         MainChoice::Demo => demo(ui, game)?,
-        // Needs saved replays (a later phase).
-        MainChoice::ReplayGoals => return Ok(()),
+        MainChoice::ReplayGoals => super::replays::replay_goals(ui, game)?,
     }
     let mut page = game.titled_page(addr::TITLE_SPEEDBALL_2_PUSH_START);
-    page.big_text(&game.assets, &game.ram.string(addr::STR_GAME_OVER));
+    page.big_text(&game.assets, &game.ram.string(choice.game_over()));
     ui.transition(&page)?;
     wait_any_fire(ui)
 }
@@ -289,6 +323,7 @@ pub(super) fn wait_fire(ui: &mut Ui) -> Flow {
 fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.init_squad(Side::Team1, 100);
     game.manager_mode = false;
+    game.one_player = true;
     let menu = game.ram.menu(addr::MENU_SELECT_MATCH);
     match list_menu(ui, game, &menu)? {
         0 => knockout(ui, game),
@@ -333,10 +368,11 @@ pub(super) fn win_shared(ui: &mut Ui, picture: &Picture) -> Flow {
 /// `game_practice`: Brutal Deluxe on their own, with no result screen.
 fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(10_000);
+    game.one_player = false;
     let mut rules = MatchRules::practice(&game.rom);
     rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
     let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(1));
-    play_match(ui, game, rules, teams, ResultScreen::None).map(|_| ())
+    play_match(ui, game, rules, teams, ResultScreen::None, false).map(|_| ())
 }
 
 // -- Two players -----------------------------------------------------------------
@@ -349,6 +385,8 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(2000);
     game.career.init_squad(Side::Team1, 170);
     game.career.init_squad(Side::Team2, 170);
+    game.manager_mode = false;
+    game.one_player = false;
     let menu = game.ram.menu(addr::MENU_SELECT_ONE_THREE_FIVE);
     let matches = list_menu(ui, game, &menu)? * 2 + 1;
     let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
@@ -361,7 +399,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         let mut initial_dir = 0;
         gym_two_player(ui, game)?;
         let rules = two_player_rules(game, initial_dir);
-        let mut total = play_match(ui, game, rules, teams, ResultScreen::Score)?;
+        let mut total = play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
         message(
             ui,
             game,
@@ -372,7 +410,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
             initial_dir ^= 4;
             gym_two_player(ui, game)?;
             let rules = two_player_rules(game, initial_dir);
-            let leg = play_match(ui, game, rules, teams, ResultScreen::Score)?;
+            let leg = play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
             total = PerTeam::new(total.team1 + leg.team1, total.team2 + leg.team2);
             result_screen(ui, game, total, addr::STR_TOTAL)?;
             if total.team1 != total.team2 {
@@ -427,9 +465,11 @@ pub(super) fn message(ui: &mut Ui, game: &Game, title: usize, text: &[u8]) -> Fl
 
 /// The demo game, then a look at the manager and gym screens.
 fn demo(ui: &mut Ui, game: &mut Game) -> Flow {
+    game.manager_mode = true;
+    game.one_player = true;
     let rules = MatchRules::demo(&game.rom);
     let teams = PerTeam::new(TeamId::League(14), TeamId::League(13));
-    play_match(ui, game, rules, teams, ResultScreen::Score)?;
+    play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
     manager::show_off(ui, game)
 }
 
@@ -499,7 +539,10 @@ fn brutal_deluxe_match(
     rules.initial_dir_team1 = initial_dir;
     rules.coin_value = game.coin_value;
     let teams = PerTeam::new(teams.0, teams.1);
-    let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures)?;
+    // `match_kind` 1 or 2.
+    let may_speed_up =
+        game.manager_mode && matches!(competition, Competition::League | Competition::Cup);
+    let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures, may_speed_up)?;
     Ok((scores.team1, scores.team2))
 }
 
@@ -522,6 +565,7 @@ fn play_match(
     mut rules: MatchRules,
     teams: PerTeam<TeamId>,
     result: ResultScreen,
+    may_speed_up: bool,
 ) -> Flow<PerTeam<i32>> {
     let money = game.career.money;
     rules.min_credits = i32::from(money.start);
@@ -536,8 +580,14 @@ fn play_match(
     let controls = Controls {
         take_over_on_touch: false,
         hold_at_end: false,
+        replay_saves: game
+            .may_save_replays()
+            .then(|| ReplaySaves::new(&game.save_disk, &game.ram)),
+        sped_up: &mut game.sped_up,
+        may_speed_up,
     };
     let played = run_match(ui, &mut game_match, &game.renderer, controls);
+    game.status_bar = Some(ui.front().clone());
     // Substitutions change the squad for good, even in an abandoned match.
     for (side, managed) in [(Side::Team1, managed.team1), (Side::Team2, managed.team2)] {
         if managed {

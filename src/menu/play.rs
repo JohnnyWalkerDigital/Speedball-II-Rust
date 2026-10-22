@@ -1,11 +1,17 @@
-//! Running a match: the loop in `play_match`, plus the port's pause, step
-//! and fast-forward keys.
+//! Running a match: the loop in `play_match` and the keys `run_replay`
+//! reads during a goal replay, plus the port's pause, step and fast-forward
+//! keys.
 
 use std::time::Duration;
 
 use super::host::{Button, Control, SoundBank};
+use super::ram::{addr, MenuRam};
+use super::saving::DISK_ERROR;
 use super::ui::{Flow, Stop, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::game::geometry::{Input, PerTeam};
+use crate::data::save_disk::{replay_sector, SaveDisk};
+use crate::game::geometry::{Input, PerTeam, Side};
+use crate::game::replay::SavedReplay;
+use crate::game::text::Text;
 use crate::game::Match;
 use crate::graphics::Canvas;
 use crate::render::MatchRenderer;
@@ -13,6 +19,9 @@ use crate::render::MatchRenderer;
 /// The original ran on a 1000/31 ms timer.
 pub const FRAME_TIME: Duration = Duration::from_millis(1000 / 31);
 const FAST_FORWARD_STEPS: usize = 8;
+/// A sped-up match ran as fast as the Amiga could run it without drawing;
+/// the port runs this many steps a frame.
+const SPED_UP_STEPS: usize = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Playback {
@@ -22,17 +31,82 @@ enum Playback {
 }
 
 /// How a match is driven.
-#[derive(Clone, Copy)]
-pub struct Controls {
+pub struct Controls<'a> {
     /// Touching a team's controls takes it over from the computer (the
     /// command-line knockout mode); otherwise the computer keeps its teams.
     pub take_over_on_touch: bool,
     /// Stay on the final frame, paused, instead of returning.
     pub hold_at_end: bool,
+    /// Where keys 1 to 9 save a goal replay, if they may.
+    pub replay_saves: Option<ReplaySaves<'a>>,
+    /// `misc_flags` bit 4: the match is sped up. It outlasts the match.
+    pub sped_up: &'a mut bool,
+    /// F speeds the match up or slows it down (league and cup matches in
+    /// manager mode). Elsewhere F is the port's fast forward.
+    pub may_speed_up: bool,
+}
+
+/// Saving goal replays (`save_replay`): the original allowed it in one
+/// player games, but not in manager mode.
+pub struct ReplaySaves<'a> {
+    pub disk: &'a SaveDisk,
+    /// `maybe_serial`, saved with each replay.
+    pub serial: u32,
+    /// "DISK ERROR" on the panel.
+    pub disk_error: Text,
+}
+
+impl<'a> ReplaySaves<'a> {
+    pub fn new(disk: &'a SaveDisk, ram: &MenuRam) -> Self {
+        Self {
+            disk,
+            serial: ram.long(addr::MAYBE_SERIAL),
+            disk_error: Text::new(ram.string(addr::STR_DISK_ERROR)),
+        }
+    }
+
+    /// Writes a replay to `slot`, asking to retry on a disk error
+    /// (`save_replay`). `frame` is what is on screen.
+    pub fn save(
+        &self,
+        ui: &mut Ui,
+        renderer: &MatchRenderer,
+        frame: &Canvas,
+        replay: &SavedReplay,
+        slot: u8,
+    ) -> Flow {
+        let bytes = replay.encode();
+        while self.disk.write(replay_sector(slot), &bytes).is_err() {
+            if !self.disk_error(ui, renderer, frame)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// `disk_error_message`: player 1's fire retries, Escape gives up.
+    fn disk_error(&self, ui: &mut Ui, renderer: &MatchRenderer, frame: &Canvas) -> Flow<bool> {
+        let mut shown = frame.clone();
+        renderer.render_message(&self.disk_error, &mut shown);
+        ui.play_sound(DISK_ERROR);
+        ui.clear_input();
+        loop {
+            ui.show_frame(&shown, FRAME_TIME)?;
+            let pressed = ui.next_press(|b| {
+                b == Button::Joystick(Side::Team1, Control::Fire) || b == Button::Escape
+            });
+            match pressed {
+                Some(Button::Escape) => return Ok(false),
+                Some(_) => return Ok(true),
+                None => {}
+            }
+        }
+    }
 }
 
 /// Plays `game` to the end. Escape abandons it (`Stop::Abort`), as in the
-/// original. Returns the final score.
+/// original, except during a goal replay, where it ends the replay.
+/// Returns the final score.
 pub fn run_match(
     ui: &mut Ui,
     game: &mut Match,
@@ -40,8 +114,11 @@ pub fn run_match(
     controls: Controls,
 ) -> Flow<PerTeam<i32>> {
     ui.use_sound_bank(SoundBank::Match);
+    game.set_accelerated(*controls.sped_up);
     let mut canvas = Canvas::new(SCREEN_WIDTH, SCREEN_HEIGHT);
     renderer.render(game, &mut canvas);
+    // What a sped-up match leaves on screen.
+    let mut view = canvas.clone();
     ui.transition_to(canvas.clone(), None)?;
 
     let mut playback = Playback::Running;
@@ -49,6 +126,7 @@ pub fn run_match(
     ui.clear_input();
     let result = loop {
         let mut steps = match playback {
+            Playback::Running if game.is_accelerated() => SPED_UP_STEPS,
             Playback::Running => 1,
             Playback::FastForward => FAST_FORWARD_STEPS,
             Playback::Paused => 0,
@@ -62,7 +140,24 @@ pub fn run_match(
                     set_control(game.input_mut(side), control, event.pressed);
                 }
                 _ if !event.pressed || event.repeat => {}
+                Button::Escape if game.is_replaying() => game.end_replay(),
                 Button::Escape => break_out(ui, game)?,
+                Button::Number(slot) if game.is_replaying() => {
+                    if let Some(saves) = &controls.replay_saves {
+                        let replay = game.saved_replay(saves.serial);
+                        saves.save(ui, renderer, &canvas, &replay, slot)?;
+                    }
+                }
+                Button::Number(_) => {}
+                // `run_replay`: F speeds the match up and ends the replay.
+                Button::FastForward if controls.may_speed_up && game.is_replaying() => {
+                    game.set_accelerated(true);
+                    game.end_replay();
+                }
+                // `play_match`: F toggles it.
+                Button::FastForward if controls.may_speed_up => {
+                    game.set_accelerated(!game.is_accelerated());
+                }
                 Button::Pause if playback == Playback::Paused => playback = Playback::Running,
                 Button::Pause => playback = Playback::Paused,
                 Button::FastForward if playback == Playback::FastForward => {
@@ -91,13 +186,20 @@ pub fn run_match(
             playback = Playback::Paused;
         }
         ui.host().set_status(match playback {
+            Playback::Running if game.is_accelerated() => "sped up: F for normal speed",
             Playback::Running => "",
             Playback::Paused => "paused: P resume, N step",
             Playback::FastForward => "fast forward",
         });
-        renderer.render(game, &mut canvas);
+        if game.is_accelerated() {
+            renderer.render_sped_up(game, &mut view, &mut canvas);
+        } else {
+            renderer.render(game, &mut canvas);
+            view.pixels_mut().copy_from_slice(canvas.pixels());
+        }
         ui.show_frame(&canvas, FRAME_TIME)?;
     };
+    *controls.sped_up = game.is_accelerated();
     ui.host().set_status("");
     ui.use_sound_bank(SoundBank::Menu);
     Ok(result)

@@ -50,6 +50,28 @@ impl Page {
         Self { screen, palette }
     }
 
+    /// `fill_screen_zero`: a blank screen, to be shown in `palette`.
+    pub fn blank(palette: ColorWords) -> Self {
+        Self {
+            screen: IndexedScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT),
+            palette,
+        }
+    }
+
+    /// A masked sprite (colour 0 shows what is underneath).
+    pub fn sprite(&mut self, image: &IndexedImage, x: i32, y: i32) {
+        self.screen.draw(image, x, y);
+    }
+
+    /// An unmasked sprite.
+    pub fn sprite_opaque(&mut self, image: &IndexedImage, x: i32, y: i32) {
+        self.screen.draw_opaque(image, x, y);
+    }
+
+    pub fn region(&self, x: i32, y: i32, width: usize, height: usize) -> IndexedImage {
+        self.screen.region(x, y, width, height)
+    }
+
     /// `display_splash`: a full-screen picture and its colours.
     pub fn picture(picture: &Picture) -> Self {
         let mut screen = IndexedScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -228,6 +250,21 @@ impl<'h> Ui<'h> {
         self.transition_to(canvas, Some(page.palette))
     }
 
+    /// `display_fade_transition_sound`: as [`Ui::transition`], starting
+    /// `sound` once the old screen has faded out. Nothing plays if no fade
+    /// is needed.
+    pub fn transition_playing(&mut self, page: &Page, sound: Sound) -> Flow {
+        if self.front_palette == Some(page.palette) && self.darkness == 0 {
+            return self.transition(page);
+        }
+        self.fade_out()?;
+        page.screen.render(&page.palette, &mut self.front);
+        self.front_palette = Some(page.palette);
+        self.vblank()?;
+        self.play_sound(sound);
+        self.fade_in()
+    }
+
     /// Brings a frame to the front; a frame with no palette (a match) always
     /// fades.
     pub fn transition_to(&mut self, frame: Canvas, palette: Option<ColorWords>) -> Flow {
@@ -272,6 +309,11 @@ impl<'h> Ui<'h> {
         self.front_palette = None;
         self.darkness = 0;
         self.wait(wait)
+    }
+
+    /// What is on screen, at full brightness.
+    pub fn front(&self) -> &Canvas {
+        &self.front
     }
 
     /// Forgets anything pressed so far (`clr.b controller_1_cooked`).

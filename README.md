@@ -12,7 +12,8 @@ lookup tables straight from the Atari ST / Amiga disk images in
 cargo run --release
 ```
 
-starts at the main menu. `--mode` skips the menus and plays one match:
+starts with the intro (fire or space skips it), then the main menu.
+`--mode` skips both and plays one match:
 
 ```bash
 cargo run --release -- --atari --mode two-players --team2 5
@@ -28,7 +29,9 @@ Options (`--help` lists them all): `--atari`/`--amiga` (match graphics),
 | Arrows + Space / Right Ctrl | Team 1 (and the menus) |
 | W A S D + Left Shift / Left Ctrl | Team 2 |
 | P / N / F | In a match: pause / step one frame / fast forward |
-| Esc | Leave a match or menu for the main menu; on the main menu, quit |
+| F | In a league or cup match as team manager: speed up / back to normal (the original's) |
+| 1-9 | During a goal replay: save it to that slot |
+| Esc | Leave a match or menu for the main menu; during a goal replay, end it; on the main menu, quit |
 
 With `--mode knockout`, both teams are computer controlled until you touch a
 team's controls, as in the C# port.
@@ -127,9 +130,21 @@ team 1 reaches its cap (in two-player games, once both teams have).
   original's "DISK ERROR" menu: retry or cancel. A loaded game rejoins where
   it was saved: the same round, or the second leg of a cup tie.
 
-Not yet: saving goal replays (keys 1-9 during a replay) and the "REPLAY
-GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
-in the original: one-player games are always Brutal Deluxe.
+- Goal replays saved to the same disk image (keys 1-9 during a replay) and
+  the "REPLAY GOALS" viewer (`menu/replays.rs`); see Goal replay.
+- Sped-up matches: F in a league or cup match as team manager runs it
+  without drawing the pitch, which stays as it was (with any panel message
+  drawn over it) while the status bar keeps up, and skips the goal
+  replays. F again (or F during a replay) toggles it; it lasts for the rest
+  of the game, until the main menu.
+- The intro (`menu/intro.rs`): "IMAGEWORKS PRESENTS", "A BITMAP BROTHERS
+  GAME", then the title with its music, the story and the credits typed out
+  letter by letter over the arena, round and round until fire or space is
+  held, and "LOADING GAME". It comes from `Intro - Amiga.dmp`; without that
+  file the game starts at the main menu.
+
+There is no team selection in the original: one-player games are always
+Brutal Deluxe.
 
 ## Sound
 
@@ -164,12 +179,19 @@ into a ring buffer the size of the original's (765 entries: one per frame
 plus one per sprite), so the replay covers the last 3 or so seconds, fewer
 when the screen is busy. It plays at half speed with "SCORED" or "OWN GOAL"
 on the panel, and the score in the status bar updates when it ends. Either
-team's fire button skips it. The frames drawn live and replayed come from
-the same list (`game/scene.rs`, `draw_game`'s order), which the renderer
-draws.
+team's fire button, or Escape, ends it.
 
-Not included: saving replays to disk (keys 1-9 during a replay) and the
-replay viewer in the main menu.
+Entries are packed as `save_sprite_for_replay` packed them: the sprite's
+Amiga bank and index (`game/sprites.rs` maps the port's ST numbering to the
+Amiga's four banks), its screen position and its colours. So whatever
+platform's graphics are showing, the replay is the Amiga's, and keys 1-9
+save it byte for byte as the original did (`save_replay`): the 3K buffer,
+the serial number the loader left in memory, the start and end, and
+"goal", six sectors at sector 44 plus a track per slot. The original
+allowed this only in one-player games outside manager mode. "REPLAY GOALS"
+on the main menu plays slots 1 to 9 in turn, skipping empty ones, with
+"GOAL n" on the panel for its first twenty frames, then says "REPLAYS
+OVER".
 
 ## Tests
 
@@ -182,7 +204,9 @@ geometry. `simulation_tests.rs` plays whole matches headlessly against the
 real disk images on both platforms, rendering every frame, and checks that a
 seed always replays identically. `front_end_tests.rs` drives the menus with
 a scripted player: the demo after 30 idle seconds, Escape leaving a match,
-two-player legs. These are skipped when the images are missing.
+two-player legs, the league, cup and manager screens, saving and loading,
+a goal replay saved in a match and watched from the menu, a sped-up match
+and the intro. These are skipped when the images are missing.
 `cargo test dump_ -- --ignored` with `SPEEDBALL_FRAMES_DIR` set writes sample
 match, menu and result frames as BMPs.
 
@@ -198,12 +222,13 @@ match, menu and result frames as BMPs.
 | `game/arena.rs` | Stars, multipliers, domes, electrobounces | `Stars.cs`, `ScoreMultipliers.cs`, ... |
 | `game/medic.rs` | Injuries and substitutions | `Match.cs` (`AnimMedic*`), `Player.sub_F6DC` |
 | `game/scene.rs` | The sprites on screen each frame, in drawing order | drawing code in `Match.cs` |
-| `game/replay.rs` | Recording and playing back the goal replay | none (new, from the disassembly) |
+| `game/replay.rs` | Recording, playing back and saving the goal replay | none (new, from the disassembly) |
+| `game/sprites.rs` | The Amiga's sprite banks | none (new, from the disassembly) |
 | `game/setup.rs` | Building teams per game mode | `Game.cs` |
 | `game/career.rs`, `league.rs`, `cup.rs`, `squad.rs`, `statistics.rs` | Money, records, the league and cup rules, the squad, gym and market, match statistics | none (new, from the disassembly) |
 | `graphics/` | Palettes, bitplane decoding, sprite sheets, pitch assembly | `Palette`, `Sprite`, `SpriteManager`, `Field` |
 | `render.rs` | Draws a `Match` onto the screen | drawing code spread through `Match`/`Entity` |
-| `menu/` | Main menu, game modes, result screens | none (new, from the disassembly) |
+| `menu/` | Intro, main menu, game modes, result screens, replay viewer | none (new, from the disassembly) |
 | `app.rs` | Window, keyboard, timing | `Main.cs`, `Program.cs` |
 
 Design choices:
@@ -246,7 +271,18 @@ Design choices:
 - The menus are new (see Menus). Where they differ from the Amiga: Escape on
   the main menu quits (the original had nowhere to go); each match gets a
   seed from `--seed` instead of random numbers stirred while the menus wait
-  for input; and the "insert disk" prompts are gone.
+  for input; and the "insert disk" prompts are gone, except before saving
+  and loading.
+- In a match, the original paused on any key without a job until the next
+  key; the port has P instead, and F is its fast forward wherever the
+  original's F does nothing.
+- A sped-up match ran as fast as the Amiga could compute it; the port runs
+  eight steps a frame.
+- The intro dump comes from a cracked copy that says "DUAL CREW PRESENT";
+  the port shows the original's "IMAGEWORKS PRESENTS" (from the
+  disassembly; the same number of bytes).
+- A saved replay's buffer holds zeros where the replay doesn't reach; the
+  original's held whatever earlier matches had left there.
 
 ## Oddities kept on purpose
 
@@ -320,6 +356,25 @@ Menus and results:
   its counters reset, so the injured player's goals and tackles drop out of
   the team's statistics screen (the score is unaffected); only the
   substitution count carries over (`step_injury_3`, `reset_player`).
+
+Replays and the intro:
+
+- The domes are pitch tiles on the Amiga except for the frame when one is
+  hit, so only that frame is recorded, and on ST graphics the replayed domes
+  are drawn idle under it.
+- A 32x32 sprite records whether it came from the launcher's bank, but
+  not which of the others, so the big ball (its own bank) replays as the
+  player frame with the same index (`replay_frame`).
+- The replay viewer shows the status bar as the last match left it, since
+  the Amiga only draws it once at boot; before any match, it is blank.
+- Keys 1-9 work in the viewer when the last game was a one-player game
+  outside manager mode: `misc_flags` outlast the game.
+- The intro's typing sound was meant to differ for spaces, but the
+  character is compared before it is converted, so every letter gets the
+  same sound (0x36); the cursor's blinks get the other (0x37). Only the
+  "presents" screens make these sounds, and they cannot be skipped.
+- Fire skips the intro only when it is held as the intro checks it: a press
+  and release within a fade goes unnoticed.
 
 Sound driver:
 

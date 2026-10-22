@@ -4,18 +4,15 @@
 use super::flow::{list_menu, wait_fire, Game};
 use super::ram::addr;
 use super::ui::{Flow, Stop, Ui};
+use crate::data::save_disk::{CUP_SECTOR, GAME_SECTORS, LEAGUE_SECTOR};
 use crate::game::career::{TeamId, TeamRecord};
 use crate::game::events::Sound;
 use crate::game::save::{Progress, SaveGame, SavedMarketPlayer, SavedPlayer, SavedTeam};
 use crate::game::squad::SquadPlayer;
 
-/// Where each game goes on the save disk.
-const LEAGUE_SECTOR: usize = 0;
-const CUP_SECTOR: usize = 22;
-const SECTORS: usize = 2;
 /// `misc_flags` bit 1: one player (the computer has team 2).
 const ONE_PLAYER: u16 = 1 << 1;
-const DISK_ERROR: Sound = Sound { id: 8, priority: 2 };
+pub(super) const DISK_ERROR: Sound = Sound { id: 8, priority: 2 };
 
 /// `keypad_manager_fn_save`: the save screen, then the game onto the save
 /// disk. Escape there cancels the save, not the game.
@@ -44,7 +41,7 @@ pub fn load(ui: &mut Ui, game: &mut Game, cup: bool) -> Flow<SaveGame> {
     }
     let sector = if cup { CUP_SECTOR } else { LEAGUE_SECTOR };
     loop {
-        let read = game.save_disk.read(sector, SECTORS).ok();
+        let read = game.save_disk.read(sector, GAME_SECTORS).ok();
         if let Some(save) = read.and_then(|bytes| SaveGame::decode(&bytes, cup)) {
             return Ok(save);
         }

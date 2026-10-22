@@ -11,7 +11,9 @@ use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
 use crate::config::{Config, Platform};
 use crate::data::amiga::{menu_ram, Overlays};
-use crate::data::files::{read_amiga_files, read_amiga_match_dump, AmigaFiles};
+use crate::data::files::{
+    read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
+};
 use crate::data::save_disk::SaveDisk;
 use crate::data::{sounds, AtariRom, GameFiles};
 use crate::game::events::Sound;
@@ -21,6 +23,7 @@ use crate::graphics::{Assets, Canvas};
 use crate::menu::assets::MenuAssets;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
+use crate::menu::intro::{self, IntroAssets};
 use crate::menu::play::{run_match, Controls};
 use crate::menu::ram::MenuRam;
 use crate::menu::ui::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -46,6 +49,15 @@ const BINDINGS: &[(Key, Button)] = &[
     (Key::P, Button::Pause),
     (Key::N, Button::Step),
     (Key::F, Button::FastForward),
+    (Key::Key1, Button::Number(1)),
+    (Key::Key2, Button::Number(2)),
+    (Key::Key3, Button::Number(3)),
+    (Key::Key4, Button::Number(4)),
+    (Key::Key5, Button::Number(5)),
+    (Key::Key6, Button::Number(6)),
+    (Key::Key7, Button::Number(7)),
+    (Key::Key8, Button::Number(8)),
+    (Key::Key9, Button::Number(9)),
 ];
 
 /// Saves the Amiga sound samples as WAV files.
@@ -105,9 +117,13 @@ fn play_one_match(
     let sound = SoundBanks::without_menus(config);
     let mut host = WindowHost::open(config.scale, &title, sound)?;
     let mut ui = Ui::new(&mut host);
+    let mut sped_up = false;
     let controls = Controls {
         take_over_on_touch: true,
         hold_at_end: true,
+        replay_saves: None,
+        sped_up: &mut sped_up,
+        may_speed_up: false,
     };
     // Escape or closing the window ends it either way.
     let _ = run_match(&mut ui, &mut game, &renderer, controls);
@@ -123,11 +139,25 @@ fn play_with_menus(
     let overlays = Overlays::new(&amiga.disk).ok_or("the Amiga disk has no overlay directory")?;
     let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
     let assets = MenuAssets::load(&ram, &overlays)?;
-    let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes());
+    let intro_dump = match read_amiga_intro_dump(&config.data_dir) {
+        Ok(dump) => Some(dump),
+        Err(error) => {
+            eprintln!("no intro: {error}");
+            None
+        }
+    };
+    let intro = intro_dump.as_deref().map(IntroAssets::load).transpose()?;
+    let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes(), intro_dump);
     let mut host = WindowHost::open(config.scale, WINDOW_TITLE, sound)?;
+    let mut ui = Ui::new(&mut host);
+    if let Some(intro) = &intro {
+        if intro::run(&mut ui, intro).is_err() {
+            return Ok(()); // The window was closed.
+        }
+    }
     let save_disk = SaveDisk::new(&config.save_disk);
     let mut game = Game::new(rom, ram, assets, renderer, save_disk, config.seed);
-    flow::run(&mut Ui::new(&mut host), &mut game);
+    flow::run(&mut ui, &mut game);
     Ok(())
 }
 
@@ -136,10 +166,16 @@ struct SoundBanks {
     output: SoundOutput,
     match_ram: Vec<u8>,
     menu_ram: Option<Vec<u8>>,
+    intro_ram: Option<Vec<u8>>,
 }
 
 impl SoundBanks {
-    fn with_menus(config: &Config, match_dump: &[u8], menu_ram: &[u8]) -> Option<Self> {
+    fn with_menus(
+        config: &Config,
+        match_dump: &[u8],
+        menu_ram: &[u8],
+        intro_ram: Option<Vec<u8>>,
+    ) -> Option<Self> {
         if config.mute {
             return None;
         }
@@ -148,6 +184,7 @@ impl SoundBanks {
             output,
             match_ram: match_dump.to_vec(),
             menu_ram: Some(menu_ram.to_vec()),
+            intro_ram,
         })
     }
 
@@ -169,6 +206,7 @@ impl SoundBanks {
             output,
             match_ram: dump,
             menu_ram: None,
+            intro_ram: None,
         })
     }
 
@@ -176,6 +214,10 @@ impl SoundBanks {
         let ram = match bank {
             SoundBank::Match => &self.match_ram,
             SoundBank::Menu => match &self.menu_ram {
+                Some(ram) => ram,
+                None => return,
+            },
+            SoundBank::Intro => match &self.intro_ram {
                 Some(ram) => ram,
                 None => return,
             },

@@ -92,6 +92,27 @@ impl IndexedScreen {
         }
     }
 
+    /// A copy of part of the screen (`copy_16x16_from_screen`). Parts off
+    /// the screen come back as colour 0.
+    pub fn region(&self, x: i32, y: i32, width: usize, height: usize) -> IndexedImage {
+        let mut pixels = Vec::with_capacity(width * height);
+        for sy in 0..height as i32 {
+            for sx in 0..width as i32 {
+                let (px, py) = (x + sx, y + sy);
+                let inside = px >= 0
+                    && py >= 0
+                    && (px as usize) < self.image.width
+                    && (py as usize) < self.image.height;
+                pixels.push(if inside {
+                    self.image.pixels[py as usize * self.image.width + px as usize]
+                } else {
+                    0
+                });
+            }
+        }
+        IndexedImage::new(width, height, pixels)
+    }
+
     /// XORs `value` into the colours along a rectangle's edge (the
     /// blitter's XOR lines: drawing it twice takes it away).
     pub fn xor_outline(&mut self, x: i32, y: i32, width: i32, height: i32, value: u8) {

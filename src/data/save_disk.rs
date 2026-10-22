@@ -1,9 +1,11 @@
 //! The game save disk, as an Amiga disk image file.
 //!
 //! The original wrote its saves straight to sectors of a blank disk: a
-//! league at sector 0, a cup at sector 22 (the second track). Keeping a
-//! whole 880K image in the same layout means the saves are exactly the
-//! original's.
+//! league at sector 0, a cup at sector 22 (the second track) and goal
+//! replays 1 to 9 on the tracks after. It asked for a "game save disk" or a
+//! "goal save disk", but the two never overlap, so one image holds both.
+//! Keeping a whole 880K image in the same layout means the saves are
+//! exactly the original's.
 
 use std::fs;
 use std::io;
@@ -11,6 +13,19 @@ use std::path::PathBuf;
 
 pub const SECTOR_SIZE: usize = 512;
 const DISK_SIZE: usize = 901_120;
+/// Sectors on a track (both sides).
+const TRACK: usize = 22;
+
+pub const LEAGUE_SECTOR: usize = 0;
+pub const CUP_SECTOR: usize = TRACK;
+pub const GAME_SECTORS: usize = 2;
+pub const REPLAY_SECTORS: usize = 6;
+
+/// Where goal replay `slot` (1 to 9) goes: from the third track, a track
+/// each (`save_replay`).
+pub fn replay_sector(slot: u8) -> usize {
+    2 * TRACK + (usize::from(slot) - 1) * TRACK
+}
 
 pub struct SaveDisk {
     path: PathBuf,

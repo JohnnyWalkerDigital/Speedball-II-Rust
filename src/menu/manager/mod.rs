@@ -439,7 +439,7 @@ fn keypad(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow<KeypadExi
                 }
                 press_key(ui, game, session, action)?;
             }
-            Button::Pause | Button::Step | Button::FastForward => {}
+            Button::Pause | Button::Step | Button::FastForward | Button::Number(_) => {}
         }
     }
 }

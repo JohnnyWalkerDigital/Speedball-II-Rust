@@ -9,6 +9,8 @@ use crate::config::Platform;
 use crate::data::{addr, AtariRom};
 use crate::game::entity::Entity;
 use crate::game::geometry::{Point, Side};
+use crate::game::replay::ReplayFrame;
+use crate::game::sprites::{amiga_sprite, AmigaSprite, Bank, BIG_BALL_FIRST, LAUNCHER_FIRST};
 use crate::game::state::{Match, VIEW_HEIGHT};
 use crate::game::text::{Text, TextId};
 use crate::graphics::field::{
@@ -20,16 +22,22 @@ use crate::graphics::{Assets, Canvas, Sheet};
 pub struct MatchRenderer {
     assets: Assets,
     status_led: Entity,
+    /// The domes as the ST draws them between hits. The Amiga's are pitch
+    /// tiles, so replays (recorded the Amiga's way) leave them out.
+    idle_domes: [Entity; 2],
 }
 
 impl MatchRenderer {
     const VIEW_ROWS: Option<usize> = Some(VIEW_HEIGHT as usize);
     const STATUS_Y: i32 = VIEW_HEIGHT;
+    /// `sprites_monitor_final_score`: the panel without "GOAL" or "INJURED".
+    const PLAIN_PANEL: usize = 2;
 
     pub fn new(assets: Assets, rom: &AtariRom) -> Self {
         Self {
             assets,
             status_led: Entity::read(rom, addr::STATUS_LED),
+            idle_domes: addr::BOUNCE_DOMES.map(|a| Entity::read(rom, a)),
         }
     }
 
@@ -41,34 +49,90 @@ impl MatchRenderer {
         canvas.draw(&self.assets.pitch, -m.scroll.x, -m.scroll.y);
         // The wall stars are pitch tiles in the original, under every sprite.
         self.draw_stars(m, canvas);
-        self.draw_sprites(m, canvas);
+        if m.is_replaying() {
+            self.draw_idle_domes(canvas, m.scroll);
+        }
+        self.draw_sprites(&m.scene, m.scroll, canvas);
         if m.clock_paused {
             self.draw_panel(m, canvas);
         }
         canvas.clip_to_rows(None);
     }
 
+    /// A sped-up match draws nothing on the pitch (`match_tick`): the
+    /// view stays as it was, with any panel message drawn over it for
+    /// good, while the status bar keeps up. `view` holds the frozen view.
+    pub fn render_sped_up(&self, m: &Match, view: &mut Canvas, canvas: &mut Canvas) {
+        if m.text_panel_shown() {
+            view.clip_to_rows(Self::VIEW_ROWS);
+            self.draw_text_panel(m, view);
+            view.clip_to_rows(None);
+        }
+        canvas.pixels_mut().copy_from_slice(view.pixels());
+        self.draw_status_bar(m, canvas);
+    }
+
+    /// A frame of a replay loaded from a goal save disk
+    /// (`load_replay_goal`): the pitch as freshly loaded, the replayed
+    /// sprites and, if any, a panel message. The status bar rows are left
+    /// as they are.
+    pub fn render_saved_replay(
+        &self,
+        frame: &ReplayFrame,
+        message: Option<&Text>,
+        canvas: &mut Canvas,
+    ) {
+        canvas.clip_to_rows(Self::VIEW_ROWS);
+        canvas.draw(&self.assets.pitch, -frame.scroll.x, -frame.scroll.y);
+        self.draw_idle_domes(canvas, frame.scroll);
+        self.draw_sprites(&frame.sprites, frame.scroll, canvas);
+        if let Some(message) = message {
+            canvas.draw(&self.assets.panels[Self::PLAIN_PANEL], 16, 8);
+            self.draw_text(canvas, message);
+        }
+        canvas.clip_to_rows(None);
+    }
+
+    /// A message on the panel over whatever is shown (`disk_error_message`).
+    pub fn render_message(&self, message: &Text, canvas: &mut Canvas) {
+        canvas.clip_to_rows(Self::VIEW_ROWS);
+        canvas.draw(&self.assets.panels[Self::PLAIN_PANEL], 16, 8);
+        self.draw_text(canvas, message);
+        canvas.clip_to_rows(None);
+    }
+
+    /// `zero_screen`: the view in the background colour.
+    pub fn render_blank_view(&self, canvas: &mut Canvas) {
+        let color = self.assets.palette.color(Assets::BACKGROUND);
+        canvas.fill_rect(0, 0, canvas.width(), VIEW_HEIGHT as usize, color);
+    }
+
+    /// The blank status bar the Amiga starts with (`init_screen_status_bar`).
+    pub fn render_blank_status_bar(&self, canvas: &mut Canvas) {
+        canvas.draw(&self.assets.status_bar, 0, Self::STATUS_Y);
+    }
+
     // -- Pitch ---------------------------------------------------------------------
 
     /// Draws the frame's sprites (live or replayed) in the match's order.
-    fn draw_sprites(&self, m: &Match, canvas: &mut Canvas) {
-        for e in &m.scene {
-            if e.is_electrobounce() {
-                self.draw_electrobounce(canvas, e, m.scroll);
-            } else if Self::is_dome(e)
-                && self.assets.platform == Platform::Amiga
-                && e.sprite != 0x88
-            {
-                // The Amiga bank only has the "hit" frame of the domes; the
-                // rest is part of the pitch tiles.
-            } else {
-                self.draw_entity(canvas, e, m.scroll);
+    fn draw_sprites(&self, scene: &[Entity], scroll: Point, canvas: &mut Canvas) {
+        for e in scene {
+            match self.assets.platform {
+                Platform::Amiga => self.draw_entity(canvas, e, scroll),
+                Platform::Atari if e.is_electrobounce() => {
+                    self.draw_atari_electrobounce(canvas, e, scroll)
+                }
+                Platform::Atari => self.draw_entity(canvas, e, scroll),
             }
         }
     }
 
-    fn is_dome(e: &Entity) -> bool {
-        addr::BOUNCE_DOMES.contains(&e.address)
+    fn draw_idle_domes(&self, canvas: &mut Canvas, scroll: Point) {
+        if self.assets.platform == Platform::Atari {
+            for dome in &self.idle_domes {
+                self.draw_entity(canvas, dome, scroll);
+            }
+        }
     }
 
     fn draw_stars(&self, m: &Match, canvas: &mut Canvas) {
@@ -119,14 +183,14 @@ impl MatchRenderer {
         }
     }
 
-    fn draw_electrobounce(&self, canvas: &mut Canvas, pad: &Entity, scroll: Point) {
-        let index = usize::from(pad.address != addr::ELECTROBOUNCES[0]);
-        let (sheet, sprite) = match (self.assets.platform, index) {
-            (Platform::Atari, 0) => (Sheet::Pitch, ATARI_WALL_LEFT + 9),
-            (Platform::Atari, _) => (Sheet::Pitch, ATARI_WALL_RIGHT + 9),
-            (Platform::Amiga, i) => (Sheet::Players, 135 + i),
+    /// The ST's electrobounces are pitch tiles.
+    fn draw_atari_electrobounce(&self, canvas: &mut Canvas, pad: &Entity, scroll: Point) {
+        let base = if pad.address == addr::ELECTROBOUNCES[0] {
+            ATARI_WALL_LEFT
+        } else {
+            ATARI_WALL_RIGHT
         };
-        if let Some(image) = self.assets.sheet(sheet).get(sprite) {
+        if let Some(image) = self.assets.sheet(Sheet::Pitch).get(base + 9) {
             let (x, y) = Self::screen_position(pad, scroll);
             canvas.draw(image, x, y);
         }
@@ -144,6 +208,21 @@ impl MatchRenderer {
         if e.flags.invisible() {
             return;
         }
+        let sprite = match self.assets.platform {
+            Platform::Amiga => Self::amiga_sheet_sprite(e),
+            Platform::Atari => Self::atari_sheet_sprite(e),
+        };
+        if let Some(image) = sprite.and_then(|(sheet, index)| {
+            usize::try_from(index)
+                .ok()
+                .and_then(|i| self.assets.sheet(sheet).get(i))
+        }) {
+            let (x, y) = Self::screen_position(e, scroll);
+            canvas.draw(image, x, y);
+        }
+    }
+
+    fn atari_sheet_sprite(e: &Entity) -> Option<(Sheet, i32)> {
         let mut sprite = e.sprite;
         if e.is_ball() && e.is_charged() {
             sprite += 11;
@@ -155,34 +234,28 @@ impl MatchRenderer {
             }
             addr::GFX_PLAYERS => Sheet::Players,
             addr::GFX_BIG_BALL => {
-                sprite += 130;
+                sprite += BIG_BALL_FIRST;
                 Sheet::Players
             }
             addr::GFX_PITCH => Sheet::Pitch,
-            _ => return,
+            _ => return None,
         };
-        if self.assets.platform == Platform::Amiga {
-            sprite = Self::amiga_sprite_index(sheet, sprite, e);
-        }
-        if let Some(image) = usize::try_from(sprite)
-            .ok()
-            .and_then(|i| self.assets.sheet(sheet).get(i))
-        {
-            let (x, y) = Self::screen_position(e, scroll);
-            canvas.draw(image, x, y);
-        }
+        Some((sheet, sprite))
     }
 
-    /// The Amiga sheets have one extra player-bank frame (the double dome)
-    /// and one fewer token than the ST ones the indices come from.
-    fn amiga_sprite_index(sheet: Sheet, sprite: i32, e: &Entity) -> i32 {
-        const FIRST_EXTRA_FRAME: i32 = 0x87;
-        const UNUSED_TOKEN: i32 = 67;
-        match sheet {
-            Sheet::Players if sprite >= FIRST_EXTRA_FRAME && !e.is_electrobounce() => sprite + 1,
-            Sheet::Entities if sprite > UNUSED_TOKEN => sprite - 1,
-            _ => sprite,
-        }
+    /// The Amiga's banks are laid out one after another in the port's
+    /// sheets.
+    fn amiga_sheet_sprite(e: &Entity) -> Option<(Sheet, i32)> {
+        let AmigaSprite { bank, index } = amiga_sprite(e)?;
+        Some(match bank {
+            Bank::Entities => (Sheet::Entities, index),
+            Bank::Players if e.is_player_or_medic() && e.uses_blue_palette() => {
+                (Sheet::PlayersBlue, index)
+            }
+            Bank::Players => (Sheet::Players, index),
+            Bank::BigBall => (Sheet::Players, BIG_BALL_FIRST + index),
+            Bank::Launcher => (Sheet::Players, LAUNCHER_FIRST + index),
+        })
     }
 
     // -- Status bar ----------------------------------------------------------------
@@ -270,8 +343,7 @@ impl MatchRenderer {
     }
 
     fn draw_text_panel(&self, m: &Match, canvas: &mut Canvas) {
-        const BACKGROUND: usize = 2;
-        canvas.draw(&self.assets.panels[BACKGROUND], 16, 8);
+        canvas.draw(&self.assets.panels[Self::PLAIN_PANEL], 16, 8);
         let Some(id) = m.text_panel.current else {
             return;
         };

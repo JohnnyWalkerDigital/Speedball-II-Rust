@@ -168,6 +168,14 @@ impl Autopilot {
     }
 }
 
+/// Writes the frame to `SPEEDBALL_FRAMES_DIR`, if set.
+fn dump_frame(m: &Moment, name: &str) {
+    if let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") {
+        let path = format!("{dir}/{name}.bmp");
+        std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+    }
+}
+
 fn at(moment: &Moment, seconds: f64) -> bool {
     let t = Duration::from_secs_f64(seconds);
     moment.time >= t && moment.time < t + Duration::from_millis(20)
@@ -747,4 +755,190 @@ fn a_league_saved_from_the_manager_screen_loads_back() {
     assert_eq!(save.teams[0].team_offset, 0);
     assert_eq!(loaded.career.squads.team1[0].name, "BARRY");
     let _ = std::fs::remove_file(&disk_path);
+}
+
+#[test]
+fn a_goal_replay_saved_in_a_match_plays_back_from_the_menu() {
+    use crate::data::save_disk::{replay_sector, REPLAY_SECTORS};
+    use crate::game::replay::{Replay, ReplayTick, SavedReplay};
+    use crate::menu::play::FRAME_TIME;
+    use crate::menu::replays::replay_goals;
+    let disk_path = std::env::temp_dir().join(format!("sb2-replay-{}.adf", std::process::id()));
+    let _ = std::fs::remove_file(&disk_path);
+    let Some(mut game) = load_game_with_disk(SaveDisk::new(&disk_path)) else {
+        return;
+    };
+    // A knockout match where Brutal Deluxe stand still: key 3 during the
+    // first goal's replay, then leave the match.
+    let mut saved_at = None;
+    let mut host = ScriptedHost::new(600, |m| {
+        let goal = m
+            .sounds
+            .iter()
+            .find(|(_, s)| *s == Sound::GOAL)
+            .map(|(t, _)| *t);
+        if let Some(goal) = goal {
+            if saved_at.is_none() && m.time > goal {
+                dump_frame(m, "replay_in_match");
+                saved_at = Some(m.time);
+                return Some(press(Button::Number(3)));
+            }
+            return (m.time < goal + Duration::from_secs(1)).then(Vec::new);
+        }
+        Some(if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) || at(m, 10.0) {
+            press(FIRE_1)
+        } else if at(m, 9.5) {
+            press(UP_1)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+    assert!(saved_at.is_some(), "a goal was scored");
+
+    let disk = SaveDisk::new(&disk_path);
+    let bytes = disk.read(replay_sector(3), REPLAY_SECTORS).unwrap();
+    let saved = SavedReplay::decode(&bytes).expect("a replay in slot 3");
+    assert_eq!(saved.encode(), bytes, "the original layout");
+    assert_eq!(&bytes[0xBF4..0xBF8], &0x167Fu32.to_be_bytes(), "the serial");
+    assert!(disk
+        .read(replay_sector(2), REPLAY_SECTORS)
+        .unwrap()
+        .iter()
+        .all(|&b| b == 0));
+    let mut replay = Replay::from_saved(&saved);
+    assert!(replay.start());
+    let mut frames = 0;
+    loop {
+        match replay.tick() {
+            ReplayTick::Frame(frame) => {
+                frames += 1;
+                assert!(!frame.sprites.is_empty());
+            }
+            ReplayTick::Same => {}
+            ReplayTick::Over => break,
+        }
+    }
+    assert!(frames > 20, "{frames} frames");
+
+    // "REPLAY GOALS": fire on the insert-disk screen, then watch.
+    let mut started = None;
+    let mut shows = 0;
+    let mut host = ScriptedHost::new(60, |m| {
+        if at(m, 2.0) {
+            dump_frame(m, "replay_insert_disk");
+            started = Some(m.time);
+            return Some(press(FIRE_1));
+        }
+        shows += 1;
+        if shows % 10 == 0 {
+            dump_frame(m, &format!("replay_viewer_{shows}"));
+        }
+        Some(vec![])
+    });
+    let mut ui = Ui::new(&mut host);
+    assert_eq!(replay_goals(&mut ui, &game), Ok(()));
+    let watched = host.time - started.expect("past the first screen");
+    assert!(
+        watched >= FRAME_TIME * 2 * frames,
+        "{watched:?} for {frames} frames"
+    );
+    std::fs::remove_file(&disk_path).unwrap();
+}
+
+#[test]
+fn f_speeds_up_a_team_managers_league_match() {
+    let match_time = |speed_up: bool| {
+        let mut game = load_game()?;
+        game.cursors.keypad = (2, 0);
+        let mut pilot = Autopilot::default();
+        let mut pressed = false;
+        let mut host = ScriptedHost::new(3000, |m| {
+            if m.banks.len() >= 2 {
+                return None; // The first match is over.
+            }
+            if speed_up && m.banks.len() == 1 {
+                let t = (m.time - m.banks[0].0).as_millis();
+                if t % 3000 < 32 {
+                    dump_frame(m, &format!("sped_up_{}", t / 3000));
+                }
+            }
+            // After the fade in, which drops earlier presses.
+            if speed_up
+                && !pressed
+                && m.banks.len() == 1
+                && m.time > m.banks[0].0 + Duration::from_secs(2)
+            {
+                pressed = true;
+                return Some(press(Button::FastForward));
+            }
+            // One player, league (down once), team manager (down once).
+            Some(if at(m, 2.0) || at(m, 5.0) || at(m, 8.0) {
+                press(FIRE_1)
+            } else if at(m, 4.0) || at(m, 7.0) {
+                press(DOWN_1)
+            } else if m.time > Duration::from_secs(10) {
+                pilot.step(m)
+            } else {
+                vec![]
+            })
+        });
+        flow::run(&mut Ui::new(&mut host), &mut game);
+        assert_eq!(game.sped_up, speed_up, "it lasts beyond the match");
+        Some(host.banks[1].0 - host.banks[0].0)
+    };
+    let Some(normal) = match_time(false) else {
+        return;
+    };
+    let sped_up = match_time(true).unwrap();
+    assert!(sped_up * 4 < normal, "{sped_up:?} against {normal:?}");
+}
+
+#[test]
+fn the_intro_runs_until_fire_then_loads_the_game() {
+    use crate::data::files::read_amiga_intro_dump;
+    use crate::menu::intro::{self, IntroAssets};
+    let Ok(dump) = read_amiga_intro_dump(&Config::default().data_dir) else {
+        eprintln!("skipping: no intro dump");
+        return;
+    };
+    let assets = IntroAssets::load(&dump).expect("the intro pictures decode");
+    let mut shot = 0;
+    let mut host = ScriptedHost::new(300, |m| {
+        let t = m.time.as_millis();
+        if t % 2000 < 20 {
+            dump_frame(m, &format!("intro_{shot:03}"));
+            shot += 1;
+        }
+        // Fire is held from 60 seconds in until 63 (the intro checks it
+        // between fades).
+        Some(if (60_000..60_020).contains(&t) {
+            vec![ButtonEvent {
+                button: FIRE_1,
+                pressed: true,
+                repeat: false,
+            }]
+        } else if (63_000..63_020).contains(&t) {
+            vec![ButtonEvent::release(FIRE_1)]
+        } else {
+            vec![]
+        })
+    });
+    assert_eq!(intro::run(&mut Ui::new(&mut host), &assets), Ok(()));
+    let music: Vec<_> = host.sounds.iter().filter(|(_, s)| s.id == 0x2C).collect();
+    assert_eq!(music.len(), 1, "the music starts once");
+    assert!(host.sounds.iter().any(|(_, s)| s.id == 0x36), "typing");
+    assert_eq!(
+        host.sounds.last().map(|(_, s)| s.id),
+        Some(0x2D),
+        "the music stops"
+    );
+    assert_eq!(
+        host.banks.iter().map(|b| b.1).collect::<Vec<_>>(),
+        [SoundBank::Intro, SoundBank::Menu]
+    );
+    // After fire is let go, "LOADING GAME" is typed at two steps of five
+    // vertical blanks a letter.
+    assert!(host.time > Duration::from_secs(63) + Duration::from_millis(12 * 200));
+    assert!(host.time < Duration::from_secs(70));
 }

@@ -27,6 +27,8 @@ pub enum Control {
 pub enum Button {
     Joystick(Side, Control),
     Escape,
+    /// Keys 1 to 9, which save a goal replay.
+    Number(u8),
     /// The port's own match controls: pause, step a frame, fast forward.
     Pause,
     Step,
@@ -54,6 +56,8 @@ impl ButtonEvent {
 /// Which instrument samples are in sound memory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SoundBank {
+    /// The intro's music and sounds, loaded at boot.
+    Intro,
     /// Overlay 28, loaded by `load_mgmt_data`.
     Menu,
     /// Overlay 27, loaded by `load_arena_data`.
