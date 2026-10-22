@@ -180,7 +180,7 @@ pub fn run_match(
             }
         }
         if over && !controls.hold_at_end {
-            break game.scores;
+            break game.scores();
         }
         if over {
             playback = Playback::Paused;

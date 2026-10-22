@@ -56,13 +56,13 @@ impl Match {
         if player.entity.flags.busy() || player.entity.timer != 0 {
             return;
         }
-        let target = if self.leg == 2 {
+        let target = if self.clock.is_full_time() {
             let base = if player.attacks_up() { 0 } else { 9 };
             self.presentation_position(base + player.index)
         } else {
             player.launch
         };
-        let scroll = self.scroll;
+        let scroll = self.camera.position();
         let rom = self.rom.clone();
         let player = &mut self.players[p.0];
         player.reset_think_delay(&rom);
@@ -81,7 +81,9 @@ impl Match {
 
     fn control_active_player(&mut self, p: PlayerId, side: Side) {
         self.try_catch_ball(p);
-        let on_screen = self.players[p.0].entity.is_well_inside_view(self.scroll);
+        let on_screen = self.players[p.0]
+            .entity
+            .is_well_inside_view(self.camera.position());
         if !*self.computer.get(side) && on_screen {
             let input = *self.inputs.get(side);
             self.apply_human_input(p, input);

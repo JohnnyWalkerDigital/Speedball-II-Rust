@@ -94,12 +94,13 @@ fn demo_match_plays_to_the_end_on_both_platforms() {
         let Some(h) = load(platform) else { continue };
         let (game, frames) = play(&h, &config(platform, GameMode::Demo, 1), 20_000);
         assert!(
-            game.leg >= 2,
+            game.clock.leg() >= 2,
             "{platform:?}: match did not finish in {frames} frames"
         );
         println!(
             "{platform:?} demo: {} - {} after {frames} frames",
-            game.scores.team1, game.scores.team2
+            game.scores().team1,
+            game.scores().team2
         );
     }
 }
@@ -115,18 +116,19 @@ fn knockout_matches_are_deterministic_and_eventful() {
         let (first, frames) = play(&h, &config, 60_000);
         let (second, _) = play(&h, &config, 60_000);
         assert!(
-            first.leg >= 2,
+            first.clock.leg() >= 2,
             "seed {seed}: match did not finish in {frames} frames"
         );
         assert_eq!(
-            (first.scores.team1, first.scores.team2),
-            (second.scores.team1, second.scores.team2),
+            (first.scores().team1, first.scores().team2),
+            (second.scores().team1, second.scores().team2),
             "seed {seed}: same seed must replay identically"
         );
-        any_goals |= first.scores.team1 + first.scores.team2 > 0;
+        any_goals |= first.scores().team1 + first.scores().team2 > 0;
         println!(
             "seed {seed}: {} - {}",
-            first.scores.team1, first.scores.team2
+            first.scores().team1,
+            first.scores().team2
         );
     }
     assert!(
@@ -214,7 +216,7 @@ fn sounds_are_requested_where_the_original_plays_them() {
         let mut was_injured = false;
         let mut second_crowd = None;
         for _ in 0..60_000 {
-            let goals_before = game.scores.team1 + game.scores.team2;
+            let goals_before = game.scores().team1 + game.scores().team2;
             let over = game.step();
             if game.player_injured && !was_injured {
                 injuries += 1;
@@ -233,7 +235,7 @@ fn sounds_are_requested_where_the_original_plays_them() {
                     &[Sound::SILENCE, Sound::GOAL, crowd, Sound::SILENCE_CHANNEL_0]
                 );
                 assert!(game.replay.is_playing());
-                assert!(game.scores.team1 + game.scores.team2 > goals_before);
+                assert!(game.scores().team1 + game.scores().team2 > goals_before);
                 second_crowd = Some(crowd);
             } else if let Some(crowd) = second_crowd {
                 if !game.replay.is_playing() {
@@ -365,34 +367,34 @@ fn goals_are_replayed_at_half_speed_then_play_resumes() {
     let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
     let mut replays = 0;
     for _ in 0..60_000 {
-        let score = game.scores;
+        let score = game.scores();
         game.step();
         if !game.replay.is_playing() {
             continue;
         }
         replays += 1;
-        assert_ne!(game.scores, score, "a replay starts on a goal");
+        assert_ne!(game.scores(), score, "a replay starts on a goal");
         assert_eq!(game.displayed_scores(), score, "the status bar waits");
         assert!(matches!(
-            game.text_panel.current,
+            game.text_panel.message(),
             Some(TextId::Team1Scored | TextId::Team2Scored | TextId::OwnGoal)
         ));
 
         // Each recorded frame shows for two steps; the game itself is frozen.
-        let frozen = game.leg_remaining;
+        let frozen = game.clock.remaining();
         let ball = game.props.ball.pos;
         let mut steps = 1;
         while game.replay.is_playing() {
             game.step();
             steps += 1;
-            assert_eq!(game.leg_remaining, frozen);
+            assert_eq!(game.clock.remaining(), frozen);
             assert!(steps < 2000, "a replay is bounded by the buffer");
         }
         println!("replay {replays}: {steps} steps");
         assert!(steps >= 4, "replayed {steps} steps");
         assert_eq!(game.props.ball.pos, ball);
-        assert_eq!(game.displayed_scores(), game.scores);
-        assert_eq!(game.text_panel.current, None);
+        assert_eq!(game.displayed_scores(), game.scores());
+        assert_eq!(game.text_panel.message(), None);
         assert!(game.clock_paused, "the celebration follows the replay");
         if replays == 3 {
             break;

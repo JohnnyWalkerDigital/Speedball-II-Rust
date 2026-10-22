@@ -215,7 +215,7 @@ match, menu and result frames as BMPs.
 | Module | Role | C# origin |
 | --- | --- | --- |
 | `data/` | Disk loading, big-endian reads, named RAM addresses and lookup tables | `ExtensionByte`, scattered `Game.AtariDisk.Read*` calls |
-| `game/state.rs` | `Match`: state and the per-frame update | `Match.cs` |
+| `game/state.rs`, `state/` | `Match`: state and the per-frame update; the clock, camera, scoreboard, kick-off, ball, goals and message panel | `Match.cs` |
 | `game/actions.rs` | Running, tackling, jumping, catching, throwing | `Player.cs` (action routines) |
 | `game/ai.rs` | Computer decisions | `Player.cs` (`sub_D742`, `sub_E076`, ...) |
 | `game/items.rs`, `token.rs` | Coins, equipment, power-up tokens | `Entity.cs`, `Token.cs` |
@@ -229,6 +229,7 @@ match, menu and result frames as BMPs.
 | `graphics/` | Palettes, bitplane decoding, sprite sheets, pitch assembly | `Palette`, `Sprite`, `SpriteManager`, `Field` |
 | `render.rs` | Draws a `Match` onto the screen | drawing code spread through `Match`/`Entity` |
 | `menu/` | Intro, main menu, game modes, result screens, replay viewer | none (new, from the disassembly) |
+| `menu/manager/` | Manager screens: a session's view and drawing, the keypad and its keys, the squad table, transfers and the gym | none (new, from the disassembly) |
 | `app.rs` | Window, keyboard, timing | `Main.cs`, `Program.cs` |
 
 Design choices:

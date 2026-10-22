@@ -83,7 +83,10 @@ impl Match {
             return;
         }
         let mut chase = EntityRef::Player(opponent);
-        if !self.players[p.0].entity.is_well_inside_view(self.scroll) {
+        if !self.players[p.0]
+            .entity
+            .is_well_inside_view(self.camera.position())
+        {
             chase = EntityRef::Ball;
         } else {
             let item = self.find_reachable_item(p, [DirBits::NONE; 2]);
@@ -205,7 +208,7 @@ impl Match {
             EntityRef::Coins(2),
             EntityRef::Coins(3),
         ];
-        let scroll = self.scroll;
+        let scroll = self.camera.position();
         for item in items {
             self.entity_mut(item).update_offscreen(scroll);
             let entity = self.entity(item);

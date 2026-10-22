@@ -4,7 +4,7 @@ use super::events::Sound;
 use super::geometry::{Point, Side};
 use super::player::{count, PlayerId};
 use super::roster::PersonRef;
-use super::state::{EntityRef, Injury, Match, PITCH_CENTER};
+use super::state::{EntityRef, Match, PITCH_CENTER};
 use super::text::TextId;
 use crate::data::addr;
 
@@ -12,6 +12,30 @@ use crate::data::addr;
 const FRONT: usize = 0;
 const REAR: usize = 1;
 const MEDIC_SPEED: i32 = 2;
+
+/// Stretcher sequence state while a player is carried off.
+#[derive(Clone, Copy, Debug)]
+pub struct Injury {
+    pub player: Option<PlayerId>,
+    /// Where the front medic stands, relative to the injured player's x.
+    pub front_medic_offset: Point,
+    /// Where the rear medic is heading.
+    pub rear_medic_target: Point,
+    /// -1 before any injury, then 0 approaching, 1 first medic arrived,
+    /// 2 lifting, 3 carrying off.
+    pub stage: i32,
+}
+
+impl Default for Injury {
+    fn default() -> Self {
+        Self {
+            player: None,
+            front_medic_offset: Point::ZERO,
+            rear_medic_target: Point::ZERO,
+            stage: -1,
+        }
+    }
+}
 
 impl Match {
     /// Stops play and sends the medics on (`sub_F6DC`).
@@ -197,7 +221,7 @@ impl Match {
     fn medics_carry_off(&mut self, injured: PlayerId) {
         self.props.medics[FRONT].velocity = self.props.medics[REAR].velocity;
         let front_x = self.props.medics[FRONT].pos.x + 16;
-        if front_x >= self.scroll.x && front_x - 352 <= self.scroll.x {
+        if front_x >= self.camera.position().x && front_x - 352 <= self.camera.position().x {
             return; // Still on screen.
         }
 

@@ -5,7 +5,7 @@
 //! order, so the result matches.
 
 use super::data::{Armour, Keypad, ManagerTables, TextLine};
-use super::{BuyMode, Screen, View};
+use super::view::{BuyMode, Message, Screen, View};
 use crate::game::squad::{self, group_averages, max_boost, team_average, Context, Squad};
 use crate::game::squad::{MarketPlayer, SkillBytes, SquadPlayer, Upgrade};
 use crate::graphics::indexed::{IndexedImage, IndexedScreen};
@@ -304,8 +304,8 @@ fn upgrade_description(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.fill(120, 42, 16, 30, BLACK);
     let button = &scene.tables.upgrades[view.selected_upgrade];
     let lines: &[TextLine; 3] = match view.message {
-        Some(super::Message::NotEnoughCash) => &scene.tables.not_enough_cash,
-        Some(super::Message::MaximumBoost) => &scene.tables.maximum_boost,
+        Some(Message::NotEnoughCash) => &scene.tables.not_enough_cash,
+        Some(Message::MaximumBoost) => &scene.tables.maximum_boost,
         None => &button.description,
     };
     for line in &lines[..2] {

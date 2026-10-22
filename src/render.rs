@@ -46,13 +46,13 @@ impl MatchRenderer {
         self.draw_status_bar(m, canvas);
 
         canvas.clip_to_rows(Self::VIEW_ROWS);
-        canvas.draw(&self.assets.pitch, -m.scroll.x, -m.scroll.y);
+        canvas.draw(&self.assets.pitch, -m.scroll().x, -m.scroll().y);
         // The wall stars are pitch tiles in the original, under every sprite.
         self.draw_stars(m, canvas);
         if m.is_replaying() {
-            self.draw_idle_domes(canvas, m.scroll);
+            self.draw_idle_domes(canvas, m.scroll());
         }
-        self.draw_sprites(&m.scene, m.scroll, canvas);
+        self.draw_sprites(&m.scene, m.scroll(), canvas);
         if m.clock_paused {
             self.draw_panel(m, canvas);
         }
@@ -139,7 +139,11 @@ impl MatchRenderer {
         let [left, right] = m.arena.stars.wall_tiles();
         let tiles = &self.assets.pitch_tiles;
         let draw = |canvas: &mut Canvas, tile: usize, x: i32, y: i32, size: i32| {
-            canvas.draw(&tiles[tile], x * size - m.scroll.x, y * size - m.scroll.y);
+            canvas.draw(
+                &tiles[tile],
+                x * size - m.scroll().x,
+                y * size - m.scroll().y,
+            );
         };
         for (wall, variants) in [(0, left), (1, right)] {
             for (i, variant) in variants.into_iter().enumerate() {
@@ -264,7 +268,7 @@ impl MatchRenderer {
         canvas.draw(&self.assets.status_bar, 0, Self::STATUS_Y);
         self.draw_number(canvas, m.displayed_scores().team1, 3, 2 * 8, 187);
         self.draw_number(canvas, m.displayed_scores().team2, 3, 35 * 8, 187);
-        self.draw_number(canvas, m.leg_remaining, 2, 19 * 8, 186);
+        self.draw_number(canvas, m.clock.remaining(), 2, 19 * 8, 186);
 
         let palette = &self.assets.palette;
         for (side, x, color) in [
@@ -284,7 +288,7 @@ impl MatchRenderer {
 
         for (side, x) in [(Side::Team1, 56), (Side::Team2, 264)] {
             if let Some(sprite) = *m.status_tokens.get(side) {
-                self.draw_status_icon(canvas, sprite, x, m.scroll);
+                self.draw_status_icon(canvas, sprite, x, m.scroll());
             }
         }
         self.draw_status_leds(m, canvas);
@@ -313,16 +317,16 @@ impl MatchRenderer {
         const OFF_SPRITE_OFFSET: i32 = 6;
         for slot in 0..6 {
             let (x, sprite) = m.rom.status_led(slot);
-            self.draw_status_icon(canvas, sprite + OFF_SPRITE_OFFSET, x, m.scroll);
+            self.draw_status_icon(canvas, sprite + OFF_SPRITE_OFFSET, x, m.scroll());
         }
         let team1 = &m.players[m.controlled.team1.0];
         let (sprite, x) = position_light(Side::Team1, team1.attributes.pos);
-        self.draw_status_icon(canvas, sprite, x, m.scroll);
+        self.draw_status_icon(canvas, sprite, x, m.scroll());
 
         let team2 = &m.players[m.controlled.team2.0];
         if !team2.entity.flags.invisible() {
             let (sprite, x) = position_light(Side::Team2, team2.attributes.pos);
-            self.draw_status_icon(canvas, sprite, x, m.scroll);
+            self.draw_status_icon(canvas, sprite, x, m.scroll());
         }
     }
 
@@ -334,7 +338,7 @@ impl MatchRenderer {
         let plain_panel = if m.player_injured {
             (m.injury.stage <= 1).then_some(INJURED)
         } else {
-            m.text_panel.current.is_none().then_some(GOAL)
+            m.text_panel.message().is_none().then_some(GOAL)
         };
         match plain_panel {
             Some(panel) => canvas.draw(&self.assets.panels[panel], 16, 8),
@@ -344,7 +348,7 @@ impl MatchRenderer {
 
     fn draw_text_panel(&self, m: &Match, canvas: &mut Canvas) {
         canvas.draw(&self.assets.panels[Self::PLAIN_PANEL], 16, 8);
-        let Some(id) = m.text_panel.current else {
+        let Some(id) = m.text_panel.message() else {
             return;
         };
         self.draw_text(canvas, m.text_panel.text(id));

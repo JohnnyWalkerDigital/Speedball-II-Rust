@@ -284,7 +284,7 @@ impl Match {
         if self.clock_paused || self.accelerated {
             return;
         }
-        let scroll = self.scroll;
+        let scroll = self.camera.position();
         self.replay.record_frame(scroll);
         for sprite in &self.scene {
             if scene::on_screen(sprite, scroll) {
@@ -317,7 +317,7 @@ impl Match {
         match self.replay.tick() {
             ReplayTick::Same => true,
             ReplayTick::Frame(frame) => {
-                self.scroll = frame.scroll;
+                self.camera.jump_to(frame.scroll);
                 self.scene = frame.sprites;
                 self.build_panel_overlay();
                 true

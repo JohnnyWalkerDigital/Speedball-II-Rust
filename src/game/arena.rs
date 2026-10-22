@@ -271,7 +271,7 @@ impl Match {
         } else if self.arena.stars.is_lit(wall_owner, star) {
             // Hitting the opponent's lit star puts it out and costs them.
             self.arena.stars.put_out(wall_owner, star);
-            *self.scores.get_mut(wall_owner) -= 2;
+            self.score.deduct(wall_owner, 2);
             self.play_sound(Sound::STAR);
         }
     }

@@ -75,7 +75,7 @@ impl Match {
             successful_tackles: sum(|s| s.successful_tackles),
             substitutions: sum(|s| s.substitutions),
             time_in_opponents_half: *self.time_in_opponents_half.get(side) as u16,
-            bonus_points: *self.bonus_points.get(side) as i16,
+            bonus_points: *self.score.bonus().get(side) as i16,
         }
     }
 }
