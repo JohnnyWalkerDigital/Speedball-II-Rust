@@ -168,12 +168,21 @@ impl Autopilot {
     }
 }
 
+/// What a scripted player presses at a moment.
+type Script = dyn Fn(&Moment) -> Vec<ButtonEvent>;
+
 /// Writes the frame to `SPEEDBALL_FRAMES_DIR`, if set.
 fn dump_frame(m: &Moment, name: &str) {
     if let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") {
         let path = format!("{dir}/{name}.bmp");
         std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
     }
+}
+
+/// Whether this is the frame `seconds` after `start`.
+fn at_since(moment: &Moment, start: Duration, seconds: f64) -> bool {
+    let t = start + Duration::from_secs_f64(seconds);
+    moment.time >= t && moment.time < t + Duration::from_millis(20)
 }
 
 fn at(moment: &Moment, seconds: f64) -> bool {
@@ -319,32 +328,59 @@ fn dump_menu_frames() {
 #[test]
 #[ignore = "writes images; run manually"]
 fn dump_result_frames() {
-    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+    if std::env::var("SPEEDBALL_FRAMES_DIR").is_err() {
         return;
+    }
+    // The knockout: one player, knockout, past the fixture, out of the gym
+    // (up to its exit key), then Brutal Deluxe stand still and lose.
+    let knockout = |m: &Moment| {
+        if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) || at(m, 10.0) {
+            press(FIRE_1)
+        } else if at(m, 9.5) {
+            press(UP_1)
+        } else {
+            vec![]
+        }
     };
-    for (name, down) in [("knockout", false), ("two_players", true)] {
+    // Two players: "2 PLAYER GAME", "ONE MATCH", then through the gyms.
+    let two_players = |m: &Moment| {
+        if at(m, 2.0) {
+            press(DOWN_1)
+        } else if at(m, 4.0) || at(m, 6.0) {
+            press(FIRE_1)
+        } else if m.time > Duration::from_secs(7) {
+            two_player_autopilot(m)
+        } else {
+            vec![]
+        }
+    };
+    let games: [(&str, usize, &Script); 2] =
+        [("knockout", 2, &knockout), ("two_players", 4, &two_players)];
+    for (name, matches_banks, script) in games {
         let Some(mut game) = load_game() else { return };
         let mut host = ScriptedHost::new(3000, |m| {
-            if let Some(&(t, SoundBank::Menu)) = m.banks.last() {
+            // After each match, three shots of what follows, hands off.
+            if let Some(&(back, SoundBank::Menu)) = m.banks.last() {
+                let since = (m.time - back).as_secs_f64();
                 for (shot, after) in [(0, 2.0), (1, 7.5), (2, 13.0)] {
-                    if at(m, t.as_secs_f64() + after) {
-                        let path = format!("{dir}/{name}_{}_{shot}.bmp", m.banks.len());
-                        std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+                    if at_since(m, back, after) {
+                        dump_frame(m, &format!("{name}_{}_{shot}", m.banks.len()));
                     }
                 }
+                if since < 14.0 {
+                    return Some(vec![]);
+                }
+                if m.banks.len() >= matches_banks {
+                    return None;
+                }
             }
-            if m.banks.len() >= 4 {
-                return None;
-            }
-            Some(if at(m, 2.0) && down {
-                press(DOWN_1)
-            } else if at(m, 4.0) || at(m, 6.0) {
-                press(FIRE_1)
-            } else {
-                vec![]
-            })
+            Some(script(m))
         });
         flow::run(&mut Ui::new(&mut host), &mut game);
+        assert!(
+            host.banks.len() >= matches_banks,
+            "{name}: the matches were played"
+        );
     }
 }
 
@@ -399,38 +435,54 @@ fn a_knockout_defeat_is_recorded_and_paid() {
 #[test]
 #[ignore = "writes images; run manually"]
 fn dump_league_frames() {
-    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+    if std::env::var("SPEEDBALL_FRAMES_DIR").is_err() {
         return;
-    };
+    }
     let Some(mut game) = load_game() else { return };
+    game.cursors.keypad = (2, 0);
+    let mut pilot = Autopilot::default();
     let mut shot = 0;
     let mut host = ScriptedHost::new(1200, |m| {
-        let t = m.time.as_secs_f64();
-        let after_match = m.banks.len() >= 2;
-        let since = m.banks.last().map_or(0.0, |b| t - b.0.as_secs_f64());
-        // Before the match: one player, league, new game, past the fixture.
-        let presses = [2.0, 4.0, 4.5, 7.0, 10.0];
-        let pre = !after_match && m.banks.is_empty() && presses.iter().any(|&p| at(m, p));
-        // After it: fire every three seconds, one shot just before each.
-        let post_shot = after_match && since > 1.0 && ((since - 2.0) % 3.0).abs() < 0.01;
-        let post_press = after_match && since > 1.0 && ((since - 2.5) % 3.0).abs() < 0.01;
-        if (m.banks.is_empty() && [3.0, 6.5, 9.5].iter().any(|&p| at(m, p))) || post_shot {
-            let path = format!("{dir}/league_{shot:02}.bmp");
-            std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+        let mut snap = |m: &Moment| {
+            dump_frame(m, &format!("league_{shot:02}"));
             shot += 1;
+        };
+        match m.banks {
+            // The menus: one player, league, new game, past the fixture,
+            // then off the manager screen.
+            [] => {
+                if [3.0, 6.5, 9.5].iter().any(|&t| at(m, t)) {
+                    snap(m);
+                }
+                Some(if at(m, 4.0) {
+                    press(DOWN_1)
+                } else if [2.0, 4.5, 7.0, 10.0].iter().any(|&t| at(m, t)) {
+                    press(FIRE_1)
+                } else if m.time > Duration::from_secs(11) {
+                    pilot.step(m)
+                } else {
+                    vec![]
+                })
+            }
+            // Brutal Deluxe stand still through the match.
+            [_] => Some(vec![]),
+            // After it: a shot every three seconds, each followed by fire,
+            // up to the next manager screen.
+            [.., (back, _)] => {
+                let back = *back;
+                if (1..12).any(|n| at_since(m, back, 3.0 * n as f64 - 1.0)) {
+                    snap(m);
+                }
+                if shot >= 9 {
+                    return None;
+                }
+                let fire = (1..12).any(|n| at_since(m, back, 3.0 * n as f64 - 0.5));
+                Some(if fire { press(FIRE_1) } else { vec![] })
+            }
         }
-        if shot >= 14 {
-            return None;
-        }
-        Some(if at(m, 4.0) {
-            press(DOWN_1)
-        } else if pre || post_press {
-            press(FIRE_1)
-        } else {
-            vec![]
-        })
     });
     flow::run(&mut Ui::new(&mut host), &mut game);
+    assert_eq!(shot, 9, "every shot taken");
 }
 
 /// Presses fire every 0.3 seconds (after a scripted start), to get
@@ -526,42 +578,43 @@ fn losing_a_cup_tie_ends_the_cup_and_restores_the_coins() {
 #[test]
 #[ignore = "writes images; run manually"]
 fn dump_cup_frames() {
-    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+    if std::env::var("SPEEDBALL_FRAMES_DIR").is_err() {
         return;
-    };
+    }
     let Some(mut game) = load_game() else { return };
+    game.cursors.keypad = (2, 0);
+    let mut pilot = Autopilot::default();
     let mut shot = 0;
     let mut host = ScriptedHost::new(3000, |m| {
-        let snap = |shot: &mut usize| {
-            let path = format!("{dir}/cup_{shot:02}.bmp");
-            std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
-            *shot += 1;
+        let mut snap = |m: &Moment| {
+            dump_frame(m, &format!("cup_{shot:02}"));
+            shot += 1;
         };
         if at(m, 11.0) {
-            snap(&mut shot);
+            snap(m);
         }
-        if m.banks.len() >= 4 {
-            let since = (m.time - m.banks[3].0).as_secs_f64();
-            if (since - 1.4).abs() < 0.01
-                || (since - 2.4).abs() < 0.01
-                || (since - 3.9).abs() < 0.01
-            {
-                snap(&mut shot);
+        // After the second leg: the result, the defeat and what follows.
+        if let Some(&(back, _)) = m.banks.get(3) {
+            if [1.4, 2.4, 3.9].iter().any(|&t| at_since(m, back, t)) {
+                snap(m);
             }
-            let fire = (since - 1.6).abs() < 0.01 || (since - 2.6).abs() < 0.01;
-            return (since < 4.0).then(|| if fire { press(FIRE_1) } else { vec![] });
+            let fire = [1.6, 2.6].iter().any(|&t| at_since(m, back, t));
+            let more = m.time < back + Duration::from_secs(4);
+            return more.then(|| if fire { press(FIRE_1) } else { vec![] });
         }
+        // One player, cup (down twice), new game; then fire through.
         Some(if at(m, 2.0) || at(m, 6.0) || at(m, 9.0) {
             press(FIRE_1)
         } else if at(m, 4.0) || at(m, 5.0) {
             press(DOWN_1)
-        } else if m.time > Duration::from_secs(12) && m.banks.len() % 2 == 0 {
-            keep_firing(m)
+        } else if m.time > Duration::from_secs(12) {
+            pilot.step(m)
         } else {
             vec![]
         })
     });
     flow::run(&mut Ui::new(&mut host), &mut game);
+    assert_eq!(shot, 4, "every shot taken");
 }
 
 /// Writes the manager screens to `SPEEDBALL_FRAMES_DIR`: a new league's
