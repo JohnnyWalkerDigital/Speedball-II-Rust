@@ -54,6 +54,14 @@ pub mod addr {
     pub const STR_LEAGUE_MATCH_RESULT: usize = 0x3205;
     pub const STR_PLAY: usize = 0x2976;
     pub const TITLE_STATISTICS: usize = 0x2884;
+    pub const TITLE_SAVE_GAME: usize = 0x289C;
+    pub const TITLE_LOAD_GAME: usize = 0x28A4;
+    /// "PLEASE INSERT GAME SAVE DISK".
+    pub const STR_INSERT_GAME_SAVE_DISK: usize = 0x364C;
+    /// "DISK ERROR": "RETRY", "CANCEL".
+    pub const MENU_SELECT_RETRY_CANCEL: usize = 0x35EA;
+    /// Saved names are offsets from here (the first market player's).
+    pub const STR_JAMS: usize = 0x5DCA;
     pub const TITLE_FIXTURE_LIST: usize = 0x288C;
     pub const STRINGS_STATISTICS: usize = 0x33FE;
     pub const STRINGS_FIXTURE_LIST: usize = 0x3454;
@@ -324,6 +332,11 @@ impl MenuRam {
             position: self.bytes[stats + 2],
             skills: std::array::from_fn(|skill| self.bytes[stats + 3 + skill]),
         }
+    }
+
+    /// The 32-bit pointer stored at `address`.
+    pub fn pointer_at(&self, address: usize) -> usize {
+        self.pointer(address)
     }
 
     fn pointer(&self, address: usize) -> usize {

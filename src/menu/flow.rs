@@ -16,6 +16,7 @@ use super::play::{run_match, Controls};
 use super::ram::{addr, MenuRam, MenuSpec, Title};
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
+use crate::data::save_disk::SaveDisk;
 use crate::data::AtariRom;
 use crate::game::career::{compare_scores, Career, LastMatch, TeamId};
 use crate::game::events::Sound;
@@ -77,6 +78,7 @@ pub struct Game {
     pub manager_tables: ManagerTables,
     /// Where the manager screens' cursors were left.
     pub cursors: Cursors,
+    pub save_disk: SaveDisk,
     seed: u64,
 }
 
@@ -86,6 +88,7 @@ impl Game {
         ram: MenuRam,
         assets: MenuAssets,
         renderer: MatchRenderer,
+        save_disk: SaveDisk,
         seed: u64,
     ) -> Self {
         let squads = PerTeam::new(
@@ -108,6 +111,7 @@ impl Game {
             manager_mode: false,
             manager_tables,
             cursors: Cursors::default(),
+            save_disk,
             seed,
         }
     }

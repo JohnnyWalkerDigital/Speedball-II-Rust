@@ -12,6 +12,7 @@ use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 use crate::config::{Config, Platform};
 use crate::data::amiga::{menu_ram, Overlays};
 use crate::data::files::{read_amiga_files, read_amiga_match_dump, AmigaFiles};
+use crate::data::save_disk::SaveDisk;
 use crate::data::{sounds, AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
@@ -124,7 +125,8 @@ fn play_with_menus(
     let assets = MenuAssets::load(&ram, &overlays)?;
     let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes());
     let mut host = WindowHost::open(config.scale, WINDOW_TITLE, sound)?;
-    let mut game = Game::new(rom, ram, assets, renderer, config.seed);
+    let save_disk = SaveDisk::new(&config.save_disk);
+    let mut game = Game::new(rom, ram, assets, renderer, save_disk, config.seed);
     flow::run(&mut Ui::new(&mut host), &mut game);
     Ok(())
 }

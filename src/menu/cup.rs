@@ -8,10 +8,12 @@ use super::flow::{
 use super::manager::Standings;
 use super::panels::Competition;
 use super::ram::addr;
-use super::ui::{Flow, Stop, Ui};
+use super::saving;
+use super::ui::{Flow, Ui};
 use crate::game::cup::Cup;
 use crate::game::geometry::PerTeam;
 use crate::game::league::{team2_won, BRUTAL_DELUXE};
+use crate::game::save::Progress;
 
 /// `game_cup`.
 pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
@@ -24,22 +26,41 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
 fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(2000);
     let menu = game.ram.menu(addr::MENU_SELECT_NEW_LOAD);
-    if list_menu(ui, game, &menu)? != 0 {
-        // Loading a saved cup comes with saving (a later phase).
-        return Err(Stop::Abort);
-    }
-    // `init_cup`.
-    game.career.market.init(&mut game.rng);
-    let mut cup = Cup::new(&mut game.rng);
-    game.career.clear_records();
-    game.career.money.cash = PerTeam::new(2000, 2000);
+    let (mut cup, mut resume) = if list_menu(ui, game, &menu)? == 0 {
+        // `init_cup`.
+        game.career.market.init(&mut game.rng);
+        let cup = Cup::new(&mut game.rng);
+        game.career.clear_records();
+        game.career.money.cash = PerTeam::new(2000, 2000);
+        (cup, None)
+    } else {
+        // A loaded cup goes straight to the round in progress, its draw as
+        // saved.
+        let save = saving::load(ui, game, true)?;
+        let (teams, initial_dir) = saving::restore(game, &save);
+        let Progress::Cup {
+            round, aggregate, ..
+        } = save.progress
+        else {
+            unreachable!("a cup save")
+        };
+        let cup = Cup {
+            teams: teams.try_into().expect("sixteen teams"),
+            round: usize::from(round),
+        };
+        let aggregate = (i32::from(aggregate.0), i32::from(aggregate.1));
+        (cup, Some((aggregate, initial_dir)))
+    };
     loop {
-        cup.redraw(&mut game.rng);
+        if resume.is_none() {
+            cup.redraw(&mut game.rng);
+        }
         let text = game.ram.string_at(addr::STRINGS_CUP_ROUNDS, cup.round);
         message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
         let ties: Vec<_> = cup.ties().collect();
-        for tie in ties {
-            if tie_lost_by_brutal_deluxe(ui, game, &mut cup, tie)? {
+        for (index, tie) in ties.into_iter().enumerate() {
+            let partway = resume.take().filter(|(aggregate, _)| *aggregate != (0, 0));
+            if tie_lost_by_brutal_deluxe(ui, game, &mut cup, index, tie, partway)? {
                 return Ok(());
             }
         }
@@ -56,31 +77,50 @@ fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
 
 /// `cup_match`: a two-legged tie, with more legs while the aggregate is
 /// level. The winner moves into the tie's first slot. Returns whether
-/// Brutal Deluxe were knocked out.
+/// Brutal Deluxe were knocked out. A tie loaded part way (`cup_score_1`
+/// set) skips its first leg.
 fn tie_lost_by_brutal_deluxe(
     ui: &mut Ui,
     game: &mut Game,
     cup: &mut Cup,
+    index: usize,
     tie: (usize, usize),
+    partway: Option<((i32, i32), i32)>,
 ) -> Flow<bool> {
     let teams = (cup.teams[tie.0], cup.teams[tie.1]);
     let playing = teams.0 == BRUTAL_DELUXE;
-    let mut initial_dir = 0;
-    let first = cup_league_match(
-        ui,
-        game,
-        Competition::Cup,
-        teams,
+    let standings = |cup, aggregate, initial_dir| Standings::Cup {
+        cup,
+        tie_index: index,
+        tie,
+        aggregate,
         initial_dir,
-        Standings::Cup(cup),
-    )?;
-    game.career.record_result(per_team(teams), per_team(first));
-    let mut total = first;
-    if playing {
-        initial_dir = 4;
-        let text = game.ram.string(addr::STR_SECOND_LEG);
-        message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
-    }
+    };
+    let (mut total, mut initial_dir) = match partway {
+        Some(partway) => {
+            let text = game.ram.string(addr::STR_SECOND_LEG);
+            message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+            partway
+        }
+        None => {
+            let first = cup_league_match(
+                ui,
+                game,
+                Competition::Cup,
+                teams,
+                0,
+                standings(cup, (0, 0), 0),
+            )?;
+            game.career.record_result(per_team(teams), per_team(first));
+            if playing {
+                let text = game.ram.string(addr::STR_SECOND_LEG);
+                message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+                (first, 4)
+            } else {
+                (first, 0)
+            }
+        }
+    };
     loop {
         let leg = cup_league_match(
             ui,
@@ -88,7 +128,7 @@ fn tie_lost_by_brutal_deluxe(
             Competition::Cup,
             teams,
             initial_dir,
-            Standings::Cup(cup),
+            standings(cup, total, initial_dir),
         )?;
         game.career.record_result(per_team(teams), per_team(leg));
         initial_dir ^= 4;

@@ -51,6 +51,27 @@ impl League {
         }
     }
 
+    /// A league from a save: the teams in fixture order, division 2 then
+    /// division 1 (`read_teams` into `division_2_b`).
+    pub fn from_saved(teams: &[TeamId]) -> Self {
+        let division = |first: usize| std::array::from_fn(|i| teams[first + i]);
+        let fixtures = [division(DIVISION_SIZE), division(0)];
+        Self {
+            fixtures,
+            tables: fixtures,
+            results: [[(0, 0); MATCHES_PER_ROUND]; 2],
+        }
+    }
+
+    /// The teams in save order: division 2's fixtures, then division 1's.
+    pub fn saved_order(&self) -> Vec<TeamId> {
+        self.fixtures[1]
+            .iter()
+            .chain(&self.fixtures[0])
+            .copied()
+            .collect()
+    }
+
     /// Which division a placing is in.
     pub fn division_of(placing: u8) -> usize {
         usize::from(placing > DIVISION_SIZE as u8)

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use crate::config::{Config, Platform};
 use crate::data::amiga::{menu_ram, Overlays};
+use crate::data::save_disk::SaveDisk;
 use crate::data::{AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
@@ -18,6 +19,15 @@ use crate::menu::ui::Ui;
 use crate::render::MatchRenderer;
 
 fn load_game() -> Option<Game> {
+    let disk = std::env::temp_dir().join(format!(
+        "sb2-test-{}-{:?}.adf",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    load_game_with_disk(SaveDisk::new(disk))
+}
+
+fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
     let config = Config::default();
     let files = match GameFiles::load(&config.data_dir, Platform::Amiga) {
         Ok(files) => files,
@@ -35,7 +45,7 @@ fn load_game() -> Option<Game> {
         Assets::load(&rom, files.amiga.as_ref(), Platform::Amiga),
         &rom,
     );
-    Some(Game::new(rom, ram, assets, renderer, 1))
+    Some(Game::new(rom, ram, assets, renderer, save_disk, 1))
 }
 
 /// What the script sees each frame.
@@ -631,4 +641,110 @@ fn the_knockout_gym_trains_the_squad_for_the_match() {
         host.sounds.iter().any(|(_, s)| s.id == 0x22),
         "the purchase sound"
     );
+}
+
+#[test]
+fn a_league_saved_from_the_manager_screen_loads_back() {
+    use crate::game::career::TeamId;
+    use crate::game::save::{Progress, SaveGame};
+    let disk_path = std::env::temp_dir().join(format!("sb2-save-{}.adf", std::process::id()));
+    let _ = std::fs::remove_file(&disk_path);
+    let Some(mut game) = load_game_with_disk(SaveDisk::new(&disk_path)) else {
+        return;
+    };
+    game.cursors.keypad = (2, 0);
+    let left = Button::Joystick(Side::Team1, Control::Left);
+    let right = Button::Joystick(Side::Team1, Control::Right);
+    // One player, league, team manager, past the next fixture; then on the
+    // manager screen: left to the save key, save, back right to exit.
+    let presses: Vec<(f64, Button)> = vec![
+        (2.0, FIRE_1),
+        (4.0, DOWN_1),
+        (5.0, FIRE_1),
+        (7.0, DOWN_1),
+        (8.0, FIRE_1),
+        (11.0, FIRE_1),
+        (14.0, left),
+        (14.5, FIRE_1),
+        (17.0, FIRE_1), // "PLEASE INSERT GAME SAVE DISK"
+        (20.0, right),
+        (20.5, FIRE_1),
+    ];
+    let mut host = ScriptedHost::new(60, |m| {
+        if !m.banks.is_empty() {
+            return None; // The match has started.
+        }
+        Some(
+            presses
+                .iter()
+                .find(|(t, _)| at(m, *t))
+                .map_or(vec![], |&(_, b)| press(b)),
+        )
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+    assert_eq!(host.banks.len(), 1, "on to the first match");
+
+    let disk = SaveDisk::new(&disk_path);
+    let bytes = disk.read(0, 2).unwrap();
+    let save = SaveGame::decode(&bytes, false).expect("a league save at sector 0");
+    assert_eq!(save.progress, Progress::League { round: 0, game: 0 });
+    assert_eq!(save.flags & 1, 1, "team manager");
+    assert_eq!(save.cash, 1100);
+    assert_eq!(
+        save.encode(),
+        bytes[..save.encode().len()],
+        "the original layout"
+    );
+    let records = |game: &Game| -> Vec<(u16, u16, u16)> {
+        (0..16)
+            .map(|i| {
+                let r = game.career.record(TeamId::League(i));
+                (r.played, r.league_points, r.points_for)
+            })
+            .collect()
+    };
+    let saved_records = records(&game);
+
+    // A fresh game loads it: "LOAD GAME" is the third item.
+    let Some(mut loaded) = load_game_with_disk(SaveDisk::new(&disk_path)) else {
+        return;
+    };
+    loaded.cursors.keypad = (2, 0);
+    let presses: Vec<(f64, Button)> = vec![
+        (2.0, FIRE_1),
+        (4.0, DOWN_1),
+        (5.0, FIRE_1),
+        (7.0, DOWN_1),
+        (7.5, DOWN_1),
+        (8.0, FIRE_1),
+        (11.0, FIRE_1), // "PLEASE INSERT GAME SAVE DISK"
+        (14.0, FIRE_1), // the next fixture
+        (17.0, FIRE_1), // exit the manager screen
+    ];
+    let mut host = ScriptedHost::new(60, |m| {
+        if !m.banks.is_empty() {
+            return None;
+        }
+        Some(
+            presses
+                .iter()
+                .find(|(t, _)| at(m, *t))
+                .map_or(vec![], |&(_, b)| press(b)),
+        )
+    });
+    flow::run(&mut Ui::new(&mut host), &mut loaded);
+    assert_eq!(host.banks.len(), 1, "the loaded league plays on");
+    assert!(loaded.manager_mode);
+    assert_eq!(records(&loaded), saved_records);
+    // Placings are worked out again from the saved fixture order; with
+    // everyone level at the start of a season, they follow it.
+    let placing = |i| loaded.career.record(TeamId::League(i)).league_placing;
+    assert_eq!(
+        placing(0),
+        9,
+        "Brutal Deluxe stay first in division 2's fixtures"
+    );
+    assert_eq!(save.teams[0].team_offset, 0);
+    assert_eq!(loaded.career.squads.team1[0].name, "BARRY");
+    let _ = std::fs::remove_file(&disk_path);
 }

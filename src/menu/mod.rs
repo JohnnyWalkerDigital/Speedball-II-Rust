@@ -13,5 +13,6 @@ pub mod manager;
 pub mod panels;
 pub mod play;
 pub mod ram;
+pub mod saving;
 pub mod text;
 pub mod ui;

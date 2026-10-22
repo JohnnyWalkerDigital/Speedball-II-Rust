@@ -117,9 +117,18 @@ the game's starting amount (0, or 300 in league games) and at most its cap
 fell short of the cap is added to its next cap. Coins stop appearing once
 team 1 reaches its cap (in two-player games, once both teams have).
 
-Not yet: loading and saving games ("LOAD GAME" goes back to the main menu;
-the manager's save key does nothing), replay saving and the "REPLAY GOALS"
-viewer (selecting it does nothing), and the intro. There is no team selection
+- Saving and loading leagues and cups (`menu/saving.rs`, `game/save.rs`):
+  the manager screen's save key (every fourth management round) and "LOAD
+  GAME" in the league and cup menus. The original wrote to a blank "game
+  save disk"; here that disk is an 880K image file, `saves/save-disk.adf`
+  (`--save-disk` to choose another), with each save at the original's
+  sectors (a league at sector 0, a cup at 22) in the original's byte layout,
+  so an emulator's save disk can be used. A failed read or write gets the
+  original's "DISK ERROR" menu: retry or cancel. A loaded game rejoins where
+  it was saved: the same round, or the second leg of a cup tie.
+
+Not yet: saving goal replays (keys 1-9 during a replay) and the "REPLAY
+GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
 in the original: one-player games are always Brutal Deluxe.
 
 ## Sound
@@ -298,6 +307,14 @@ Menus and results:
   are skipped without a message, and the money for them is not spent.
 - The save key shows as a blank key except every fourth management round
   (`draw_keypad`), the only rounds the original let you save.
+- A save keeps only what `write_*` writes: not the round's results so
+  far, the player-2 squad or the random numbers. So after loading part way
+  through a league round, the results screen shows zeros for the matches
+  played before the save, and the tables are sorted again from the saved
+  fixture order (at the start of a season, with every team level, that
+  reorders the placings).
+- A loaded cup round always starts again from its first tie, which is
+  Brutal Deluxe's (they are always drawn first), so nothing is replayed.
 - The statistics are bytes per player, so a player's possession count wraps
   after 255 frames. A substitute takes over the injured player's slot with
   its counters reset, so the injured player's goals and tackles drop out of

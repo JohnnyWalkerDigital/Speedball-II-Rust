@@ -38,6 +38,8 @@ pub struct Config {
     /// Write the Amiga sound samples here as WAV files instead of playing.
     pub export_sounds: Option<PathBuf>,
     pub mute: bool,
+    /// The game save disk image.
+    pub save_disk: PathBuf,
 }
 
 pub const TEAM_COUNT: usize = 16;
@@ -60,6 +62,8 @@ OPTIONS:
     --export-sounds <DIR>  Save the raw instrument samples, and every game sound
                            rendered through the driver, as WAV files and exit
     --mute                 No sound
+    --save-disk <FILE>     Save disk image for leagues and cups
+                           (default: saves/save-disk.adf)
     -h, --help             Show this help
 
 CONTROLS:
@@ -95,6 +99,7 @@ impl Config {
                     config.export_sounds = Some(PathBuf::from(value("--export-sounds")?));
                 }
                 "--mute" => config.mute = true,
+                "--save-disk" => config.save_disk = PathBuf::from(value("--save-disk")?),
                 other => return Err(format!("unknown argument `{other}`")),
             }
         }
@@ -117,6 +122,7 @@ impl Default for Config {
             team2: None,
             export_sounds: None,
             mute: false,
+            save_disk: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("saves/save-disk.adf"),
         }
     }
 }

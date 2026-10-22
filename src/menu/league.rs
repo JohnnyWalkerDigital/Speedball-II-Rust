@@ -7,44 +7,89 @@ use super::host::{Button, Control};
 use super::manager::Standings;
 use super::panels::{self, Competition};
 use super::ram::addr;
+use super::saving;
 use super::ui::{Flow, Stop, Ui};
 use crate::game::geometry::Side;
 use crate::game::league::{
     team2_won, League, BRUTAL_DELUXE, DIVISION_SIZE, MATCHES_PER_ROUND, ROUNDS,
 };
+use crate::game::save::Progress;
+
+/// Where a loaded league picks up (`round_num`, `match_num` and the
+/// half-season's playing direction).
+struct Resume {
+    round: usize,
+    game: usize,
+    initial_dir: i32,
+}
 
 /// `game_league`.
 pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(550);
     let menu = game.ram.menu(addr::MENU_SELECT_GAME);
-    match list_menu(ui, game, &menu)? {
-        0 => {}
-        1 => {
-            // "TEAM MANAGER": the computer plays Brutal Deluxe's matches,
-            // for a guaranteed 300 a match and more prize money.
-            game.manager_mode = true;
-            game.career.money.start = 300;
-            game.career.set_cash_cap(650);
+    let (mut league, mut resume) = match list_menu(ui, game, &menu)? {
+        choice @ (0 | 1) => {
+            if choice == 1 {
+                // "TEAM MANAGER": the computer plays Brutal Deluxe's
+                // matches, for a guaranteed 300 a match and more prize money.
+                game.manager_mode = true;
+                game.career.money.start = 300;
+                game.career.set_cash_cap(650);
+            }
+            let league = League::new_game(&mut game.career);
+            game.career.market.init(&mut game.rng);
+            (league, None)
         }
-        // Loading a saved league comes with saving (a later phase).
-        _ => return Err(Stop::Abort),
-    }
-    let mut league = League::new_game(&mut game.career);
-    game.career.market.init(&mut game.rng);
+        _ => {
+            let save = saving::load(ui, game, false)?;
+            let (teams, initial_dir) = saving::restore(game, &save);
+            if game.manager_mode {
+                game.career.money.start = 300;
+                game.career.money.cap_base = 650;
+            }
+            let Progress::League { round, game: index } = save.progress else {
+                unreachable!("a league save")
+            };
+            let resume = Resume {
+                round: usize::from(round),
+                game: usize::from(index),
+                initial_dir,
+            };
+            (League::from_saved(&teams), Some(resume))
+        }
+    };
     league.update_placings(&mut game.career);
     loop {
-        game.career.clear_records();
-        for initial_dir in [0, 4] {
-            league.shuffle_fixtures(&mut game.rng);
-            season(ui, game, &mut league, initial_dir)?;
-        }
+        // The second half of a season plays with ends swapped.
+        let initial_dir = match resume.take() {
+            None => {
+                game.career.clear_records();
+                for initial_dir in [0, 4] {
+                    league.shuffle_fixtures(&mut game.rng);
+                    season(ui, game, &mut league, initial_dir, 0, 0)?;
+                }
+                4
+            }
+            // Saved during the play-offs.
+            Some(r) if r.round >= ROUNDS => r.initial_dir,
+            Some(r) => {
+                season(ui, game, &mut league, r.initial_dir, r.round, r.game)?;
+                if r.initial_dir == 0 {
+                    league.shuffle_fixtures(&mut game.rng);
+                    season(ui, game, &mut league, 4, 0, 0)?;
+                    4
+                } else {
+                    r.initial_dir
+                }
+            }
+        };
         if placing(game) <= DIVISION_SIZE as u8 {
             if placing(game) == 1 {
                 win_shared(ui, &game.assets.league_win)?;
             }
             return Ok(());
         }
-        playoffs(ui, game, &mut league)?;
+        playoffs(ui, game, &mut league, initial_dir)?;
         promote_relegate_announce(ui, game, &mut league)?;
         if placing(game) > DIVISION_SIZE as u8 {
             return Ok(());
@@ -59,9 +104,18 @@ fn placing(game: &Game) -> u8 {
 }
 
 /// `league_season`: seven rounds, each followed by the results and tables.
-fn season(ui: &mut Ui, game: &mut Game, league: &mut League, initial_dir: i32) -> Flow {
-    for round in 0..ROUNDS {
-        league_round(ui, game, league, round, initial_dir)?;
+/// A loaded game starts part way (`league_season_middle`).
+fn season(
+    ui: &mut Ui,
+    game: &mut Game,
+    league: &mut League,
+    initial_dir: i32,
+    first_round: usize,
+    first_game: usize,
+) -> Flow {
+    for round in first_round..ROUNDS {
+        let first_game = if round == first_round { first_game } else { 0 };
+        league_round(ui, game, league, round, first_game, initial_dir)?;
         ui.transition(&panels::results(game, league, round))?;
         wait_fire(ui)?;
         league.update_placings(&mut game.career);
@@ -77,13 +131,19 @@ fn league_round(
     game: &mut Game,
     league: &mut League,
     round: usize,
+    first_game: usize,
     initial_dir: i32,
 ) -> Flow {
-    for game_index in 0..MATCHES_PER_ROUND {
+    for game_index in first_game..MATCHES_PER_ROUND {
         let own = League::division_of(placing(game));
         for division in [own, 1 - own] {
             let teams = league.fixture(division, round, game_index);
-            let standings = Standings::League(league);
+            let standings = Standings::League {
+                league,
+                round,
+                game: game_index,
+                initial_dir,
+            };
             let scores =
                 cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
             game.career.record_result(per_team(teams), per_team(scores));
@@ -134,17 +194,23 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
 }
 
 /// `league_playoffs`: seventh in division 1 plays second in division 2
-/// until one wins; if the division 2 team wins, they swap divisions.
-fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League) -> Flow {
+/// until one wins; if the division 2 team wins, they swap divisions. The
+/// ends swap before each match.
+fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: i32) -> Flow {
     let teams = (league.tables[0][6], league.tables[1][1]);
     if teams.0 == BRUTAL_DELUXE || teams.1 == BRUTAL_DELUXE {
         let text = game.ram.string(addr::STR_PLAYOFF);
         message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
     }
-    let mut initial_dir = 4;
     let scores = loop {
         initial_dir ^= 4;
-        let standings = Standings::League(league);
+        // A save here comes back to the end of the season.
+        let standings = Standings::League {
+            league,
+            round: ROUNDS,
+            game: MATCHES_PER_ROUND,
+            initial_dir,
+        };
         let scores =
             cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
         if scores.0 != scores.1 {

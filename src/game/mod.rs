@@ -19,6 +19,7 @@ pub mod player;
 pub mod replay;
 pub mod rng;
 pub mod roster;
+pub mod save;
 pub mod scene;
 pub mod setup;
 pub mod squad;

@@ -12,12 +12,14 @@ pub mod draw;
 use super::flow::{wait_fire, Game};
 use super::host::{Button, Control};
 use super::panels::{self, Competition as Fixtures};
+use super::saving;
 use super::ui::{Flow, Stop, Ui};
 use crate::game::career::TeamId;
 use crate::game::cup::Cup;
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::game::league::League;
+use crate::game::save::Progress;
 use crate::game::squad::{self, Context, Manager, Refusal};
 use data::KeyAction;
 use draw::Scene;
@@ -138,11 +140,65 @@ impl View {
     }
 }
 
-/// What the "TABLE" key shows: the league tables or the cup's fixtures.
+/// The league or cup being played, and how far it has got: for the
+/// "TABLE" key and for saving.
 pub enum Standings<'a> {
     None,
-    League(&'a mut League),
-    Cup(&'a Cup),
+    League {
+        league: &'a mut League,
+        round: usize,
+        game: usize,
+        initial_dir: i32,
+    },
+    Cup {
+        cup: &'a Cup,
+        /// Which tie of the round, and its two places in the draw.
+        tie_index: usize,
+        tie: (usize, usize),
+        aggregate: (i32, i32),
+        initial_dir: i32,
+    },
+}
+
+impl Standings<'_> {
+    /// What a save records of the competition (`write_league_config`,
+    /// `write_cup_config`, `write_teams`).
+    fn snapshot(&self) -> Option<saving::Snapshot> {
+        match self {
+            Standings::None => None,
+            Standings::League {
+                league,
+                round,
+                game,
+                initial_dir,
+            } => Some(saving::Snapshot {
+                teams: league.saved_order(),
+                initial_dir: *initial_dir,
+                progress: Progress::League {
+                    round: *round as u16,
+                    game: *game as u16,
+                },
+            }),
+            Standings::Cup {
+                cup,
+                tie_index,
+                tie,
+                aggregate,
+                initial_dir,
+            } => Some(saving::Snapshot {
+                teams: cup.teams.to_vec(),
+                initial_dir: *initial_dir,
+                progress: Progress::Cup {
+                    round: cup.round as u16,
+                    tie: *tie_index as u16,
+                    ties: cup.ties().count() as u16,
+                    // `cup_team_1` and `_2` are byte offsets into the draw.
+                    slots: (tie.0 as u16 * 4, tie.1 as u16 * 4),
+                    aggregate: (aggregate.0 as i16, aggregate.1 as i16),
+                },
+            }),
+        }
+    }
 }
 
 /// A visit to the manager screens.
@@ -429,15 +485,23 @@ fn press_key(ui: &mut Ui, game: &mut Game, session: &mut Session, action: KeyAct
             }
             transition(ui, game, session)?;
         }
-        // Saving comes with loading (a later phase).
-        KeyAction::Save => {}
+        // Only every fourth management round (the key is blank otherwise).
+        KeyAction::Save => {
+            if game.career.market.rounds & 3 == 0 {
+                if let Some(snapshot) = session.standings.snapshot() {
+                    let save = saving::snapshot(game, snapshot);
+                    saving::save(ui, game, save)?;
+                }
+                transition(ui, game, session)?;
+            }
+        }
         KeyAction::Table => {
             match &mut session.standings {
-                Standings::League(league) => {
+                Standings::League { league, .. } => {
                     league.update_placings(&mut game.career);
                     super::league::show_league_placings(ui, game, league)?;
                 }
-                Standings::Cup(cup) => {
+                Standings::Cup { cup, .. } => {
                     ui.transition(&panels::fixture_list(game, cup))?;
                     wait_fire(ui)?;
                 }
