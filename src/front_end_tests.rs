@@ -144,8 +144,8 @@ fn escape_leaves_a_match_for_the_main_menu() {
             // Back on the menus: done once the main menu is up again.
             return (m.time < m.banks[1].0 + Duration::from_secs(3)).then(Vec::new);
         }
-        let events = if at(m, 2.0) || at(m, 4.0) {
-            // "1 PLAYER GAME", then "KNOCKOUT".
+        let events = if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) {
+            // "1 PLAYER GAME", "KNOCKOUT", then past the next fixture.
             press(FIRE_1)
         } else if m.banks.len() == 1
             && escaped.is_none()
@@ -277,8 +277,9 @@ fn a_knockout_defeat_is_recorded_and_paid() {
             // Past the defeat picture, on "GAME OVER".
             return (m.time < m.banks[1].0 + Duration::from_secs(8)).then(Vec::new);
         }
-        // "1 PLAYER GAME", then "KNOCKOUT"; then Brutal Deluxe stand still.
-        Some(if at(m, 2.0) || at(m, 4.0) {
+        // "1 PLAYER GAME", "KNOCKOUT", past the next fixture; then Brutal
+        // Deluxe stand still.
+        Some(if at(m, 2.0) || at(m, 4.0) || at(m, 7.0) {
             press(FIRE_1)
         } else {
             vec![]
@@ -308,4 +309,168 @@ fn a_knockout_defeat_is_recorded_and_paid() {
         assert_eq!(cap, 1100 + (1100 - prize));
     }
     assert!(career.money.cash.team2 > 1100, "Revolver picked up coins");
+}
+
+/// Writes the league's screens to `SPEEDBALL_FRAMES_DIR`: the menus, the
+/// next fixture, then what follows the first match.
+#[test]
+#[ignore = "writes images; run manually"]
+fn dump_league_frames() {
+    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+        return;
+    };
+    let Some(mut game) = load_game() else { return };
+    let mut shot = 0;
+    let mut host = ScriptedHost::new(1200, |m| {
+        let t = m.time.as_secs_f64();
+        let after_match = m.banks.len() >= 2;
+        let since = m.banks.last().map_or(0.0, |b| t - b.0.as_secs_f64());
+        // Before the match: one player, league, new game, past the fixture.
+        let presses = [2.0, 4.0, 4.5, 7.0, 10.0];
+        let pre = !after_match && m.banks.is_empty() && presses.iter().any(|&p| at(m, p));
+        // After it: fire every three seconds, one shot just before each.
+        let post_shot = after_match && since > 1.0 && ((since - 2.0) % 3.0).abs() < 0.01;
+        let post_press = after_match && since > 1.0 && ((since - 2.5) % 3.0).abs() < 0.01;
+        if (m.banks.is_empty() && [3.0, 6.5, 9.5].iter().any(|&p| at(m, p))) || post_shot {
+            let path = format!("{dir}/league_{shot:02}.bmp");
+            std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+            shot += 1;
+        }
+        if shot >= 14 {
+            return None;
+        }
+        Some(if at(m, 4.0) {
+            press(DOWN_1)
+        } else if pre || post_press {
+            press(FIRE_1)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+}
+
+/// Presses fire every 0.3 seconds (after a scripted start), to get
+/// through screens.
+fn keep_firing(m: &Moment) -> Vec<ButtonEvent> {
+    let ms = m.time.as_millis();
+    if ms % 300 < 20 {
+        press(FIRE_1)
+    } else {
+        vec![]
+    }
+}
+
+#[test]
+fn a_half_season_of_the_league_plays_every_team_seven_times() {
+    use crate::game::career::TeamId;
+    let Some(mut game) = load_game() else { return };
+    // Brutal Deluxe play one match a round: seven, each switching the
+    // samples in and out.
+    let mut host = ScriptedHost::new(3000, |m| {
+        if m.banks.len() >= 14 {
+            return (m.time < m.banks[13].0 + Duration::from_secs(5)).then(|| keep_firing(m));
+        }
+        // One player, league (down once), team manager (down once).
+        Some(if at(m, 2.0) || at(m, 5.0) || at(m, 8.0) {
+            press(FIRE_1)
+        } else if at(m, 4.0) || at(m, 7.0) {
+            press(DOWN_1)
+        } else if m.time > Duration::from_secs(10) {
+            keep_firing(m)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+
+    assert!(game.manager_mode);
+    let career = &game.career;
+    let records: Vec<_> = (0..16).map(|i| *career.record(TeamId::League(i))).collect();
+    for record in &records {
+        assert_eq!(record.played, 7, "{record:?}");
+        assert_eq!(record.won + record.drawn + record.lost, 7);
+    }
+    let wins: u16 = records.iter().map(|r| r.won).sum();
+    let losses: u16 = records.iter().map(|r| r.lost).sum();
+    assert_eq!(wins, losses);
+    let mut placings: Vec<u8> = records.iter().map(|r| r.league_placing).collect();
+    placings.sort_unstable();
+    assert_eq!(placings, (1..=16).collect::<Vec<u8>>());
+    // Team manager mode guarantees 300 a match.
+    assert!(career.money.cash.team1 >= 1100 + 7 * 300);
+}
+
+#[test]
+fn losing_a_cup_tie_ends_the_cup_and_restores_the_coins() {
+    use crate::game::career::TeamId;
+    let Some(mut game) = load_game() else { return };
+    let mut host = ScriptedHost::new(3000, |m| {
+        if m.banks.len() >= 4 {
+            // Both legs played: past the aggregate, onto "GAME OVER".
+            // Both legs played: stop once past the defeat picture (the
+            // second leg is recorded after it), before another game.
+            return (m.time < m.banks[3].0 + Duration::from_secs(2)).then(|| keep_firing(m));
+        }
+        // One player, cup (down twice), new game; then fire through.
+        Some(if at(m, 2.0) || at(m, 6.0) || at(m, 9.0) {
+            press(FIRE_1)
+        } else if at(m, 4.0) || at(m, 5.0) {
+            press(DOWN_1)
+        } else if m.time > Duration::from_secs(11) {
+            keep_firing(m)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
+
+    assert_eq!(game.coin_value, 100, "the cup's double coins end with it");
+    let brutal_deluxe = game.career.record(TeamId::League(0));
+    assert_eq!(brutal_deluxe.played, 2, "{brutal_deluxe:?}");
+    assert_eq!(brutal_deluxe.lost, 2);
+    // A new cup gives both players 2000.
+    assert!(game.career.money.cash.team1 >= 2000);
+    let banks: Vec<_> = host.banks.iter().map(|b| b.1).collect();
+    assert_eq!(banks.len(), 4, "knocked out after two legs");
+}
+
+/// Writes the cup's round title and the aggregate picture after a tie to
+/// `SPEEDBALL_FRAMES_DIR`.
+#[test]
+#[ignore = "writes images; run manually"]
+fn dump_cup_frames() {
+    let Ok(dir) = std::env::var("SPEEDBALL_FRAMES_DIR") else {
+        return;
+    };
+    let Some(mut game) = load_game() else { return };
+    let mut shot = 0;
+    let mut host = ScriptedHost::new(3000, |m| {
+        let snap = |shot: &mut usize| {
+            let path = format!("{dir}/cup_{shot:02}.bmp");
+            std::fs::write(path, crate::simulation_tests::bmp(m.frame)).unwrap();
+            *shot += 1;
+        };
+        if at(m, 11.0) {
+            snap(&mut shot);
+        }
+        if m.banks.len() >= 4 {
+            let since = (m.time - m.banks[3].0).as_secs_f64();
+            if (since - 1.4).abs() < 0.01 || (since - 2.4).abs() < 0.01 || (since - 3.9).abs() < 0.01 {
+                snap(&mut shot);
+            }
+            let fire = (since - 1.6).abs() < 0.01 || (since - 2.6).abs() < 0.01;
+            return (since < 4.0).then(|| if fire { press(FIRE_1) } else { vec![] });
+        }
+        Some(if at(m, 2.0) || at(m, 6.0) || at(m, 9.0) {
+            press(FIRE_1)
+        } else if at(m, 4.0) || at(m, 5.0) {
+            press(DOWN_1)
+        } else if m.time > Duration::from_secs(12) && m.banks.len() % 2 == 0 {
+            keep_firing(m)
+        } else {
+            vec![]
+        })
+    });
+    flow::run(&mut Ui::new(&mut host), &mut game);
 }

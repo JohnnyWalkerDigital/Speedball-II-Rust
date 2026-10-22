@@ -54,8 +54,28 @@ Ported:
 
 - Main menu ("SELECT GAME"), with the demo starting after 30 idle seconds.
 - One player: knockout (the 15 other teams in turn; a draw replays the
-  round, a defeat ends it; the knockout trophy screen after the last) and
-  practice.
+  round, a defeat ends it; the knockout trophy screen after the last),
+  league, cup and practice.
+- League (`menu/league.rs`, `game/league.rs`): two divisions of eight,
+  Brutal Deluxe starting in division 2. Each season is two halves of seven
+  rounds (every team plays every other in its division, then again with
+  ends swapped). Brutal Deluxe's matches are played; the others come from
+  the original's table of pre-baked results. After each round come the
+  results and the tables (sorted by league points, then goal difference,
+  with arrows for movement and Brutal Deluxe's name blinking; up and down
+  switch division). At the end of a season in division 2, the top team
+  swaps with the bottom of division 1, and seventh in division 1 plays
+  second in division 2 for the other place. Brutal Deluxe go on to a new
+  season if promoted; otherwise, or after a season in division 1 (the
+  trophy if they win it), the game ends. "TEAM MANAGER" has the computer
+  play Brutal Deluxe's matches, for at least 300 a match.
+- Cup (`menu/cup.rs`, `game/cup.rs`): the sixteen teams drawn into
+  two-legged ties, with extra legs while the aggregate is level, redrawn
+  among the winners before rounds two and three. Coins are worth double,
+  both players start with 2000, and Brutal Deluxe's money doubles after
+  each round from the second.
+- The next-fixture screen before each of Brutal Deluxe's knockout, league
+  and cup matches: both teams' records and average skills.
 - Two players: one match or the best of three or five, each match two legs
   with ends swapped and extra legs while the aggregate is level.
 - The demo game.
@@ -74,11 +94,11 @@ the game's starting amount (0, or 300 in league games) and at most its cap
 fell short of the cap is added to its next cap. Coins stop appearing once
 team 1 reaches its cap (in two-player games, once both teams have).
 
-Not yet: league and cup (selecting them goes back to the main menu), the
-manager screens (the gym before knockout and two-player matches, the
-knockout fixture screen, the statistics screen, the manager screens after
-the demo, and anything to spend the money on), replay saving and the
-"REPLAY GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
+Not yet: the manager screens (the gym and transfers before matches, the
+statistics and cup fixture-list screens, the manager screens after the
+demo, and so anything to spend the money on), loading and saving games
+("LOAD GAME" goes back to the main menu), replay saving and the "REPLAY
+GOALS" viewer (selecting it does nothing), and the intro. There is no team selection
 in the original: one-player games are always Brutal Deluxe.
 
 ## Sound
@@ -150,6 +170,7 @@ match, menu and result frames as BMPs.
 | `game/scene.rs` | The sprites on screen each frame, in drawing order | drawing code in `Match.cs` |
 | `game/replay.rs` | Recording and playing back the goal replay | none (new, from the disassembly) |
 | `game/setup.rs` | Building teams per game mode | `Game.cs` |
+| `game/career.rs`, `league.rs`, `cup.rs`, `statistics.rs` | Money, records, the league and cup rules, match statistics | none (new, from the disassembly) |
 | `graphics/` | Palettes, bitplane decoding, sprite sheets, pitch assembly | `Palette`, `Sprite`, `SpriteManager`, `Field` |
 | `render.rs` | Draws a `Match` onto the screen | drawing code spread through `Match`/`Entity` |
 | `menu/` | Main menu, game modes, result screens | none (new, from the disassembly) |
@@ -242,6 +263,12 @@ Menus and results:
 
 - In a two-player series, the deciding match is not added to the records;
   only matches that leave the series open are (`game_two_player`).
+- A new league numbers the teams 16 (Brutal Deluxe) down to 1, then sorts
+  the tables before the first match. With everyone on no points nothing
+  moves, so Brutal Deluxe start the season top of division 2.
+- The league ends unless Brutal Deluxe are promoted: finishing a season in
+  division 1 ends the game whatever the placing, with the trophy for first.
+- Play-off matches are not added to the records (`league_playoffs`).
 - The statistics are bytes per player, so a player's possession count wraps
   after 255 frames. A substitute takes over the injured player's slot with
   its counters reset, so the injured player's goals and tackles drop out of

@@ -34,6 +34,8 @@ pub struct MatchRules {
     pub leg_duration: i32,
     /// `match_cash_start`: what each team has earned at kick-off.
     pub min_credits: i32,
+    /// `coin_value`: what a coin is worth (doubled in the cup).
+    pub coin_value: i32,
     /// `match_cash_max_p1` / `_p2`: no more coins appear once a team has
     /// earned this much.
     pub max_credits: PerTeam<i32>,
@@ -52,6 +54,9 @@ pub struct Squad {
 pub enum SquadSkills {
     /// Every skill the same (`init_player_stats`).
     Uniform(i32),
+    /// Each player's own skills (`player_1_player_stats_table`), in squad
+    /// order: three each of defence, midfield, attack and substitutes.
+    Given(Box<[Skills; 12]>),
     /// The team's skill templates (`populate_opposition_player_stats`).
     FromTeam,
 }
@@ -72,6 +77,7 @@ impl MatchRules {
             },
             leg_duration: HALF_LENGTH_SECONDS,
             min_credits: 0,
+            coin_value: 100,
             max_credits: PerTeam::new(1100, 1100),
             computer: PerTeam::new(false, true),
             initial_dir_team1: 0,
@@ -92,6 +98,7 @@ impl MatchRules {
             },
             leg_duration: HALF_LENGTH_SECONDS,
             min_credits: 0,
+            coin_value: 100,
             max_credits: PerTeam::new(10_000, 10_000),
             computer: PerTeam::new(false, false),
             initial_dir_team1: 0,
@@ -116,6 +123,7 @@ impl MatchRules {
             },
             leg_duration: HALF_LENGTH_SECONDS,
             min_credits: 0,
+            coin_value: 100,
             max_credits: PerTeam::new(2000, 2000),
             computer: PerTeam::new(false, false),
             initial_dir_team1,
@@ -136,6 +144,7 @@ impl MatchRules {
             },
             leg_duration: 20,
             min_credits: 0,
+            coin_value: 100,
             max_credits: PerTeam::new(0, 0),
             computer: PerTeam::new(true, true),
             initial_dir_team1: 0,
@@ -189,7 +198,7 @@ impl MatchSetup {
             roster,
             team1: rules.team1.team,
             team2: rules.team2.team,
-            coins_credits: 100,
+            coins_credits: rules.coin_value,
             leg_duration: rules.leg_duration,
             min_credits: rules.min_credits,
             max_credits: rules.max_credits,
@@ -201,10 +210,15 @@ impl MatchSetup {
 }
 
 fn set_skills(squad: &Squad, attributes: &mut [Attributes]) {
-    match squad.skills {
-        SquadSkills::Uniform(value) => {
+    match &squad.skills {
+        &SquadSkills::Uniform(value) => {
             for member in attributes {
                 member.skills = Skills::uniform(value);
+            }
+        }
+        SquadSkills::Given(skills) => {
+            for (member, skills) in attributes.iter_mut().zip(skills.iter()) {
+                member.skills = *skills;
             }
         }
         SquadSkills::FromTeam => squad.team.apply_skills_to(attributes),
@@ -238,6 +252,7 @@ fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRul
         },
         leg_duration: HALF_LENGTH_SECONDS,
         min_credits: 0,
+        coin_value: 100,
         max_credits: PerTeam::new(1100, 1100),
         computer: PerTeam::new(true, true),
         initial_dir_team1: 0,

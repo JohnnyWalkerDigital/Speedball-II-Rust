@@ -22,6 +22,9 @@ pub mod overlay {
     /// Full-screen pictures, loaded into the spare screen buffer.
     pub const VICTORY: usize = 12;
     pub const DEFEAT: usize = 13;
+    pub const LEAGUE_WIN: usize = 14;
+    pub const PROMOTION: usize = 15;
+    pub const CUP_WIN: usize = 16;
     pub const KNOCKOUT_WIN: usize = 17;
 }
 

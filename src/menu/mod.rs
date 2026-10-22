@@ -5,8 +5,11 @@
 //! files whichever graphics the match uses.
 
 pub mod assets;
+pub mod cup;
 pub mod flow;
 pub mod host;
+pub mod league;
+pub mod panels;
 pub mod play;
 pub mod ram;
 pub mod text;

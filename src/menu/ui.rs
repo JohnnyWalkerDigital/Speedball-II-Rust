@@ -91,6 +91,46 @@ impl Page {
         }
     }
 
+    /// `display_screen_block`: the plain panel behind the table screens.
+    pub fn panel(&mut self) {
+        self.fill_box(17, 286, 17, 166, PANEL_COLOUR);
+    }
+
+    /// `draw_box_colour`: a filled rectangle in one palette colour.
+    pub fn fill_box(&mut self, x: usize, width: usize, y: usize, height: usize, colour: u8) {
+        self.screen.fill(x, y, width, height, colour);
+    }
+
+    /// `draw_string_alt`: small text without cursor codes, starting at the
+    /// pixel column in its first byte and the row in its second, six
+    /// pixels a letter.
+    pub fn alt_text(&mut self, assets: &MenuAssets, text: &[u8], font: SmallFont) {
+        let images = assets.small_font(font);
+        let (mut x, y) = (i32::from(text[0]), i32::from(text[1]) * 4);
+        for &c in &text[2..] {
+            if c != b' ' {
+                draw_glyph(
+                    &mut self.screen,
+                    images,
+                    usize::from(c.wrapping_sub(b'A')),
+                    x,
+                    y,
+                );
+            }
+            x += 6;
+        }
+    }
+
+    /// `draw_string_list`: lines of orange text, two rows apart, ending at
+    /// row 44.
+    pub fn string_list(&mut self, assets: &MenuAssets, lines: &[Vec<u8>]) {
+        for (i, line) in lines.iter().enumerate() {
+            let mut line = line.clone();
+            line[1] = ((0x16 - (lines.len() - 1 - i)) * 2) as u8;
+            self.alt_text(assets, &line, SmallFont::Orange);
+        }
+    }
+
     /// `draw_menu_arrows`: the arrows either side of the chosen item.
     pub fn arrows(&mut self, assets: &MenuAssets, arrows: Arrows) {
         const RIGHT_ARROW: usize = 0x24;
@@ -101,6 +141,9 @@ impl Page {
         }
     }
 }
+
+/// The panel's colour, also used to blank things out on it.
+pub const PANEL_COLOUR: u8 = 6;
 
 fn draw_glyph(screen: &mut IndexedScreen, font: &[IndexedImage], index: usize, x: i32, y: i32) {
     if let Some(image) = font.get(index) {
@@ -211,6 +254,11 @@ impl<'h> Ui<'h> {
             self.vblanks(FADE_STEP_VBLANKS)?;
         }
         Ok(())
+    }
+
+    /// Swaps `page` in straight away (for redraws in the same colours).
+    pub fn show_page(&mut self, page: &Page) {
+        page.screen.render(&page.palette, &mut self.front);
     }
 
     /// Puts a match frame on screen as it is, at full brightness.

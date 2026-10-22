@@ -66,6 +66,12 @@ impl Skills {
         }
     }
 
+    pub fn to_array(self) -> [i32; 8] {
+        [
+            self.agr, self.att, self.def, self.spd, self.thr, self.pow, self.sta, self.int,
+        ]
+    }
+
     pub fn get_mut(&mut self, skill: Skill) -> &mut i32 {
         match skill {
             Skill::Aggression => &mut self.agr,
@@ -209,6 +215,11 @@ impl Team {
             attack: group(40),
             substitutes: group(48),
         }
+    }
+
+    /// The skill templates for defence, midfield, attack and substitutes.
+    pub fn groups(&self) -> [[i32; 8]; 4] {
+        [self.defence, self.midfield, self.attack, self.substitutes]
     }
 
     /// Copies the group templates into a 12-player attribute table: three

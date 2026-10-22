@@ -6,13 +6,14 @@ use std::cmp::Ordering;
 
 use super::geometry::PerTeam;
 use super::m68k::ext_divu_register;
+use super::roster::Skills;
 use super::statistics::TeamStatistics;
 
 /// The 16 league teams, in the original's order.
 pub const LEAGUE_TEAMS: usize = 16;
 
 /// Which record a team keeps its results in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TeamId {
     League(usize),
     /// The second human in two-player games (`team_player_2`).
@@ -60,7 +61,13 @@ pub struct Career {
     pub money: Money,
     records: [TeamRecord; LEAGUE_TEAMS + 1],
     pub last_match: Option<LastMatch>,
+    /// `player_1_player_stats_table`, `player_2_...`: each human squad's
+    /// skills, kept between matches.
+    pub squads: PerTeam<[Skills; SQUAD_SIZE]>,
 }
+
+/// Players in a squad: nine on the pitch and three substitutes.
+pub const SQUAD_SIZE: usize = 12;
 
 impl Career {
     /// The state at power-on: every variable zero, the records as stored.
@@ -69,16 +76,15 @@ impl Career {
             money: Money::default(),
             records,
             last_match: None,
+            squads: PerTeam::default(),
         }
     }
 
-    // Shown by the league table and statistics screens, which come later.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn record(&self, team: TeamId) -> &TeamRecord {
         &self.records[Self::slot(team)]
     }
 
-    fn record_mut(&mut self, team: TeamId) -> &mut TeamRecord {
+    pub(crate) fn record_mut(&mut self, team: TeamId) -> &mut TeamRecord {
         &mut self.records[Self::slot(team)]
     }
 
@@ -95,6 +101,11 @@ impl Career {
         self.money.cash = PerTeam::new(1100, 1100);
         self.money.start = 0;
         self.last_match = None;
+    }
+
+    /// `init_player_stats`: every skill in a human squad set to `value`.
+    pub fn init_squad(&mut self, side: super::geometry::Side, value: i32) {
+        *self.squads.get_mut(side) = [Skills::uniform(value); SQUAD_SIZE];
     }
 
     /// A game mode's cap per match, for both teams.
@@ -220,7 +231,6 @@ mod tests {
         let loser = career.record(TeamId::League(3));
         assert_eq!((loser.lost, loser.league_points), (1, 2 + 5 + 1));
     }
-
 
     #[test]
     fn clearing_keeps_league_placings() {

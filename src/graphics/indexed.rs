@@ -75,6 +75,18 @@ impl IndexedScreen {
         }
     }
 
+    /// Fills a rectangle with one colour, clipped to the screen.
+    pub fn fill(&mut self, x: usize, y: usize, width: usize, height: usize, color: u8) {
+        let (right, bottom) = (
+            (x + width).min(self.image.width),
+            (y + height).min(self.image.height),
+        );
+        for row in y.min(bottom)..bottom {
+            let start = row * self.image.width;
+            self.image.pixels[start + x.min(right)..start + right].fill(color);
+        }
+    }
+
     /// Shows the screen through `palette`.
     pub fn render(&self, palette: &ColorWords, canvas: &mut Canvas) {
         let colors: Vec<u32> = palette.iter().map(|&word| amiga_color(word)).collect();
