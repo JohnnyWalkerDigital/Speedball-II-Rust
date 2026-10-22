@@ -103,9 +103,7 @@ impl Career {
         self.money.cap = PerTeam::new(base, base);
     }
 
-    /// `clear_match_stats`: every team back to no games played. (The
-    /// original clears one record too many; the extra pointer is the first
-    /// instruction of the program, which lands in unused memory.)
+    /// `clear_match_stats`: every team back to no games played.
     pub fn clear_records(&mut self) {
         for record in &mut self.records {
             *record = TeamRecord {
@@ -161,8 +159,7 @@ impl Career {
             (teams.team1, teams.team2, scores.team1),
             (teams.team2, teams.team1, scores.team2),
         ] {
-            // A tenth of the score; a negative score fails to divide and
-            // counts in full.
+            // A tenth of the score.
             let points = ext_divu_register(score as i16, 10) as u16;
             let record = self.record_mut(team);
             record.league_points = record.league_points.wrapping_add(points);
@@ -173,8 +170,9 @@ impl Career {
     }
 }
 
-/// How the original compares two scores: as unsigned 16-bit words, so a
-/// negative score beats any positive one.
+/// How the original compares two scores: as unsigned 16-bit words. Scores
+/// never go below zero in a match (a lit star costs no more than it
+/// earned), so this only matters in principle.
 pub fn compare_scores(a: i32, b: i32) -> Ordering {
     (a as u16).cmp(&(b as u16))
 }
@@ -223,17 +221,6 @@ mod tests {
         assert_eq!((loser.lost, loser.league_points), (1, 2 + 5 + 1));
     }
 
-    #[test]
-    fn a_negative_score_wins_and_counts_in_full() {
-        let mut career = career();
-        let teams = PerTeam::new(TeamId::League(0), TeamId::PlayerTwo);
-        career.record_result(teams, PerTeam::new(-2, 30));
-        let odd = career.record(TeamId::League(0));
-        assert_eq!(odd.won, 1);
-        assert_eq!(odd.league_points, 8);
-        assert_eq!(odd.points_for, 0xFFFE);
-        assert_eq!(career.record(TeamId::PlayerTwo).lost, 1);
-    }
 
     #[test]
     fn clearing_keeps_league_placings() {

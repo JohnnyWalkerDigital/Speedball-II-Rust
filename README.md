@@ -206,8 +206,9 @@ Gameplay:
 
 - Score multipliers are never reset during a match, so one-sided games can
   produce big scores.
-- Hitting an opponent's lit wall star takes 2 points straight off their score,
-  ignoring multipliers, which can push it below zero (shown as 000).
+- Hitting an opponent's lit wall star takes 2 points straight off their
+  score, ignoring multipliers, though lighting it earned them 2 to 4 with a
+  multiplier. (So a score never goes below zero.)
 - `jumping_action_fn` always clears player 1's fire button when a jump lands,
   whichever team jumped; the line that would clear player 2's is never reached.
 
@@ -239,23 +240,13 @@ Crowd and sound:
 
 Menus and results:
 
-- A negative score on a result screen shows as "ZZZ": `format_decimal_digit`
-  divides with `divu`, which gives up on a negative number and leaves the
-  remainder as -1, one before the digit 0 in the font.
-- Scores are compared as unsigned 16-bit numbers, so a negative score
-  (possible through the wall stars) beats any positive one: on the result
-  screen, in the knockout, in a two-player series and in the records. In
-  the records it also counts in full rather than a tenth, for the same
-  `divu` reason.
 - In a two-player series, the deciding match is not added to the records;
   only matches that leave the series open are (`game_two_player`).
 - The statistics are bytes per player, so a player's possession count wraps
   after 255 frames. A substitute takes over the injured player's slot with
-  its counters reset, so the injured player's goals and tackles vanish
-  from the team's statistics; only the substitution count carries over.
-- `clear_match_stats` clears one team record too many: its eighteenth
-  pointer is the program's first instruction, which points into unused
-  memory.
+  its counters reset, so the injured player's goals and tackles drop out of
+  the team's statistics screen (the score is unaffected); only the
+  substitution count carries over (`step_injury_3`, `reset_player`).
 
 Sound driver:
 

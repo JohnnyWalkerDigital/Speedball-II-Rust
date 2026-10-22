@@ -68,7 +68,7 @@ fn layout(text: &[u8], advance: impl Fn(u8, u8) -> (u8, u8)) -> Vec<Glyph> {
 
 /// `format_N_decimal_digits`: writes `count` digits of `value` into `text`,
 /// right to left, ending at `last`. Like the 68000 code, a value that does
-/// not fit in 16 bits after dividing (any negative score) leaves the
+/// not fit in 16 bits after dividing (any negative value) leaves the
 /// division undone, which shows as `'Z'`s.
 pub fn write_digits(text: &mut [u8], last: usize, value: i16, count: usize) {
     let mut d1 = value;
