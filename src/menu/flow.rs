@@ -164,7 +164,7 @@ impl Game {
     /// Saving goal replays, if `misc_flags` allow it (`save_replay`).
     pub(super) fn replay_saves(&self) -> Option<ReplaySaves<'_>> {
         self.may_save_replays()
-            .then(|| ReplaySaves::new(&self.save_disk, &self.ram, &self.text))
+            .then(|| ReplaySaves::new(&self.save_disk, &self.text))
     }
 }
 
@@ -589,7 +589,7 @@ fn play_match(
         hold_at_end: false,
         replay_saves: game
             .may_save_replays()
-            .then(|| ReplaySaves::new(&game.save_disk, &game.ram, &game.text)),
+            .then(|| ReplaySaves::new(&game.save_disk, &game.text)),
         sped_up: &mut game.sped_up,
         may_speed_up,
     };

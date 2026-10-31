@@ -5,7 +5,6 @@
 use std::time::Duration;
 
 use super::host::{Button, Control, SoundBank};
-use super::ram::{addr, MenuRam};
 use super::saving::DISK_ERROR;
 use super::strings::MenuText;
 use super::ui::{Flow, Stop, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -47,21 +46,25 @@ pub struct Controls<'a> {
     pub may_speed_up: bool,
 }
 
+/// `maybe_serial`: a long the loader leaves at boot, saved with each
+/// replay. It was at `$80` in the original's memory.
+pub const SERIAL: u32 = 0x167F;
+
 /// Saving goal replays (`save_replay`): the original allowed it in one
 /// player games, but not in manager mode.
 pub struct ReplaySaves<'a> {
     pub disk: &'a SaveDisk,
-    /// `maybe_serial`, saved with each replay.
+    /// [`SERIAL`], saved with each replay.
     pub serial: u32,
     /// "DISK ERROR" on the panel.
     pub disk_error: Text,
 }
 
 impl<'a> ReplaySaves<'a> {
-    pub fn new(disk: &'a SaveDisk, ram: &MenuRam, text: &MenuText) -> Self {
+    pub fn new(disk: &'a SaveDisk, text: &MenuText) -> Self {
         Self {
             disk,
-            serial: ram.long(addr::MAYBE_SERIAL),
+            serial: SERIAL,
             disk_error: Text::new(text.messages.disk_error.clone()),
         }
     }
@@ -224,5 +227,22 @@ fn set_control(input: &mut Input, control: Control, on: bool) {
         Control::Left => input.set_left(on),
         Control::Right => input.set_right(on),
         Control::Fire => input.set_fire(on),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::data::bytes::BigEndian;
+    use crate::data::files::read_amiga_match_dump;
+
+    #[test]
+    fn the_serial_is_the_originals() {
+        let Ok(dump) = read_amiga_match_dump(&Config::default().data_dir) else {
+            eprintln!("skipping: no originals");
+            return;
+        };
+        assert_eq!(dump.u32_at(0x80), SERIAL);
     }
 }

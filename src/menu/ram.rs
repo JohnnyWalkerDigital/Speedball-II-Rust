@@ -48,9 +48,6 @@ pub mod addr {
     pub const STR_GOAL_DIGIT: usize = 9;
     /// "DISK ERROR", "FIRE RETRY", "ESC CANCEL" on the match panel.
     pub const STR_DISK_ERROR: usize = 0x266B;
-    /// `maybe_serial`: a long the loader leaves at boot, saved with each
-    /// replay.
-    pub const MAYBE_SERIAL: usize = 0x80;
     pub const STR_TOTAL_SCORE_WIN: usize = 0x374D;
     pub const STR_NEW_SEASON: usize = 0x3740;
     pub const STR_RELEGATE: usize = 0x371C;
@@ -326,10 +323,6 @@ impl MenuRam {
     /// The 32-bit pointer stored at `address`.
     pub fn pointer_at(&self, address: usize) -> usize {
         self.pointer(address)
-    }
-
-    pub fn long(&self, address: usize) -> u32 {
-        self.bytes.u32_at(address)
     }
 
     fn pointer(&self, address: usize) -> usize {
