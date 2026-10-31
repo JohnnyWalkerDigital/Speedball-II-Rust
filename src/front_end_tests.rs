@@ -15,6 +15,7 @@ use crate::menu::assets::MenuAssets;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
 use crate::menu::ram::MenuRam;
+use crate::menu::strings::MenuText;
 use crate::menu::ui::Ui;
 use crate::render::MatchRenderer;
 
@@ -45,7 +46,8 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
         Assets::load(&rom, files.amiga.as_ref(), Platform::Amiga),
         &rom,
     );
-    Some(Game::new(rom, ram, assets, renderer, save_disk, 1))
+    let text = MenuText::read(&ram);
+    Some(Game::new(rom, ram, text, assets, renderer, save_disk, 1))
 }
 
 /// What the script sees each frame.
@@ -950,13 +952,16 @@ fn f_speeds_up_a_team_managers_league_match() {
 #[test]
 fn the_intro_runs_until_fire_then_loads_the_game() {
     use crate::data::files::read_amiga_intro_dump;
-    use crate::menu::intro::{self, IntroAssets, IntroGraphics};
+    use crate::menu::intro::{self, IntroAssets, IntroGraphics, IntroText};
     let Ok(dump) = read_amiga_intro_dump(&Config::default().data_dir) else {
         eprintln!("skipping: no intro dump");
         return;
     };
     let graphics = IntroGraphics::load(&dump).expect("the intro pictures decode");
-    let assets = IntroAssets::new(graphics, &dump);
+    let assets = IntroAssets {
+        graphics,
+        text: IntroText::read(&dump),
+    };
     let mut shot = 0;
     let mut host = ScriptedHost::new(300, |m| {
         let t = m.time.as_millis();

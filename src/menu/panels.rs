@@ -3,7 +3,7 @@
 
 use super::assets::SmallFont;
 use super::flow::Game;
-use super::ram::addr;
+use super::strings::{FixtureNumber, Statistic, Title};
 use super::text::write_digits;
 use super::ui::{Page, PANEL_COLOUR};
 use crate::game::career::{TeamId, TeamRecord};
@@ -22,45 +22,36 @@ pub enum Competition {
     TwoPlayers,
 }
 
-/// The next-fixture lines that hold numbers, in the order
-/// `generate_team_fixture_strings` fills them.
-const FIXTURE_NUMBERS: [usize; 8] = [
-    addr::STR_PWDLP_NUMS,
-    addr::STR_LEAGUE_PLACING,
-    addr::STR_POINTS_FOR,
-    addr::STR_POINTS_AGAINST,
-    addr::STR_DEFENCE,
-    addr::STR_MIDFIELD,
-    addr::STR_ATTACK,
-    addr::STR_SUBSTITUTES,
-];
-
 /// `display_next_fixture`: the two teams' records and skills side by side.
 pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamId)) -> Page {
-    let ram = &game.ram;
-    let mut numbers: Vec<Vec<u8>> = FIXTURE_NUMBERS.iter().map(|&a| ram.string(a)).collect();
+    let text = &game.text;
+    let fixture_lines = &text.panels.next_fixture;
+    let mut numbers: Vec<Vec<u8>> = FixtureNumber::ALL
+        .iter()
+        .map(|&number| {
+            let line = fixture_lines.iter().find(|l| l.numbers == Some(number));
+            line.expect("checked when loaded").text.clone()
+        })
+        .collect();
     // Brutal Deluxe's column ends at 0x13, the opponent's at 0x31.
     for (team, end) in [(teams.0, 0x13), (teams.1, 0x31)] {
         fill_fixture_column(game, competition, team, end, &mut numbers);
     }
-    let lines: Vec<Vec<u8>> = ram
-        .pointer_list(addr::STRINGS_NEXT_FIXTURE)
-        .into_iter()
-        .map(
-            |address| match FIXTURE_NUMBERS.iter().position(|&a| a == address) {
-                Some(i) => numbers[i].clone(),
-                None => ram.string(address),
-            },
-        )
+    let lines: Vec<Vec<u8>> = fixture_lines
+        .iter()
+        .map(|line| match line.numbers {
+            Some(number) => numbers[number as usize].clone(),
+            None => line.text.clone(),
+        })
         .collect();
 
-    let mut page = game_page(game, addr::TITLE_NEXT_FIXTURE);
+    let mut page = game_page(game, &text.titles.next_fixture);
     page.string_list(&game.assets, &lines);
     // `draw_plays`: "BRUTAL DELUXE  PLAY  OPPONENT" along row 6.
     for (text, x) in [
-        (ram.team_name(teams.0), 0x10),
-        (ram.string(addr::STR_PLAY), 0x94),
-        (ram.team_name(teams.1), 0xC4),
+        (text.team_name(teams.0), 0x10),
+        (text.panels.play.clone(), 0x94),
+        (text.team_name(teams.1), 0xC4),
     ] {
         page.alt_text(&game.assets, &at(text, x, 6), SmallFont::Orange);
     }
@@ -149,23 +140,17 @@ fn average_8(values: [i32; 8]) -> i16 {
 /// One division's table (`display_league_placings_div_1`/`_2`), with
 /// Brutal Deluxe's name shown or blanked (it blinks).
 pub fn league_table(game: &Game, league: &League, division: usize, show_player: bool) -> Page {
-    let title = [addr::TITLE_DIVISION_1, addr::TITLE_DIVISION_2][division];
+    let text = &game.text;
+    let title = [&text.titles.division_1, &text.titles.division_2][division];
     let first_placing = (division * DIVISION_SIZE) as u8;
     let mut page = game_page(game, title);
-    page.string_list(
-        &game.assets,
-        &game.ram.string_list(addr::STRINGS_LEAGUE_PLACINGS),
-    );
+    page.string_list(&game.assets, &text.panels.league_table);
     for &team in &league.tables[division] {
         let record = game.career.record(team);
         let row = (record.league_placing - first_placing) * 4 + 8;
-        let name = at(game.ram.team_name(team), 0x28, row);
+        let name = at(text.team_name(team), 0x28, row);
         page.alt_text(&game.assets, &name, SmallFont::Orange);
-        let details = placing_string(
-            &game.ram.string(addr::STR_LEAGUE_TEAM_DETAILS),
-            record,
-            first_placing,
-        );
+        let details = placing_string(&text.panels.league_row, record, first_placing);
         page.alt_text(&game.assets, &at(details, 0x10, row), SmallFont::Orange);
     }
     // Brutal Deluxe's name blinks: `display_team_on_team_slot` draws it,
@@ -208,8 +193,9 @@ fn placing_string(template: &[u8], record: &TeamRecord, first_placing: u8) -> Ve
 
 /// `display_league_results`: both divisions' four matches this round.
 pub fn results(game: &Game, league: &League, round: usize) -> Page {
-    let mut page = game_page(game, addr::TITLE_RESULTS);
-    page.string_list(&game.assets, &game.ram.string_list(addr::STRINGS_RESULTS));
+    let strings = &game.text;
+    let mut page = game_page(game, &strings.titles.results);
+    page.string_list(&game.assets, &strings.panels.results);
     for (division, first_row) in [(0, 0x0A), (1, 0x1E)] {
         for game_index in 0..MATCHES_PER_ROUND {
             let (team1, team2) = league.fixture(division, round, game_index);
@@ -218,11 +204,11 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
             for (team, x) in [(team1, 0x10), (team2, 0xA0)] {
                 page.alt_text(
                     &game.assets,
-                    &at(game.ram.team_name(team), x, row),
+                    &at(strings.team_name(team), x, row),
                     SmallFont::Orange,
                 );
             }
-            let mut text = game.ram.string(addr::STR_LEAGUE_MATCH_RESULT);
+            let mut text = strings.panels.result_row.clone();
             write_digits(&mut text, 0x18, score1 as i16, 3);
             write_digits(&mut text, 0x31, score2 as i16, 3);
             text[1] = row;
@@ -236,42 +222,35 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
 /// `None` before any match has been played.
 pub fn statistics(game: &Game) -> Option<Page> {
     let last = game.career.last_match?;
-    let mut lines = game.ram.string_list(addr::STRINGS_STATISTICS);
+    let text = &game.text;
+    let mut lines: Vec<Vec<u8>> = text
+        .panels
+        .statistics
+        .iter()
+        .map(|l| l.text.clone())
+        .collect();
     for (statistics, end) in [(last.statistics.team1, 0x0C), (last.statistics.team2, 0x29)] {
-        for (address, value) in [
-            (addr::STR_SHOTS_AT_GOAL, statistics.shots_at_goal as i16),
-            (addr::STR_GOALS_SCORED, statistics.goals_scored as i16),
-            (addr::STR_GOALS_SAVED, statistics.goals_saved as i16),
-            (
-                addr::STR_TIME_IN_POSSESSION,
-                statistics.time_in_possession as i16,
-            ),
-            (
-                addr::STR_SUCCESSFUL_TACKLES,
-                statistics.successful_tackles as i16,
-            ),
-            (addr::STR_SUBSTITUTIONS, statistics.substitutions as i16),
-            (
-                addr::STR_TIME_IN_OPPONENTS_HALF,
-                statistics.time_in_opponents_half as i16,
-            ),
-            (addr::STR_BONUS_POINTS, statistics.bonus_points),
-        ] {
-            let position = game
-                .ram
-                .pointer_list(addr::STRINGS_STATISTICS)
-                .iter()
-                .position(|&p| p == address)
-                .expect("a statistics line");
-            write_digits(&mut lines[position], end, value, 3);
+        for (line, shown) in lines.iter_mut().zip(&text.panels.statistics) {
+            let value = match shown.numbers {
+                None => continue,
+                Some(Statistic::ShotsAtGoal) => statistics.shots_at_goal as i16,
+                Some(Statistic::GoalsScored) => statistics.goals_scored as i16,
+                Some(Statistic::GoalsSaved) => statistics.goals_saved as i16,
+                Some(Statistic::TimeInPossession) => statistics.time_in_possession as i16,
+                Some(Statistic::SuccessfulTackles) => statistics.successful_tackles as i16,
+                Some(Statistic::Substitutions) => statistics.substitutions as i16,
+                Some(Statistic::TimeInOpponentsHalf) => statistics.time_in_opponents_half as i16,
+                Some(Statistic::BonusPoints) => statistics.bonus_points,
+            };
+            write_digits(line, end, value, 3);
         }
     }
-    let mut page = game_page(game, addr::TITLE_STATISTICS);
+    let mut page = game_page(game, &text.titles.statistics);
     page.string_list(&game.assets, &lines);
     for (team, x) in [(last.teams.team1, 0x40), (last.teams.team2, 0xA6)] {
         page.alt_text(
             &game.assets,
-            &at(game.ram.team_name(team), x, 8),
+            &at(text.team_name(team), x, 8),
             SmallFont::Orange,
         );
     }
@@ -280,17 +259,15 @@ pub fn statistics(game: &Game) -> Option<Page> {
 
 /// `display_fixture_list`: this cup round's ties.
 pub fn fixture_list(game: &Game, cup: &Cup) -> Page {
-    let mut page = game_page(game, addr::TITLE_FIXTURE_LIST);
-    page.string_list(
-        &game.assets,
-        &game.ram.string_list(addr::STRINGS_FIXTURE_LIST),
-    );
+    let text = &game.text;
+    let mut page = game_page(game, &text.titles.fixture_list);
+    page.string_list(&game.assets, &text.panels.fixture_list);
     for (row, (first, second)) in cup.ties().enumerate() {
         let row = (row * 4 + 0xA) as u8;
         for (text, x) in [
-            (game.ram.team_name(cup.teams[first]), 0x10),
-            (game.ram.string(addr::STR_PLAY), 0x94),
-            (game.ram.team_name(cup.teams[second]), 0xB2),
+            (text.team_name(cup.teams[first]), 0x10),
+            (text.panels.play.clone(), 0x94),
+            (text.team_name(cup.teams[second]), 0xB2),
         ] {
             page.alt_text(&game.assets, &at(text, x, row), SmallFont::Orange);
         }
@@ -299,8 +276,8 @@ pub fn fixture_list(game: &Game, cup: &Cup) -> Page {
 }
 
 /// The backdrop with a title and the plain panel.
-fn game_page(game: &Game, title: usize) -> Page {
-    let mut page = Page::titled(&game.assets, &game.ram.title(title));
+fn game_page(game: &Game, title: &Title) -> Page {
+    let mut page = Page::titled(&game.assets, title);
     page.panel();
     page
 }

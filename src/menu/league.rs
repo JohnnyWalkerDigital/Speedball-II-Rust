@@ -6,7 +6,6 @@ use super::flow::{cup_league_match, list_menu, message, wait_fire, win_shared, G
 use super::host::{Button, Control};
 use super::manager::Standings;
 use super::panels::{self, Competition};
-use super::ram::addr;
 use super::saving;
 use super::ui::{Flow, Stop, Ui};
 use crate::game::geometry::Side;
@@ -26,8 +25,7 @@ struct Resume {
 /// `game_league`.
 pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(550);
-    let menu = game.ram.menu(addr::MENU_SELECT_GAME);
-    let (mut league, mut resume) = match list_menu(ui, game, &menu)? {
+    let (mut league, mut resume) = match list_menu(ui, game, &game.text.menus.league)? {
         choice @ (0 | 1) => {
             if choice == 1 {
                 // "TEAM MANAGER": the computer plays Brutal Deluxe's
@@ -94,8 +92,13 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
         if placing(game) > DIVISION_SIZE as u8 {
             return Ok(());
         }
-        let text = game.ram.string(addr::STR_NEW_SEASON);
-        message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+        let text = &game.text;
+        message(
+            ui,
+            game,
+            &text.titles.speedball_2,
+            &text.messages.new_season,
+        )?;
     }
 }
 
@@ -199,8 +202,8 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
 fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: i32) -> Flow {
     let teams = (league.tables[0][6], league.tables[1][1]);
     if teams.0 == BRUTAL_DELUXE || teams.1 == BRUTAL_DELUXE {
-        let text = game.ram.string(addr::STR_PLAYOFF);
-        message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+        let text = &game.text;
+        message(ui, game, &text.titles.speedball_2, &text.messages.playoff)?;
     }
     let scores = loop {
         initial_dir ^= 4;
@@ -242,8 +245,8 @@ fn promote_relegate_announce(ui: &mut Ui, game: &mut Game, league: &mut League) 
 }
 
 fn relegated(ui: &mut Ui, game: &Game) -> Flow {
-    let text = game.ram.string(addr::STR_RELEGATE);
-    message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)
+    let text = &game.text;
+    message(ui, game, &text.titles.speedball_2, &text.messages.relegated)
 }
 
 fn per_team<T>(pair: (T, T)) -> crate::game::geometry::PerTeam<T> {

@@ -1,14 +1,15 @@
-//! Where the game's graphics come from: the original disks and memory
-//! dumps ([`Originals`]), or a [`Pack`] of ordinary image files extracted
-//! from them, which can be edited.
+//! Where the game's graphics and words come from: the original disks and
+//! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
+//! files extracted from them, which can be edited.
 //!
-//! Everything that draws asks a [`GraphicsSource`], so it does not matter
-//! which. Text, tables and sound still come from the originals.
+//! The game asks a [`ContentSource`], so it does not matter which. Tables
+//! and sound still come from the originals.
 
 mod graphics;
 mod originals;
 mod pack;
 mod png_files;
+mod text;
 
 use std::fmt;
 use std::io;
@@ -18,19 +19,24 @@ use crate::config::Platform;
 use crate::graphics::ilbm::IlbmError;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
-use crate::menu::intro::IntroGraphics;
+use crate::menu::intro::{IntroGraphics, IntroText};
+use crate::menu::strings::MenuText;
 
 pub use originals::{AmigaOriginals, Originals};
 pub use pack::Pack;
 
-/// Supplies decoded graphics.
-pub trait GraphicsSource {
+/// Supplies decoded graphics and text.
+pub trait ContentSource {
     /// Everything a match draws, in one platform's style.
     fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError>;
     /// The menus' pictures, fonts and manager screens.
     fn menu_graphics(&self) -> Result<MenuAssets, ContentError>;
     /// The intro's pictures and font, if there is an intro.
     fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError>;
+    /// Every string the menus show.
+    fn menu_text(&self) -> Result<MenuText, ContentError>;
+    /// The intro's text, if there is an intro.
+    fn intro_text(&self) -> Result<Option<IntroText>, ContentError>;
 }
 
 #[derive(Debug)]
@@ -44,6 +50,11 @@ pub enum ContentError {
         message: String,
     },
     Manifest(String),
+    /// A file that does not say what the game needs.
+    Invalid {
+        path: PathBuf,
+        message: String,
+    },
     Missing(String),
     Picture(IlbmError),
     /// The originals needed are not there (the Amiga files).
@@ -55,6 +66,13 @@ impl ContentError {
         ContentError::Io {
             path: path.to_owned(),
             source,
+        }
+    }
+
+    pub(crate) fn invalid(path: &Path, message: String) -> Self {
+        ContentError::Invalid {
+            path: path.to_owned(),
+            message,
         }
     }
 
@@ -72,6 +90,7 @@ impl fmt::Display for ContentError {
             ContentError::Io { path, source } => write!(f, "{}: {source}", path.display()),
             ContentError::Png { path, message } => write!(f, "{}: {message}", path.display()),
             ContentError::Manifest(message) => write!(f, "{message}"),
+            ContentError::Invalid { path, message } => write!(f, "{}: {message}", path.display()),
             ContentError::Missing(what) => write!(f, "missing {what}"),
             ContentError::Picture(error) => write!(f, "{error}"),
             ContentError::Unavailable(what) => write!(f, "needs {what}"),
@@ -97,7 +116,7 @@ pub struct Extracted {
 
 /// Writes everything `source` has into a pack at `dir`. Parts whose
 /// originals are missing are left out.
-pub fn extract(source: &dyn GraphicsSource, dir: &Path) -> Result<Extracted, ContentError> {
+pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, ContentError> {
     let mut writer = pack::PackWriter::new(dir);
     let mut extracted = Extracted::default();
     for platform in [Platform::Amiga, Platform::Atari] {
@@ -113,6 +132,7 @@ pub fn extract(source: &dyn GraphicsSource, dir: &Path) -> Result<Extracted, Con
     match source.menu_graphics() {
         Ok(menus) => {
             graphics::write_menus(&mut writer, &menus)?;
+            text::write_menus(&mut writer, &source.menu_text()?)?;
             extracted.menus = true;
         }
         Err(ContentError::Unavailable(_)) => {}
@@ -120,10 +140,38 @@ pub fn extract(source: &dyn GraphicsSource, dir: &Path) -> Result<Extracted, Con
     }
     if let Some(intro) = source.intro_graphics()? {
         graphics::write_intro(&mut writer, &intro)?;
+        if let Some(intro) = source.intro_text()? {
+            text::write_intro(&mut writer, &intro)?;
+        }
         extracted.intro = true;
     }
     writer.finish()?;
     Ok(extracted)
+}
+
+impl ContentSource for Pack {
+    fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError> {
+        graphics::read_match(self, platform)
+    }
+
+    fn menu_graphics(&self) -> Result<MenuAssets, ContentError> {
+        graphics::read_menus(self)
+    }
+
+    fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError> {
+        if !self.has("intro/title") {
+            return Ok(None);
+        }
+        graphics::read_intro(self).map(Some)
+    }
+
+    fn menu_text(&self) -> Result<MenuText, ContentError> {
+        text::read_menus(self)
+    }
+
+    fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
+        text::read_intro(self)
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +219,8 @@ mod tests {
         }
         assert!(pack.menu_graphics().unwrap() == originals.menu_graphics().unwrap());
         assert!(pack.intro_graphics().unwrap() == originals.intro_graphics().unwrap());
+        assert_eq!(pack.menu_text().unwrap(), originals.menu_text().unwrap());
+        assert_eq!(pack.intro_text().unwrap(), originals.intro_text().unwrap());
         assert_eq!(
             pack.intro_graphics().unwrap().is_some(),
             intro_dump.is_some()

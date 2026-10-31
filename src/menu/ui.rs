@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use super::assets::{MenuAssets, SmallFont};
 use super::host::{Button, ButtonEvent, Closed, Host, SoundBank, VBLANK};
-use super::ram::{Arrows, Title};
+use super::strings::{Arrows, Title};
 use super::text::{big_glyphs, small_glyphs};
 use crate::game::events::Sound;
 use crate::graphics::ilbm::Picture;

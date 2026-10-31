@@ -17,11 +17,8 @@ const MESSAGE_FRAMES: u8 = 0x14;
 /// Shows every saved goal. Escape on the first screen goes straight back
 /// to the main menu.
 pub fn replay_goals(ui: &mut Ui, game: &Game) -> Flow {
-    let mut page = game.titled_page(addr::TITLE_REPLAY_GOALS);
-    page.big_text(
-        &game.assets,
-        &game.ram.string(addr::STR_INSERT_GOAL_SAVE_DISK),
-    );
+    let mut page = game.titled_page(&game.text.titles.replay_goals);
+    page.big_text(&game.assets, &game.text.messages.insert_goal_save_disk);
     ui.transition(&page)?;
     wait_fire(ui)?;
     ui.use_sound_bank(SoundBank::Match);
@@ -96,7 +93,7 @@ fn run_replay(
 
 /// "GOAL 1" to "GOAL 9" (`str_goal` with the slot's digit).
 fn goal_message(game: &Game, slot: u8) -> Text {
-    let mut text = game.ram.string(addr::STR_GOAL);
+    let mut text = game.text.messages.replay_goal.clone();
     // Digits follow the letters in the panel font.
     text[addr::STR_GOAL_DIGIT] = b'Z' + 1 + slot;
     Text::new(text)

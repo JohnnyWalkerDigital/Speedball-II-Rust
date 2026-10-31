@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
 use crate::config::{Config, Platform};
-use crate::content::{self, AmigaOriginals, GraphicsSource, Originals, Pack};
+use crate::content::{self, AmigaOriginals, ContentSource, Originals, Pack};
 use crate::data::amiga::{menu_ram, Overlays};
 use crate::data::files::{
     read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
@@ -24,9 +24,10 @@ use crate::graphics::{Assets, Canvas};
 use crate::menu::assets::MenuAssets;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
-use crate::menu::intro::{self, IntroAssets, IntroGraphics};
+use crate::menu::intro::{self, IntroAssets};
 use crate::menu::play::{run_match, Controls};
 use crate::menu::ram::MenuRam;
+use crate::menu::strings::MenuText;
 use crate::menu::ui::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::render::MatchRenderer;
 use crate::sound::SoundOutput;
@@ -123,32 +124,37 @@ fn amiga_menu_ram(amiga: &AmigaFiles) -> Result<(Overlays<'_>, MenuRam), Box<dyn
     Ok((overlays, ram))
 }
 
-/// The graphics a game needs, from the originals or `--assets`.
-struct Graphics {
+/// The graphics and text a game needs, from the originals or `--assets`.
+struct Content {
     matches: Assets,
-    menus: Option<MenuAssets>,
-    intro: Option<IntroGraphics>,
+    menus: Option<(MenuAssets, MenuText)>,
+    intro: Option<IntroAssets>,
 }
 
-impl Graphics {
+impl Content {
     fn load(
         config: &Config,
         originals: &Originals,
         with_menus: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let pack = config.assets.as_deref().map(Pack::open).transpose()?;
-        let source: &dyn GraphicsSource = match &pack {
+        let source: &dyn ContentSource = match &pack {
             Some(pack) => pack,
             None => originals,
         };
+        let matches = source.match_graphics(config.platform)?;
+        if !with_menus {
+            return Ok(Self {
+                matches,
+                menus: None,
+                intro: None,
+            });
+        }
+        let intro = source.intro_graphics()?.zip(source.intro_text()?);
         Ok(Self {
-            matches: source.match_graphics(config.platform)?,
-            menus: with_menus.then(|| source.menu_graphics()).transpose()?,
-            intro: if with_menus {
-                source.intro_graphics()?
-            } else {
-                None
-            },
+            matches,
+            menus: Some((source.menu_graphics()?, source.menu_text()?)),
+            intro: intro.map(|(graphics, text)| IntroAssets { graphics, text }),
         })
     }
 }
@@ -171,12 +177,13 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         ),
         intro_dump: loaded.intro_dump.as_deref(),
     };
-    let graphics = Graphics::load(&config, &originals, with_menus)?;
-    let renderer = MatchRenderer::new(graphics.matches, &loaded.rom);
+    let content = Content::load(&config, &originals, with_menus)?;
+    let renderer = MatchRenderer::new(content.matches, &loaded.rom);
     let rom = Rc::clone(&loaded.rom);
-    match (menu_memory, loaded.amiga.as_ref(), graphics.menus) {
+    match (menu_memory, loaded.amiga.as_ref(), content.menus) {
         (Some((_, ram)), Some(amiga), Some(menus)) => {
-            let intro = graphics.intro.zip(loaded.intro_dump);
+            // The intro's music is in its dump.
+            let intro = content.intro.zip(loaded.intro_dump);
             play_with_menus(&config, rom, renderer, amiga, ram, menus, intro)
         }
         _ => play_one_match(&config, rom, renderer),
@@ -258,13 +265,10 @@ fn play_with_menus(
     renderer: MatchRenderer,
     amiga: &AmigaFiles,
     ram: MenuRam,
-    menus: MenuAssets,
-    intro: Option<(IntroGraphics, Vec<u8>)>,
+    (menus, text): (MenuAssets, MenuText),
+    intro: Option<(IntroAssets, Vec<u8>)>,
 ) -> Result<(), Box<dyn Error>> {
-    let (intro, intro_dump) = match intro {
-        Some((graphics, dump)) => (Some(IntroAssets::new(graphics, &dump)), Some(dump)),
-        None => (None, None),
-    };
+    let (intro, intro_dump) = intro.unzip();
     let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes(), intro_dump);
     let mut host = WindowHost::open(config.scale, WINDOW_TITLE, sound)?;
     let mut ui = Ui::new(&mut host);
@@ -274,7 +278,7 @@ fn play_with_menus(
         }
     }
     let save_disk = SaveDisk::new(&config.save_disk);
-    let mut game = Game::new(rom, ram, menus, renderer, save_disk, config.seed);
+    let mut game = Game::new(rom, ram, text, menus, renderer, save_disk, config.seed);
     flow::run(&mut ui, &mut game);
     Ok(())
 }

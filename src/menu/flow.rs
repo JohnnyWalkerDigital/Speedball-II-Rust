@@ -13,7 +13,8 @@ use super::manager::data::ManagerTables;
 use super::manager::{self, Cursors, Standings};
 use super::panels::{self, Competition};
 use super::play::{run_match, Controls, ReplaySaves};
-use super::ram::{addr, MenuRam, MenuSpec, Title};
+use super::ram::{addr, MenuRam};
+use super::strings::{MenuSpec, MenuText, Title};
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
@@ -64,6 +65,7 @@ const WIN_AFTER: Sound = Sound {
 pub struct Game {
     pub rom: Rc<AtariRom>,
     pub ram: MenuRam,
+    pub text: MenuText,
     pub assets: MenuAssets,
     pub renderer: MatchRenderer,
     /// Money and results, kept across games like the original's globals.
@@ -97,6 +99,7 @@ impl Game {
     pub fn new(
         rom: Rc<AtariRom>,
         ram: MenuRam,
+        text: MenuText,
         assets: MenuAssets,
         renderer: MatchRenderer,
         save_disk: SaveDisk,
@@ -113,6 +116,7 @@ impl Game {
         Self {
             rom,
             ram,
+            text,
             assets,
             renderer,
             career,
@@ -137,12 +141,8 @@ impl Game {
         self.seed
     }
 
-    fn title(&self, address: usize) -> Title {
-        self.ram.title(address)
-    }
-
-    pub(super) fn titled_page(&self, address: usize) -> Page {
-        Page::titled(&self.assets, &self.title(address))
+    pub(super) fn titled_page(&self, title: &Title) -> Page {
+        Page::titled(&self.assets, title)
     }
 
     fn may_save_replays(&self) -> bool {
@@ -152,7 +152,7 @@ impl Game {
     /// Saving goal replays, if `misc_flags` allow it (`save_replay`).
     pub(super) fn replay_saves(&self) -> Option<ReplaySaves<'_>> {
         self.may_save_replays()
-            .then(|| ReplaySaves::new(&self.save_disk, &self.ram))
+            .then(|| ReplaySaves::new(&self.save_disk, &self.ram, &self.text))
     }
 }
 
@@ -167,10 +167,10 @@ enum MainChoice {
 
 impl MainChoice {
     /// What "GAME OVER" says afterwards.
-    fn game_over(self) -> usize {
+    fn game_over(self, text: &MenuText) -> &[u8] {
         match self {
-            MainChoice::ReplayGoals => addr::STR_REPLAYS_OVER,
-            _ => addr::STR_GAME_OVER,
+            MainChoice::ReplayGoals => &text.messages.replays_over,
+            _ => &text.messages.game_over,
         }
     }
 }
@@ -197,8 +197,8 @@ fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
         MainChoice::Demo => demo(ui, game)?,
         MainChoice::ReplayGoals => super::replays::replay_goals(ui, game)?,
     }
-    let mut page = game.titled_page(addr::TITLE_SPEEDBALL_2_PUSH_START);
-    page.big_text(&game.assets, &game.ram.string(choice.game_over()));
+    let mut page = game.titled_page(&game.text.titles.speedball_2);
+    page.big_text(&game.assets, choice.game_over(&game.text));
     ui.transition(&page)?;
     wait_any_fire(ui)
 }
@@ -206,9 +206,10 @@ fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
 /// The "SELECT GAME" screen. Escape here quits the port (the original had
 /// nowhere to go back to).
 fn select_game(ui: &mut Ui, game: &Game) -> Flow<MainChoice> {
-    let mut base = game.titled_page(addr::TITLE_SELECT_GAME);
-    base.big_text(&game.assets, &game.ram.string(addr::STR_MENU_GAME_SELECT));
-    let arrows = game.ram.arrows(addr::MENU_ARROWS_GAME_TYPE, 4);
+    let menu = &game.text.menus.game_type;
+    let mut base = game.titled_page(&menu.title);
+    base.big_text(&game.assets, &menu.items);
+    let arrows = &menu.arrows;
     let mut position = 0;
     loop {
         let mut page = base.clone();
@@ -324,8 +325,7 @@ fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.init_squad(Side::Team1, 100);
     game.manager_mode = false;
     game.one_player = true;
-    let menu = game.ram.menu(addr::MENU_SELECT_MATCH);
-    match list_menu(ui, game, &menu)? {
+    match list_menu(ui, game, &game.text.menus.one_player)? {
         0 => knockout(ui, game),
         1 => super::league::league(ui, game),
         2 => super::cup::cup(ui, game),
@@ -387,32 +387,27 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.init_squad(Side::Team2, 170);
     game.manager_mode = false;
     game.one_player = false;
-    let menu = game.ram.menu(addr::MENU_SELECT_ONE_THREE_FIVE);
-    let matches = list_menu(ui, game, &menu)? * 2 + 1;
+    let matches = list_menu(ui, game, &game.text.menus.two_players)? * 2 + 1;
     let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
     let mut wins = PerTeam::new(0, 0);
     for number in 1..=matches {
-        let mut text = game.ram.string(addr::STR_MATCH);
+        let mut text = game.text.messages.match_number.clone();
         text[8] = 0x5B + number as u8;
-        message(ui, game, addr::TITLE_TWO_PLAYER, &text)?;
+        message(ui, game, &game.text.titles.two_player, &text)?;
 
         let mut initial_dir = 0;
         gym_two_player(ui, game)?;
         let rules = two_player_rules(game, initial_dir);
         let mut total = play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
-        message(
-            ui,
-            game,
-            addr::TITLE_TWO_PLAYER,
-            &game.ram.string(addr::STR_SECOND_LEG),
-        )?;
+        let text = &game.text;
+        message(ui, game, &text.titles.two_player, &text.messages.second_leg)?;
         loop {
             initial_dir ^= 4;
             gym_two_player(ui, game)?;
             let rules = two_player_rules(game, initial_dir);
             let leg = play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
             total = PerTeam::new(total.team1 + leg.team1, total.team2 + leg.team2);
-            result_screen(ui, game, total, addr::STR_TOTAL)?;
+            result_screen(ui, game, total, &game.text.messages.total)?;
             if total.team1 != total.team2 {
                 break;
             }
@@ -428,9 +423,9 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         // Only matches that leave the series open are recorded.
         game.career.record_result(teams, total);
     }
-    let mut text = game.ram.string(addr::STR_PLAYER_WINS);
+    let mut text = game.text.messages.player_wins.clone();
     text[9] = if wins.team1 < wins.team2 { 0x5D } else { 0x5C };
-    message(ui, game, addr::TITLE_TWO_PLAYER, &text)
+    message(ui, game, &game.text.titles.two_player, &text)
 }
 
 /// `gym_two_player`: each player in turn gets the gym, with their own
@@ -438,9 +433,9 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
 fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
     let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
     for (side, digit) in [(Side::Team1, 0x5C), (Side::Team2, 0x5D)] {
-        let mut text = game.ram.string(addr::STR_PLAYER_0);
+        let mut text = game.text.messages.player_turn.clone();
         text[9] = digit;
-        message(ui, game, addr::TITLE_TWO_PLAYER, &text)?;
+        message(ui, game, &game.text.titles.two_player, &text)?;
         manager::gym_screen(ui, game, side, Competition::TwoPlayers, teams)?;
     }
     Ok(())
@@ -454,7 +449,7 @@ fn two_player_rules(game: &Game, initial_dir: i32) -> MatchRules {
 }
 
 /// A title, one line of big text, then wait for fire.
-pub(super) fn message(ui: &mut Ui, game: &Game, title: usize, text: &[u8]) -> Flow {
+pub(super) fn message(ui: &mut Ui, game: &Game, title: &Title, text: &[u8]) -> Flow {
     let mut page = game.titled_page(title);
     page.big_text(&game.assets, text);
     ui.transition(&page)?;
@@ -582,7 +577,7 @@ fn play_match(
         hold_at_end: false,
         replay_saves: game
             .may_save_replays()
-            .then(|| ReplaySaves::new(&game.save_disk, &game.ram)),
+            .then(|| ReplaySaves::new(&game.save_disk, &game.ram, &game.text)),
         sped_up: &mut game.sped_up,
         may_speed_up,
     };
@@ -606,7 +601,7 @@ fn play_match(
         std::cmp::Ordering::Less if result == ResultScreen::Pictures => {
             defeat(ui, game, scores, teams.team2)?;
         }
-        _ => result_screen(ui, game, scores, addr::STR_SCORE)?,
+        _ => result_screen(ui, game, scores, &game.text.messages.score)?,
     }
     game.career.last_match = Some(LastMatch {
         teams,
@@ -626,7 +621,9 @@ pub(super) fn display_total_match_result(
 ) -> Flow {
     let scores = PerTeam::new(total.0, total.1);
     let (picture, winner) = match compare_scores(total.0, total.1) {
-        std::cmp::Ordering::Equal => return result_screen(ui, game, scores, addr::STR_TOTAL),
+        std::cmp::Ordering::Equal => {
+            return result_screen(ui, game, scores, &game.text.messages.total)
+        }
         std::cmp::Ordering::Greater => (&game.assets.victory, teams.0),
         std::cmp::Ordering::Less => (&game.assets.defeat, teams.1),
     };
@@ -641,22 +638,23 @@ pub(super) fn display_total_match_result(
     wait_any_fire(ui)
 }
 
-fn result_screen(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, score_text: usize) -> Flow {
-    let mut page = game.titled_page(addr::TITLE_SPEEDBALL_2_PUSH_START);
-    page.big_text(&game.assets, &score_string(&game.ram, score_text, scores));
+fn result_screen(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, score_text: &[u8]) -> Flow {
+    let messages = &game.text.messages;
+    let mut page = game.titled_page(&game.text.titles.speedball_2);
+    page.big_text(&game.assets, &score_string(score_text, scores));
     let verdict = match compare_scores(scores.team1, scores.team2) {
-        std::cmp::Ordering::Equal => addr::STR_MATCH_DRAWN,
-        std::cmp::Ordering::Greater => addr::STR_BLUE_WIN,
-        std::cmp::Ordering::Less => addr::STR_RED_WIN,
+        std::cmp::Ordering::Equal => &messages.match_drawn,
+        std::cmp::Ordering::Greater => &messages.blue_win,
+        std::cmp::Ordering::Less => &messages.red_win,
     };
-    page.big_text(&game.assets, &game.ram.string(verdict));
+    page.big_text(&game.assets, verdict);
     ui.transition(&page)?;
     wait_any_fire(ui)
 }
 
 /// `format_score_string`: the two scores into "SCORE 000 TO 000".
-fn score_string(ram: &MenuRam, address: usize, scores: PerTeam<i32>) -> Vec<u8> {
-    let mut text = ram.string(address);
+fn score_string(template: &[u8], scores: PerTeam<i32>) -> Vec<u8> {
+    let mut text = template.to_vec();
     write_digits(&mut text, 10, scores.team1 as i16, 3);
     write_digits(&mut text, 17, scores.team2 as i16, 3);
     text
@@ -682,13 +680,13 @@ fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flo
 /// The victory and defeat pictures: "SCORE 000 TO 000" and "A WIN FOR"
 /// the winners, centred, in the white font (`format_score_win`).
 fn win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: TeamId) -> Page {
-    let text = score_string(&game.ram, addr::STR_SCORE_WIN, scores);
+    let text = score_string(&game.text.messages.score_win, scores);
     picture_with_winner(game, picture, text, 0x12, winner)
 }
 
 /// The same for a two-legged tie, with "TOTAL SCORE" (`format_total_score`).
 fn total_win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: TeamId) -> Page {
-    let mut text = game.ram.string(addr::STR_TOTAL_SCORE_WIN);
+    let mut text = game.text.messages.total_score_win.clone();
     write_digits(&mut text, 16, scores.team1 as i16, 3);
     write_digits(&mut text, 23, scores.team2 as i16, 3);
     picture_with_winner(game, picture, text, 0x18, winner)
@@ -703,7 +701,7 @@ fn picture_with_winner(
 ) -> Page {
     const NAME_ROW: u8 = 0x30;
     let mut page = Page::picture(picture);
-    let mut name = game.ram.team_name(winner);
+    let mut name = game.text.team_name(winner);
     let x = (40 - (name.len() - 2 + 10)) / 2;
     text[win_for_x] = x as u8;
     name[0] = (x + 10) as u8;

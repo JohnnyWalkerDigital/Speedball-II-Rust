@@ -7,7 +7,6 @@ use super::flow::{
 };
 use super::manager::Standings;
 use super::panels::Competition;
-use super::ram::addr;
 use super::saving;
 use super::ui::{Flow, Ui};
 use crate::game::cup::Cup;
@@ -25,8 +24,7 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
 
 fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(2000);
-    let menu = game.ram.menu(addr::MENU_SELECT_NEW_LOAD);
-    let (mut cup, mut resume) = if list_menu(ui, game, &menu)? == 0 {
+    let (mut cup, mut resume) = if list_menu(ui, game, &game.text.menus.cup)? == 0 {
         // `init_cup`.
         game.career.market.init(&mut game.rng);
         let cup = Cup::new(&mut game.rng);
@@ -55,8 +53,9 @@ fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
         if resume.is_none() {
             cup.redraw(&mut game.rng);
         }
-        let text = game.ram.string_at(addr::STRINGS_CUP_ROUNDS, cup.round);
-        message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+        let text = &game.text;
+        let round = &text.messages.cup_rounds[cup.round];
+        message(ui, game, &text.titles.speedball_2, round)?;
         let ties: Vec<_> = cup.ties().collect();
         for (index, tie) in ties.into_iter().enumerate() {
             let partway = resume.take().filter(|(aggregate, _)| *aggregate != (0, 0));
@@ -98,8 +97,13 @@ fn tie_lost_by_brutal_deluxe(
     };
     let (mut total, mut initial_dir) = match partway {
         Some(partway) => {
-            let text = game.ram.string(addr::STR_SECOND_LEG);
-            message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+            let text = &game.text;
+            message(
+                ui,
+                game,
+                &text.titles.speedball_2,
+                &text.messages.second_leg,
+            )?;
             partway
         }
         None => {
@@ -113,8 +117,13 @@ fn tie_lost_by_brutal_deluxe(
             )?;
             game.career.record_result(per_team(teams), per_team(first));
             if playing {
-                let text = game.ram.string(addr::STR_SECOND_LEG);
-                message(ui, game, addr::TITLE_SPEEDBALL_2_PUSH_START, &text)?;
+                let text = &game.text;
+                message(
+                    ui,
+                    game,
+                    &text.titles.speedball_2,
+                    &text.messages.second_leg,
+                )?;
                 (first, 4)
             } else {
                 (first, 0)

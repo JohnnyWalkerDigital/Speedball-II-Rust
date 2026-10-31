@@ -3,6 +3,7 @@
 
 use super::flow::{list_menu, wait_fire, Game};
 use super::ram::addr;
+use super::strings::Title;
 use super::ui::{Flow, Stop, Ui};
 use crate::data::save_disk::{CUP_SECTOR, GAME_SECTORS, LEAGUE_SECTOR};
 use crate::game::career::{TeamId, TeamRecord};
@@ -17,7 +18,7 @@ pub(super) const DISK_ERROR: Sound = Sound { id: 8, priority: 2 };
 /// `keypad_manager_fn_save`: the save screen, then the game onto the save
 /// disk. Escape there cancels the save, not the game.
 pub fn save(ui: &mut Ui, game: &mut Game, save: SaveGame) -> Flow {
-    if !insert_disk(ui, game, addr::TITLE_SAVE_GAME)? {
+    if !insert_disk(ui, game, &game.text.titles.save_game)? {
         return Ok(());
     }
     let sector = match save.progress {
@@ -36,7 +37,7 @@ pub fn save(ui: &mut Ui, game: &mut Game, save: SaveGame) -> Flow {
 /// `do_load`: the load screen, then the saved game, retrying on a disk
 /// error. Cancelling (or Escape) abandons the game.
 pub fn load(ui: &mut Ui, game: &mut Game, cup: bool) -> Flow<SaveGame> {
-    if !insert_disk(ui, game, addr::TITLE_LOAD_GAME)? {
+    if !insert_disk(ui, game, &game.text.titles.load_game)? {
         return Err(Stop::Abort);
     }
     let sector = if cup { CUP_SECTOR } else { LEAGUE_SECTOR };
@@ -53,12 +54,9 @@ pub fn load(ui: &mut Ui, game: &mut Game, cup: bool) -> Flow<SaveGame> {
 
 /// "PLEASE INSERT GAME SAVE DISK", then wait for fire. `false` if the
 /// player pressed Escape.
-fn insert_disk(ui: &mut Ui, game: &Game, title: usize) -> Flow<bool> {
+fn insert_disk(ui: &mut Ui, game: &Game, title: &Title) -> Flow<bool> {
     let mut page = game.titled_page(title);
-    page.big_text(
-        &game.assets,
-        &game.ram.string(addr::STR_INSERT_GAME_SAVE_DISK),
-    );
+    page.big_text(&game.assets, &game.text.messages.insert_game_save_disk);
     ui.transition(&page)?;
     match wait_fire(ui) {
         Ok(()) => Ok(true),
@@ -70,8 +68,7 @@ fn insert_disk(ui: &mut Ui, game: &Game, title: usize) -> Flow<bool> {
 /// `menu_disk_error`: "RETRY" or "CANCEL". `true` to retry.
 fn retry(ui: &mut Ui, game: &Game) -> Flow<bool> {
     ui.play_sound(DISK_ERROR);
-    let menu = game.ram.menu(addr::MENU_SELECT_RETRY_CANCEL);
-    match list_menu(ui, game, &menu) {
+    match list_menu(ui, game, &game.text.menus.disk_error) {
         Ok(choice) => Ok(choice == 0),
         Err(Stop::Abort) => Ok(false),
         Err(stop) => Err(stop),

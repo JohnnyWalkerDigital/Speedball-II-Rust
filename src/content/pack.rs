@@ -14,6 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use super::png_files::{self, Indexed, Rgba};
@@ -54,6 +55,18 @@ Rules:
   decides which sprite is used where.
 - pack.json also holds the match palettes, as #RRGGBB colours (the status
   bar's health bars use them), and the manager screens' palette.
+- text/: the menus' and the intro's words, in JSON. In each string:
+  - capital letters, digits, spaces and punctuation are themselves (the
+    fonts have few marks: the rest draw nothing);
+  - _ is a blank the game writes a number into;
+  - the panel screens draw their tables with the lines in the text
+    (─│┬┴┼├┤), and the league table's arrows are ◢◣, ◥◤ and ◀▶;
+  - {x,y} moves to column x and row y (8 and 4 pixels each). Menu strings
+    start with one;
+  - {#6E} is any other byte.
+  The game writes numbers and names into some strings at fixed places, so
+  keep those where they are. It checks what it can when it starts, and
+  says what is wrong.
 
 Don't share a pack you extracted: the art belongs to the game's owners.
 ";
@@ -200,6 +213,16 @@ impl PackWriter {
         self.palette(name, &palette);
     }
 
+    /// Writes `value` as `{name}.json`.
+    pub fn json<T: Serialize>(&mut self, name: &str, value: &T) -> Result<(), ContentError> {
+        let path = self.dir.join(format!("{name}.json"));
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| ContentError::io(dir, e))?;
+        }
+        let json = serde_json::to_string_pretty(value).expect("text serializes");
+        std::fs::write(&path, json + "\n").map_err(|e| ContentError::io(&path, e))
+    }
+
     /// Writes `pack.json`, and a README for whoever edits the pack.
     pub fn finish(self) -> Result<(), ContentError> {
         let readme = self.dir.join(README);
@@ -239,6 +262,22 @@ impl Pack {
     /// Whether the pack has this image or sheet.
     pub fn has(&self, name: &str) -> bool {
         self.path(name).exists()
+    }
+
+    pub fn json_path(&self, name: &str) -> PathBuf {
+        self.dir.join(format!("{name}.json"))
+    }
+
+    /// Reads `{name}.json`, `None` if there is none.
+    pub fn json<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, ContentError> {
+        let path = self.json_path(name);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(&path).map_err(|e| ContentError::io(&path, e))?;
+        serde_json::from_str(&json)
+            .map(Some)
+            .map_err(|e| ContentError::invalid(&path, e.to_string()))
     }
 
     fn path(&self, name: &str) -> PathBuf {

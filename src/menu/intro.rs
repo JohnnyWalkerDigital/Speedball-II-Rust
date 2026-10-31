@@ -5,7 +5,10 @@
 //! Its pictures, font, text and music come from a RAM dump taken during the
 //! intro, where they sit after the intro code.
 
+use serde::{Deserialize, Serialize};
+
 use super::host::{Button, Control, SoundBank};
+use super::readable;
 use super::ui::{Flow, Page, Ui};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
@@ -92,18 +95,23 @@ impl IntroGraphics {
     }
 }
 
-/// The intro's graphics and text.
-pub struct IntroAssets {
-    graphics: IntroGraphics,
-    presents: Vec<Vec<u8>>,
-    story: Vec<Vec<u8>>,
-    credits: Vec<Vec<u8>>,
-    loading_game: Vec<u8>,
+/// The intro's text, typed out in its own font.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntroText {
+    /// The two screens before the title.
+    #[serde(with = "readable::intro_list")]
+    pub presents: Vec<Vec<u8>>,
+    #[serde(with = "readable::intro_list")]
+    pub story: Vec<Vec<u8>>,
+    #[serde(with = "readable::intro_list")]
+    pub credits: Vec<Vec<u8>>,
+    #[serde(with = "readable::intro")]
+    pub loading_game: Vec<u8>,
 }
 
-impl IntroAssets {
-    /// The text from the intro's RAM dump, shown with `graphics`.
-    pub fn new(graphics: IntroGraphics, dump: &[u8]) -> Self {
+impl IntroText {
+    /// Reads it from the intro's RAM dump.
+    pub fn read(dump: &[u8]) -> Self {
         let string = |at: usize| -> Vec<u8> {
             let end = dump[at..]
                 .iter()
@@ -114,13 +122,18 @@ impl IntroAssets {
         let mut presents: Vec<Vec<u8>> = addr::PRESENTS.into_iter().map(string).collect();
         presents[0] = ORIGINAL_PRESENTS.to_vec();
         Self {
-            graphics,
             presents,
             story: addr::STORY.into_iter().map(string).collect(),
             credits: addr::CREDITS.into_iter().map(string).collect(),
             loading_game: string(addr::LOADING_GAME),
         }
     }
+}
+
+/// The intro's graphics and text.
+pub struct IntroAssets {
+    pub graphics: IntroGraphics,
+    pub text: IntroText,
 }
 
 /// `intro_presents`, then `intro` until it is skipped; then `start`
@@ -164,7 +177,7 @@ impl Intro<'_, '_, '_> {
     /// `display_text_presents`: two screens of text on black.
     fn presents(&mut self) -> Flow {
         let assets = self.assets;
-        for (text, blinks) in assets.presents.iter().zip([13, 13]) {
+        for (text, blinks) in assets.text.presents.iter().zip([13, 13]) {
             self.page = Page::blank(assets.graphics.backdrop.palette);
             self.ui.transition(&self.page)?;
             let (x, y) = self.type_text(text)?;
@@ -181,10 +194,10 @@ impl Intro<'_, '_, '_> {
         self.ui
             .transition_playing(&Page::picture(&assets.graphics.title), MUSIC)?;
         self.wait(TITLE_VBLANKS)?;
-        self.screens(&assets.story, 17)?;
+        self.screens(&assets.text.story, 17)?;
         self.ui.transition(&Page::picture(&assets.graphics.title))?;
         self.wait(TITLE_VBLANKS)?;
-        self.screens(&assets.credits, 16)?;
+        self.screens(&assets.text.credits, 16)?;
         Ok(self.fire_held())
     }
 
@@ -209,7 +222,7 @@ impl Intro<'_, '_, '_> {
         }
         self.backdrop()?;
         self.skippable = false;
-        let text = self.assets.loading_game.clone();
+        let text = self.assets.text.loading_game.clone();
         self.type_text(&text)?;
         Ok(())
     }

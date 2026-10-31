@@ -1,6 +1,7 @@
 //! The menus' strings, tables and fonts, read from Amiga memory at their
 //! original addresses (see [`crate::data::amiga::menu_ram`]).
 
+use super::strings::{Arrows, MenuSpec, Title};
 use crate::data::bytes::BigEndian;
 use crate::game::career::{TeamId, TeamRecord, LEAGUE_TEAMS};
 use crate::game::squad::{MarketPlayer, Squad, SquadPlayer, Upgrade, MARKET_SIZE, SQUAD_SIZE};
@@ -145,28 +146,6 @@ pub mod addr {
     /// 8x8 letters, digits and table borders (`sprites_font_orange`).
     pub const SPRITES_FONT_ORANGE: usize = 0x44364;
     pub const ORANGE_LENGTH: usize = 2040;
-}
-
-/// A screen title: the text at the top and bottom of the backdrop.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Title {
-    pub top: Vec<u8>,
-    pub bottom: Vec<u8>,
-}
-
-/// A list menu (`shared_menu_function`'s menu structure).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MenuSpec {
-    pub title: Title,
-    pub items: Vec<u8>,
-    pub arrows: Vec<Arrows>,
-}
-
-/// Where the two arrows either side of a menu item go, in text cells.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Arrows {
-    pub left: (u8, u8),
-    pub right: (u8, u8),
 }
 
 pub struct MenuRam {

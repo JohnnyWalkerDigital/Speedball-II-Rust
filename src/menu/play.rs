@@ -7,6 +7,7 @@ use std::time::Duration;
 use super::host::{Button, Control, SoundBank};
 use super::ram::{addr, MenuRam};
 use super::saving::DISK_ERROR;
+use super::strings::MenuText;
 use super::ui::{Flow, Stop, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::data::save_disk::{replay_sector, SaveDisk};
 use crate::game::geometry::{Input, PerTeam, Side};
@@ -57,11 +58,11 @@ pub struct ReplaySaves<'a> {
 }
 
 impl<'a> ReplaySaves<'a> {
-    pub fn new(disk: &'a SaveDisk, ram: &MenuRam) -> Self {
+    pub fn new(disk: &'a SaveDisk, ram: &MenuRam, text: &MenuText) -> Self {
         Self {
             disk,
             serial: ram.long(addr::MAYBE_SERIAL),
-            disk_error: Text::new(ram.string(addr::STR_DISK_ERROR)),
+            disk_error: Text::new(text.messages.disk_error.clone()),
         }
     }
 

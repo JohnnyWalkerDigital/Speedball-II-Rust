@@ -38,8 +38,8 @@ team's controls, as in the C# port.
 
 ## Asset packs
 
-The graphics can be extracted from your originals into a folder of PNG
-files, edited, and played with:
+The graphics and the menus' and intro's words can be extracted from your
+originals into a folder of PNG and JSON files, edited, and played with:
 
 ```bash
 cargo run --release -- --extract assets
@@ -49,19 +49,30 @@ cargo run --release -- --extract assets
 cargo run --release -- --assets assets
 ```
 
-`content/` is the seam: everything that draws asks a `GraphicsSource`,
-which is either `Originals` (decoding the disk images and dumps as before)
-or a `Pack`. A pack holds the match graphics for both platforms as RGBA
-PNGs (pitch, tiles, sprites, panels, fonts, status bar), and the menu and
-intro pictures, fonts and manager-screen sheets as indexed PNGs, since
-the menus fade by palette. `pack.json` lists each sprite sheet's cell
-size and count and holds the palettes; the pack's `README.txt` explains
-the rules for editing. A test extracts a pack and checks every image,
-sheet and palette loads back identical to the originals.
+`content/` is the seam: the game asks a `ContentSource`, which is either
+`Originals` (decoding the disk images and dumps as before) or a `Pack`. A
+pack holds the match graphics for both platforms as RGBA PNGs (pitch,
+tiles, sprites, panels, fonts, status bar), and the menu and intro
+pictures, fonts and manager-screen sheets as indexed PNGs, since the menus
+fade by palette. `pack.json` lists each sprite sheet's cell size and count
+and holds the palettes.
 
-Text, tables and sound still come from the originals, so they are still
-needed. `/assets` is in `.gitignore`: an extracted pack is the game's own
-art, so it should not be shared.
+`text/menus.json` holds every string the menus show, by purpose (titles,
+list menus and their arrows, messages, the panel screens' lines, team
+names), and `text/intro.json` the intro's. Strings are written in a
+readable form that converts back to the game's bytes exactly
+(`menu/readable.rs`): `{x,y}` for cursor codes, `_` for a blank the game
+writes a number into, and box-drawing characters for the panel tables'
+lines. The game writes into some strings at fixed places, so a pack's text
+is checked when it loads (`MenuText::check`) and problems are reported
+rather than crashing. The pack's `README.txt` explains the rules for
+editing. A test extracts a pack and checks every image, sheet, palette and
+string loads back identical to the originals.
+
+The match's own panel messages, the manager screens' strings, tables and
+sound still come from the originals, so they are still needed. `/assets`
+is in `.gitignore`: an extracted pack is the game's own art, so it should
+not be shared.
 
 ## Menus
 

@@ -1,7 +1,7 @@
 //! Which file in a pack holds each of the game's images.
 
 use super::pack::{Pack, PackWriter, COLUMNS};
-use super::{ContentError, GraphicsSource};
+use super::ContentError;
 use crate::config::Platform;
 use crate::graphics::Assets;
 use crate::menu::assets::{ManagerGraphics, MenuAssets};
@@ -30,7 +30,7 @@ pub fn write_match(w: &mut PackWriter, assets: &Assets) -> Result<(), ContentErr
     Ok(())
 }
 
-fn read_match(pack: &Pack, platform: Platform) -> Result<Assets, ContentError> {
+pub fn read_match(pack: &Pack, platform: Platform) -> Result<Assets, ContentError> {
     let dir = match_dir(platform);
     let name = |file: &str| format!("{dir}/{file}");
     Ok(Assets {
@@ -118,7 +118,7 @@ pub fn write_menus(w: &mut PackWriter, menus: &MenuAssets) -> Result<(), Content
     Ok(())
 }
 
-fn read_menus(pack: &Pack) -> Result<MenuAssets, ContentError> {
+pub fn read_menus(pack: &Pack) -> Result<MenuAssets, ContentError> {
     let picture = |name: &str| pack.picture(&format!("menus/pictures/{name}"));
     let font = |name: &str| pack.indexed_sheet(&format!("menus/fonts/{name}"));
     let sheet = |name: &str| pack.indexed_sheet(&format!("menus/manager/{name}"));
@@ -157,27 +157,10 @@ pub fn write_intro(w: &mut PackWriter, intro: &IntroGraphics) -> Result<(), Cont
     w.indexed_sheet("intro/font", &intro.font, COLUMNS, &intro.backdrop.palette)
 }
 
-fn read_intro(pack: &Pack) -> Result<IntroGraphics, ContentError> {
+pub fn read_intro(pack: &Pack) -> Result<IntroGraphics, ContentError> {
     Ok(IntroGraphics {
         title: pack.picture("intro/title")?,
         backdrop: pack.picture("intro/backdrop")?,
         font: pack.indexed_sheet("intro/font")?,
     })
-}
-
-impl GraphicsSource for Pack {
-    fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError> {
-        read_match(self, platform)
-    }
-
-    fn menu_graphics(&self) -> Result<MenuAssets, ContentError> {
-        read_menus(self)
-    }
-
-    fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError> {
-        if !self.has("intro/title") {
-            return Ok(None);
-        }
-        read_intro(self).map(Some)
-    }
 }
