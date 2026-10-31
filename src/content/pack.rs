@@ -316,9 +316,9 @@ impl Pack {
         })
     }
 
-    /// Whether the pack has this image or sheet.
-    pub fn has(&self, name: &str) -> bool {
-        self.path(name).exists()
+    /// Whether the pack has a folder `name`.
+    pub fn has_dir(&self, name: &str) -> bool {
+        self.dir.join(name).is_dir()
     }
 
     pub fn json_path(&self, name: &str) -> PathBuf {

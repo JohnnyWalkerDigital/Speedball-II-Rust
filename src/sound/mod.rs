@@ -5,11 +5,12 @@
 pub mod data;
 pub mod driver;
 mod export;
+mod layout;
 mod memory;
 mod output;
 pub mod paula;
 pub mod sequences;
 pub mod wav;
 
-pub use export::export_sounds;
+pub use export::{export_samples, export_sounds};
 pub use output::SoundOutput;

@@ -90,7 +90,7 @@ impl Match {
             })
         };
         let (base1, base2) = if team1_attacks_up { (0, 9) } else { (9, 0) };
-        in_line(Side::Team1, base1) && (self.is_practice() || in_line(Side::Team2, base2))
+        in_line(Side::Team1, base1) && (!self.team2_on_pitch() || in_line(Side::Team2, base2))
     }
 
     /// Swaps ends at half time.

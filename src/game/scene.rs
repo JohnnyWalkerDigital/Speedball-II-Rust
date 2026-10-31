@@ -65,7 +65,7 @@ impl Match {
 
         if !self.clock_paused {
             add(&self.props.player_indicators[0]);
-            if !self.is_practice() {
+            if self.team2_on_pitch() {
                 add(&self.props.player_indicators[1]);
             }
             // The Amiga original has no goal markers; these are the ST's.

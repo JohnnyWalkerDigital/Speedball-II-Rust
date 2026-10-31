@@ -13,20 +13,21 @@ use super::manager::{self, Cursors, Standings};
 use super::panels;
 use super::play::{run_match, Controls, ReplaySaves};
 use super::ram::MenuRam;
+use super::saving::SavedNames;
 use super::strings::{MenuSpec, MenuText, Title};
 use super::tables::MenuTables;
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
 use crate::data::AtariRom;
-use crate::game::career::{compare_scores, Career, LastMatch, TeamId, BRUTAL_DELUXE};
+use crate::game::career::{cash_cap, compare_scores, Career, LastMatch, TeamId, BRUTAL_DELUXE};
 use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Side};
 use crate::game::league::ScoresTable;
 use crate::game::rng::Rng;
 use crate::game::setup::{MatchRules, SquadSkills};
-use crate::game::squad::Competition;
 use crate::game::squad::Market;
+use crate::game::squad::{self, Competition};
 use crate::game::{Match, MatchSetup};
 use crate::graphics::ilbm::Picture;
 use crate::graphics::Canvas;
@@ -65,7 +66,8 @@ const WIN_AFTER: Sound = Sound {
 /// Everything the front end works with.
 pub struct Game {
     pub rom: Rc<AtariRom>,
-    pub ram: MenuRam,
+    /// How saves name players.
+    pub saved_names: SavedNames,
     pub text: MenuText,
     pub tables: MenuTables,
     pub assets: MenuAssets,
@@ -123,10 +125,11 @@ impl Game {
         let squads = PerTeam::new(tables.squad.clone(), tables.squad_two.clone());
         let market = Market::new(tables.market.clone());
         let career = Career::new(ram.team_records(), squads, market);
+        let saved_names = SavedNames::new(ram, &tables);
         let scores_table = ScoresTable::new(&tables.other_results);
         Self {
             rom,
-            ram,
+            saved_names,
             text,
             tables,
             assets,
@@ -333,7 +336,7 @@ pub(super) fn wait_fire(ui: &mut Ui) -> Flow {
 
 /// Knockout, league, cup or practice.
 fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
-    game.career.init_squad(Side::Team1, 100);
+    game.career.init_squad(Side::Team1, squad::ONE_PLAYER_SKILL);
     game.manager_mode = false;
     game.one_player = true;
     match list_menu(ui, game, &game.text.menus.one_player)? {
@@ -348,7 +351,7 @@ fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
 /// each match. A draw replays the round; a defeat ends the run.
 fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
-    game.career.set_cash_cap(1100);
+    game.career.set_cash_cap(cash_cap::KNOCKOUT);
     let mut round = 1;
     while round <= KNOCKOUT_ROUNDS {
         let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::League(round));
@@ -377,7 +380,7 @@ pub(super) fn win_shared(ui: &mut Ui, picture: &Picture) -> Flow {
 
 /// Brutal Deluxe on their own, with no result screen.
 fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
-    game.career.set_cash_cap(10_000);
+    game.career.set_cash_cap(cash_cap::PRACTICE);
     game.one_player = false;
     let mut rules = MatchRules::practice(&game.rom);
     rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
@@ -392,9 +395,9 @@ fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
 /// the gym before every leg.
 fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
-    game.career.set_cash_cap(2000);
-    game.career.init_squad(Side::Team1, 170);
-    game.career.init_squad(Side::Team2, 170);
+    game.career.set_cash_cap(cash_cap::TWO_PLAYERS);
+    game.career.init_squad(Side::Team1, squad::TWO_PLAYER_SKILL);
+    game.career.init_squad(Side::Team2, squad::TWO_PLAYER_SKILL);
     game.manager_mode = false;
     game.one_player = false;
     let matches = list_menu(ui, game, &game.text.menus.two_players)? * 2 + 1;

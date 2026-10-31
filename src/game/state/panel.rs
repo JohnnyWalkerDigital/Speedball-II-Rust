@@ -34,7 +34,7 @@ impl Match {
     /// during the goal replay, the crowd may shout "ice cream".
     pub(crate) fn build_panel_overlay(&mut self) {
         let message = self.text_panel.message();
-        let team_names = if self.is_practice() { 1 } else { 2 };
+        let team_names = if self.team2_on_pitch() { 2 } else { 1 };
         let lines = match message {
             Some(TextId::Team1Scored | TextId::Team2Scored) => 2,
             Some(TextId::Vs) => 1 + team_names,

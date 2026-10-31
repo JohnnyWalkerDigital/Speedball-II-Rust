@@ -5,7 +5,7 @@ use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Point, Side};
 use crate::game::player::{count, PlayerId};
 use crate::game::text::TextId;
-use crate::game::token::ActiveToken;
+use crate::game::token::Token;
 
 /// Each team's points, the share of them won with the ball in play, and
 /// what the status bar shows.
@@ -153,10 +153,9 @@ impl Match {
 
     /// The "goal door" token shuts the holder's own goal.
     fn goal_door_open(&self, top_goal: bool) -> bool {
-        if self.token.sprite != ActiveToken::GOAL_DOOR {
+        let Some(holder) = self.held_token_holder(Token::GoalDoor) else {
             return true;
-        }
-        let holder = self.token.holder.expect("an active token has a holder");
+        };
         if self.players[holder.0].attacks_up() {
             top_goal != self.reverse_side
         } else {

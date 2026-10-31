@@ -1,5 +1,9 @@
 //! Mono WAV files of the Amiga's signed 8-bit samples.
 
+/// The rate samples are saved at. Each note sets its own pitch, so this is
+/// only the common Amiga rate (period 428), for listening.
+pub const SAMPLE_RATE: u32 = 8287;
+
 /// A mono 8-bit WAV file. WAV 8-bit samples are unsigned, so the signed
 /// Amiga data is offset by 128.
 pub fn mono_8(signed_pcm: &[u8], rate: u32) -> Vec<u8> {

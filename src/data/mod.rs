@@ -10,7 +10,6 @@ pub mod lookups;
 pub mod readable;
 pub mod rom;
 pub mod save_disk;
-pub mod sounds;
 
 pub use files::GameFiles;
 pub use rom::AtariRom;

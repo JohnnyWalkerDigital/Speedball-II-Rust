@@ -133,15 +133,14 @@ impl Match {
             self.clock.count_down();
             self.count_territory_and_possession();
         }
-        if self.token.sprite != 0 {
-            self.token.seconds_left -= 1;
-        }
-        // The clock ticks audibly while a power-up is active.
-        if self.token.sprite != 0 {
+        if let Some(held) = &mut self.token {
+            held.seconds_left -= 1;
+            let expired = held.seconds_left == 0;
+            // The clock ticks audibly while a power-up is active.
             self.play_sound(Sound::POWERUP_TICK);
-        }
-        if self.token.seconds_left == 0 {
-            self.expire_token();
+            if expired {
+                self.expire_token();
+            }
         }
         if !self.clock_paused && self.clock.leg_over() {
             self.end_leg();

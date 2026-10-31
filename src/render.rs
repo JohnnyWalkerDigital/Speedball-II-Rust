@@ -354,7 +354,7 @@ impl MatchRenderer {
                     self.draw_text(canvas, m.text_panel.text(TextId::Vs));
                 }
                 self.draw_text(canvas, &m.teams.team1.short_name.with_row(6));
-                if !m.is_practice() {
+                if m.team2_on_pitch() {
                     self.draw_text(canvas, &m.teams.team2.short_name.with_row(12));
                 }
             }

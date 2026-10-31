@@ -1,8 +1,9 @@
 //! Saving and loading leagues and cups.
 
 use super::flow::{list_menu, wait_fire, Game};
-use super::ram::addr;
+use super::ram::{addr, MenuRam};
 use super::strings::Title;
+use super::tables::MenuTables;
 use super::ui::{Flow, Stop, Ui};
 use crate::data::save_disk::{CUP_SECTOR, GAME_SECTORS, LEAGUE_SECTOR};
 use crate::game::career::{TeamId, TeamRecord};
@@ -84,7 +85,7 @@ pub struct Snapshot {
 
 /// Builds a save of the career as it stands.
 pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
-    let names = SavedNames::new(game);
+    let names = &game.saved_names;
     let career = &game.career;
     let player = |p: &SquadPlayer| SavedPlayer {
         name_offset: names.offset(&p.name),
@@ -103,7 +104,7 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
             .map(|&team| {
                 let record = career.record(team);
                 SavedTeam {
-                    team_offset: (team_index(team) * addr::TEAM_SIZE) as u32,
+                    team_offset: SavedTeam::offset_of(team),
                     played: record.played,
                     won: record.won,
                     drawn: record.drawn,
@@ -135,8 +136,7 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
 /// Puts a loaded game back into the career. Returns the teams
 /// in the save's order and the playing direction.
 pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
-    let people = SavedNames::new(game);
-    let name = |offset: u32| people.name(game, offset);
+    let name = |offset: u32| game.saved_names.name(offset);
     let squad: Vec<(String, u16, [u8; 8])> = save
         .squad
         .iter()
@@ -166,7 +166,7 @@ pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
         .teams
         .iter()
         .map(|saved| {
-            let team = TeamId::League(saved.team_offset as usize / addr::TEAM_SIZE);
+            let team = saved.team();
             *career.record_mut(team) = TeamRecord {
                 played: saved.played,
                 won: saved.won,
@@ -191,26 +191,27 @@ pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
 /// Saves name players by their name's offset from `addr::STR_JAMS` in the
 /// original's memory. Names are only ever the squad's own or the market
 /// players', the same people, in the same order, as the tables'.
-struct SavedNames {
+pub struct SavedNames {
     names: Vec<String>,
     offsets: Vec<u32>,
+    /// For offsets no one has.
+    memory: MenuRam,
 }
 
 impl SavedNames {
-    fn new(game: &Game) -> Self {
-        let ram = &game.ram;
-        let tables = &game.tables;
+    pub fn new(memory: MenuRam, tables: &MenuTables) -> Self {
         let pointers = (0..SQUAD_SIZE)
-            .map(|i| ram.pointer_at(addr::BASE_TEAM_NAMES + i * 4))
+            .map(|i| memory.pointer_at(addr::BASE_TEAM_NAMES + i * 4))
             .chain((0..MARKET_SIZE).map(|i| {
-                let record = ram.pointer_at(addr::PLAYERS_MARKET + i * 4);
-                ram.pointer_at(record + 4)
+                let record = memory.pointer_at(addr::PLAYERS_MARKET + i * 4);
+                memory.pointer_at(record + 4)
             }));
         Self {
             names: (tables.base_identities.iter().map(|i| i.name.clone()))
                 .chain(tables.market.iter().map(|m| m.player.name.clone()))
                 .collect(),
             offsets: pointers.map(|p| (p - addr::STR_JAMS) as u32).collect(),
+            memory,
         }
     }
 
@@ -224,17 +225,10 @@ impl SavedNames {
 
     /// The name a save's offset stands for. An offset no one has reads the
     /// original's memory there, as the original would.
-    fn name(&self, game: &Game, offset: u32) -> String {
+    fn name(&self, offset: u32) -> String {
         match self.offsets.iter().position(|&o| o == offset) {
             Some(i) => self.names[i].clone(),
-            None => game.ram.c_string(addr::STR_JAMS + offset as usize),
+            None => self.memory.c_string(addr::STR_JAMS + offset as usize),
         }
-    }
-}
-
-fn team_index(team: TeamId) -> usize {
-    match team {
-        TeamId::League(index) => index,
-        TeamId::PlayerTwo => unreachable!("player 2 is never saved"),
     }
 }

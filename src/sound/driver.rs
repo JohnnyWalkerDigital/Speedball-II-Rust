@@ -9,6 +9,11 @@
 //! Its tables are read from the RAM dump, where the game left them. Word
 //! arithmetic wraps (`u16`), as the data relies on it.
 
+use super::layout::{
+    effect, instrument, sound_entry, DEFAULT_INSTRUMENT, EFFECT_SIZE, ENVELOPE_SIZE,
+    INSTRUMENT_SIZE, INSTRUMENT_TABLE_INDEX, PITCH_TABLES, SOUND_BASE, SOUND_EFFECTS,
+    SOUND_ENTRY_SIZE, SOUND_ENVELOPES, SOUND_TABLE, ZERO_SAMPLE,
+};
 use super::memory::Memory;
 use super::paula::Paula;
 
@@ -16,27 +21,6 @@ use super::paula::Paula;
 // Addresses in the match RAM dump.
 // ---------------------------------------------------------------------------
 
-/// The sound table: 6 bytes per sound (priority, no-play flag, 4 sequences).
-pub(super) const SOUND_TABLE: u32 = 0x13958;
-/// The effect table: 15 bytes per effect.
-pub(super) const SOUND_EFFECTS: u32 = 0x13B5A;
-/// The envelope table: 8 bytes per envelope.
-const SOUND_ENVELOPES: u32 = 0x13CB4;
-/// The three pitch tables: note periods per octave, in quarter semitones.
-pub(super) const PITCH_TABLES: [u32; 3] = [0x14A9A, 0x14AFA, 0x14B5A];
-/// The default instrument; also played as a tiny looping sample.
-const DEFAULT_INSTRUMENT: u32 = 0x14E5A;
-/// The zero sample: 8 silent words.
-const ZERO_SAMPLE: u32 = 0x14E68;
-/// The start of the sound bank. Its first long is the offset of the
-/// sequence table.
-pub(super) const SOUND_BASE: u32 = 0x1BC3E;
-/// Holds the offset of the instrument table from `SOUND_BASE`.
-pub(super) const INSTRUMENT_TABLE_INDEX: u32 = 0x1BC42;
-
-pub(super) const INSTRUMENT_SIZE: u32 = 14;
-pub(super) const EFFECT_SIZE: u32 = 15;
-const ENVELOPE_SIZE: u32 = 8;
 const STACK_SIZE: usize = 128;
 const TICKS_PER_SECOND: u32 = 50;
 /// Guards against sequences that loop without ever playing a note (the
@@ -292,14 +276,17 @@ impl Driver {
     /// Starts `sound`'s sequences unless a channel it needs (of the first
     /// three) is busy with something more important.
     pub fn play(&mut self, sound: u8, priority: u8) {
-        let entry = SOUND_TABLE + u32::from(sound) * 6;
-        if self.memory.u8(entry + 1) & 0x80 != 0 {
+        let entry = SOUND_TABLE + u32::from(sound) * SOUND_ENTRY_SIZE;
+        if self.memory.u8(entry + sound_entry::FLAGS) & sound_entry::SILENT != 0 {
             return; // No-play flag.
         }
         let priority_value = priority & 0x7F;
         if priority != 0 {
             for channel in 0..3 {
-                let wanted = self.memory.u8(entry + 2 + channel as u32) != 0;
+                let wanted = self
+                    .memory
+                    .u8(entry + sound_entry::SEQUENCES + channel as u32)
+                    != 0;
                 if wanted && priority_value < self.priorities[channel] {
                     // The original then records the sound in a table nothing
                     // reads; either way, it does not play.
@@ -308,7 +295,9 @@ impl Driver {
             }
         }
         for channel in 0..4 {
-            let sequence = self.memory.u8(entry + 2 + channel as u32);
+            let sequence = self
+                .memory
+                .u8(entry + sound_entry::SEQUENCES + channel as u32);
             if sequence != 0 {
                 self.priorities[channel] = priority_value;
                 self.play_channel(sequence, channel);
@@ -330,14 +319,14 @@ impl Driver {
         self.paula.set_dma(channel, true);
 
         let start = self.sequence_address(sequence);
-        let base_octave = self.memory.u32(DEFAULT_INSTRUMENT + 10);
+        let base_octave = self.memory.u32(DEFAULT_INSTRUMENT + instrument::OCTAVE);
         let ch = &mut self.channels[channel];
         ch.start_pointer = start;
         ch.command_pointer = start;
         ch.stack_pointer = STACK_SIZE;
-        ch.one_shot = self.memory.u16(DEFAULT_INSTRUMENT) as i16;
-        ch.loop_offset = self.memory.u16(DEFAULT_INSTRUMENT + 2);
-        ch.sample_len = self.memory.u16(DEFAULT_INSTRUMENT + 4);
+        ch.one_shot = self.memory.u16(DEFAULT_INSTRUMENT + instrument::ONE_SHOT) as i16;
+        ch.loop_offset = self.memory.u16(DEFAULT_INSTRUMENT + instrument::LOOP_START);
+        ch.sample_len = self.memory.u16(DEFAULT_INSTRUMENT + instrument::LENGTH);
         ch.sample_start = ZERO_SAMPLE;
         ch.pitch_table = pitch_table(base_octave as u8);
         ch.period_base = 0x100;
@@ -514,16 +503,22 @@ impl Driver {
             // Set the tremolo and vibrato effect.
             0x9C => {
                 let address = SOUND_EFFECTS + u32::from(operand(pc)) * EFFECT_SIZE;
-                let byte = |i: u32| memory.i8(address + i) as i16 as u16;
+                let bytes = |field: u32| -> [u16; 3] {
+                    std::array::from_fn(|i| memory.i8(address + field + i as u32) as i16 as u16)
+                };
+                let two = |field: u32| -> [u16; 2] {
+                    let [a, b, _] = bytes(field);
+                    [a, b]
+                };
                 let ch = &mut self.channels[channel];
                 ch.effect_loops &= 0xFC;
                 ch.effect = Effect {
-                    tremolo_length: [byte(0), byte(1)],
-                    vibrato_length: [byte(2), byte(3), byte(4)],
-                    tremolo_rate: [byte(5), byte(6)],
-                    vibrato_rate: [byte(7), byte(8), byte(9)],
-                    tremolo_pause: [byte(10), byte(11)],
-                    vibrato_pause: [byte(12), byte(13), byte(14)],
+                    tremolo_length: two(effect::TREMOLO_LENGTH),
+                    vibrato_length: bytes(effect::VIBRATO_LENGTH),
+                    tremolo_rate: two(effect::TREMOLO_RATE),
+                    vibrato_rate: bytes(effect::VIBRATO_RATE),
+                    tremolo_pause: two(effect::TREMOLO_PAUSE),
+                    vibrato_pause: bytes(effect::VIBRATO_PAUSE),
                 };
                 // The length counters are left alone; the next note resets them.
                 ch.tremolo_pause_count = [0; 2];
@@ -597,11 +592,11 @@ impl Driver {
                     .wrapping_add(memory.u32(INSTRUMENT_TABLE_INDEX))
                     .wrapping_add(u32::from(operand(pc)) * INSTRUMENT_SIZE);
                 let ch = &mut self.channels[channel];
-                ch.one_shot = memory.u16(address) as i16;
-                ch.loop_offset = memory.u16(address + 2);
-                ch.sample_len = memory.u16(address + 4);
-                ch.sample_start = SOUND_BASE.wrapping_add(memory.u32(address + 6));
-                ch.pitch_table = pitch_table(memory.u32(address + 10) as u8);
+                ch.one_shot = memory.u16(address + instrument::ONE_SHOT) as i16;
+                ch.loop_offset = memory.u16(address + instrument::LOOP_START);
+                ch.sample_len = memory.u16(address + instrument::LENGTH);
+                ch.sample_start = SOUND_BASE.wrapping_add(memory.u32(address + instrument::SAMPLE));
+                ch.pitch_table = pitch_table(memory.u32(address + instrument::OCTAVE) as u8);
             }
             // Jump to another sequence.
             0xD4 => {
@@ -848,7 +843,7 @@ mod tests {
     fn instrument_start(driver: &Driver, instrument: u32) -> u32 {
         let address =
             SOUND_BASE + driver.memory.u32(INSTRUMENT_TABLE_INDEX) + instrument * INSTRUMENT_SIZE;
-        SOUND_BASE + driver.memory.u32(address + 6)
+        SOUND_BASE + driver.memory.u32(address + instrument::SAMPLE)
     }
 
     /// "Get ready" (sound 46) plays instrument 23 ("get") then instrument 32

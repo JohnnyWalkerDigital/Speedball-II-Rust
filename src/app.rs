@@ -10,15 +10,12 @@ use std::time::{Duration, Instant};
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
 use crate::config::{Config, Platform};
-use crate::content::{self, AmigaOriginals, ContentSource, Originals, Pack};
-use crate::data::amiga::{menu_ram, Overlays};
+use crate::content::{self, ContentSource, OriginalFiles, Originals, Pack};
 use crate::data::animations::Animations;
-use crate::data::files::{
-    read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
-};
+use crate::data::files::{read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump};
 use crate::data::lookups::Lookups;
 use crate::data::save_disk::SaveDisk;
-use crate::data::{sounds, AtariRom, GameFiles};
+use crate::data::{AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::game::roster::Teams;
@@ -69,11 +66,11 @@ const BINDINGS: &[(Key, Button)] = &[
 pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
     let files = GameFiles::load(&config.data_dir, Platform::Amiga)?;
     let amiga = files.amiga.expect("loaded for the Amiga");
-    let samples = sounds::export_wavs(&amiga.match_dump, dir)?;
+    let samples = crate::sound::export_samples(&amiga.match_dump, dir)?;
     println!(
         "Wrote {samples} raw instrument samples to {} (at {} Hz, which may not be their real pitch)",
         dir.display(),
-        sounds::EXPORT_RATE
+        crate::sound::wav::SAMPLE_RATE
     );
     let rendered = dir.join("rendered");
     let count = crate::sound::export_sounds(amiga.match_dump, &rendered)?;
@@ -84,67 +81,39 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-/// The originals the game needs, as loaded.
-struct Loaded {
-    rom: AtariRom,
-    amiga: Option<AmigaFiles>,
-    /// The Amiga match dump for sound, when the rest of the Amiga files
-    /// are not needed.
-    sound_dump: Option<Vec<u8>>,
-    intro_dump: Option<Vec<u8>>,
-}
-
-impl Loaded {
-    /// The ST disk always; the Amiga files for Amiga graphics, and for the
-    /// menus (unless `--mode` skips them).
-    fn load(config: &Config) -> Result<Self, Box<dyn Error>> {
-        let files = GameFiles::load(&config.data_dir, config.platform)?;
-        let amiga = match files.amiga {
-            Some(amiga) => Some(amiga),
-            None if config.mode.is_none() => {
-                Some(read_amiga_files(&config.data_dir).map_err(|e| {
-                    format!("the menus need the Amiga files ({e}); use --mode to skip them")
-                })?)
-            }
-            None => None,
-        };
-        let intro_dump = if config.mode.is_none() {
-            read_amiga_intro_dump(&config.data_dir)
-                .map_err(|error| eprintln!("no intro: {error}"))
-                .ok()
-        } else {
-            None
-        };
-        // The sound driver runs on the Amiga data, whichever graphics are
-        // shown. Without it the game is silent.
-        let sound_dump = if amiga.is_none() && !config.mute {
-            read_amiga_match_dump(&config.data_dir)
-                .map_err(|error| eprintln!("sound off: {error}"))
-                .ok()
-        } else {
-            None
-        };
-        Ok(Self {
-            rom: AtariRom::new(files.atari_disk),
-            amiga,
-            sound_dump,
-            intro_dump,
-        })
-    }
-
-    fn match_dump(&self) -> Option<&[u8]> {
-        match &self.amiga {
-            Some(amiga) => Some(&amiga.match_dump),
-            None => self.sound_dump.as_deref(),
-        }
-    }
-}
-
-/// The menus' memory, rebuilt from the Amiga disk and dump.
-fn amiga_menu_ram(amiga: &AmigaFiles) -> Result<(Overlays<'_>, MenuRam), Box<dyn Error>> {
-    let overlays = Overlays::new(&amiga.disk).ok_or("the Amiga disk has no overlay directory")?;
-    let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
-    Ok((overlays, ram))
+/// The originals the game needs: the ST disk always; the Amiga files for
+/// Amiga graphics and for the menus (unless `--mode` skips them); the
+/// Amiga match dump for sound otherwise.
+fn load_originals(config: &Config) -> Result<OriginalFiles, Box<dyn Error>> {
+    let files = GameFiles::load(&config.data_dir, config.platform)?;
+    let with_menus = config.mode.is_none();
+    let amiga = match files.amiga {
+        Some(amiga) => Some(amiga),
+        None if with_menus => Some(read_amiga_files(&config.data_dir).map_err(|e| {
+            format!("the menus need the Amiga files ({e}); use --mode to skip them")
+        })?),
+        None => None,
+    };
+    let intro_dump = if with_menus {
+        read_amiga_intro_dump(&config.data_dir)
+            .map_err(|error| eprintln!("no intro: {error}"))
+            .ok()
+    } else {
+        None
+    };
+    // The sound driver runs on the Amiga data, whichever graphics are
+    // shown. Without it the game is silent.
+    let sound_dump = if amiga.is_none() && !config.mute {
+        read_amiga_match_dump(&config.data_dir)
+            .map_err(|error| eprintln!("sound off: {error}"))
+            .ok()
+    } else {
+        None
+    };
+    let rom = AtariRom::new(files.atari_disk);
+    Ok(OriginalFiles::new(
+        rom, amiga, with_menus, sound_dump, intro_dump,
+    )?)
 }
 
 /// The graphics, text and tables a game needs, from the originals or
@@ -204,52 +173,33 @@ impl Content {
             start,
             sound,
             matches,
-            menus: Some(MenuContent {
-                assets: source.menu_graphics()?,
-                text: source.menu_text()?,
-                tables: source.menu_tables()?,
-                manager: source.manager_tables()?,
-            }),
+            menus: Some(content::menu_content(source)?),
             intro: intro.map(|(graphics, text)| IntroAssets { graphics, text }),
         })
     }
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let loaded = Loaded::load(&config)?;
+    let originals = load_originals(&config)?;
     let with_menus = config.mode.is_none();
-    let menu_memory = match (&loaded.amiga, with_menus) {
-        (Some(amiga), true) => Some(amiga_menu_ram(amiga)?),
-        _ => None,
-    };
-    let originals = Originals {
-        rom: &loaded.rom,
-        amiga: loaded.amiga.as_ref().zip(menu_memory.as_ref()).map(
-            |(files, (overlays, menu_ram))| AmigaOriginals {
-                files,
-                overlays,
-                menu_ram,
-            },
-        ),
-        match_dump: loaded.match_dump(),
-        intro_dump: loaded.intro_dump.as_deref(),
-    };
-    let content = Content::load(&config, &originals, with_menus)?;
+    let content = Content::load(&config, &originals.originals(), with_menus)?;
     let sound = SoundBanks::new(
         &config,
         content.sound.as_ref(),
-        loaded.match_dump(),
-        menu_memory.as_ref().map(|(_, ram)| ram.bytes()),
-        loaded.intro_dump.as_deref(),
+        originals.match_dump(),
+        originals.menu_ram.as_ref().map(MenuRam::bytes),
+        originals.intro_dump.as_deref(),
     );
-    let mut rom = loaded.rom;
+    let OriginalFiles {
+        mut rom, menu_ram, ..
+    } = originals;
     rom.set_lookups(content.lookups);
     rom.set_teams(content.teams);
     rom.set_animations(content.animations, content.start);
     let renderer = MatchRenderer::new(content.matches, &rom);
     let rom = Rc::new(rom);
-    match (menu_memory, content.menus) {
-        (Some((_, ram)), Some(menus)) => {
+    match (menu_ram, content.menus) {
+        (Some(ram), Some(menus)) => {
             play_with_menus(&config, rom, renderer, ram, menus, content.intro, sound)
         }
         _ => play_one_match(&config, rom, renderer, sound),
@@ -264,24 +214,11 @@ pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
     let amiga = read_amiga_files(&config.data_dir)
         .map_err(|error| eprintln!("no Amiga graphics or menus: {error}"))
         .ok();
-    let menu_memory = amiga.as_ref().map(amiga_menu_ram).transpose()?;
     let intro_dump = read_amiga_intro_dump(&config.data_dir)
         .map_err(|error| eprintln!("no intro: {error}"))
         .ok();
-    let originals = Originals {
-        rom: &rom,
-        amiga: amiga
-            .as_ref()
-            .zip(menu_memory.as_ref())
-            .map(|(files, (overlays, menu_ram))| AmigaOriginals {
-                files,
-                overlays,
-                menu_ram,
-            }),
-        match_dump: amiga.as_ref().map(|a| a.match_dump.as_slice()),
-        intro_dump: intro_dump.as_deref(),
-    };
-    let extracted = content::extract(&originals, dir)?;
+    let originals = OriginalFiles::new(rom, amiga, true, None, intro_dump)?;
+    let extracted = content::extract(&originals.originals(), dir)?;
     let platforms: Vec<_> = extracted
         .platforms
         .iter()

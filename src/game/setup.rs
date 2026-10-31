@@ -13,7 +13,7 @@ use crate::data::AtariRom;
 
 /// Everything `Match::new` needs.
 pub struct MatchSetup {
-    pub mode: GameMode,
+    pub kind: MatchKind,
     pub players: Vec<Player>,
     pub roster: Roster,
     pub team1: Team,
@@ -27,9 +27,49 @@ pub struct MatchSetup {
     pub rng: Rng,
 }
 
+/// How a game mode's matches differ from a whole match between two teams.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MatchKind {
+    /// The leg the clock starts on: 0 for a whole match, 1 for the second
+    /// half only, and past full time for a match that never ends.
+    pub first_leg: i32,
+    /// Whether team 2 is on the pitch.
+    pub team2_on_pitch: bool,
+    /// Whether the reverse-controls token can appear.
+    pub reverse_token: bool,
+    /// Whether coins keep appearing while team 2 is under its cap, as well
+    /// as team 1.
+    pub coins_for_team2: bool,
+}
+
+impl MatchKind {
+    pub const KNOCKOUT: Self = Self {
+        first_leg: 0,
+        team2_on_pitch: true,
+        reverse_token: false,
+        coins_for_team2: false,
+    };
+    /// Brutal Deluxe alone, with no end.
+    pub const PRACTICE: Self = Self {
+        first_leg: 3,
+        team2_on_pitch: false,
+        ..Self::KNOCKOUT
+    };
+    pub const TWO_PLAYERS: Self = Self {
+        reverse_token: true,
+        coins_for_team2: true,
+        ..Self::KNOCKOUT
+    };
+    /// The second half only.
+    pub const DEMO: Self = Self {
+        first_leg: 1,
+        ..Self::KNOCKOUT
+    };
+}
+
 /// What a game mode decides about a match.
 pub struct MatchRules {
-    pub mode: GameMode,
+    pub kind: MatchKind,
     pub team1: Lineup,
     pub team2: Lineup,
     /// How long each half lasts, in seconds.
@@ -66,10 +106,10 @@ impl MatchRules {
     /// them up for one player; team 2 plays itself.
     pub fn one_player(rom: &AtariRom, opponent: usize) -> Self {
         Self {
-            mode: GameMode::Knockout,
+            kind: MatchKind::KNOCKOUT,
             team1: Lineup {
                 team: league_team(rom, BRUTAL_DELUXE_INDEX),
-                skills: SquadSkills::Uniform(100),
+                skills: SquadSkills::Uniform(squad::ONE_PLAYER_SKILL.into()),
             },
             team2: Lineup {
                 team: league_team(rom, opponent),
@@ -87,14 +127,14 @@ impl MatchRules {
     /// Practice: Brutal Deluxe alone on the pitch.
     pub fn practice(rom: &AtariRom) -> Self {
         Self {
-            mode: GameMode::Practice,
+            kind: MatchKind::PRACTICE,
             team1: Lineup {
                 team: league_team(rom, BRUTAL_DELUXE_INDEX),
-                skills: SquadSkills::Uniform(100),
+                skills: SquadSkills::Uniform(squad::ONE_PLAYER_SKILL.into()),
             },
             team2: Lineup {
                 team: league_team(rom, 1),
-                skills: SquadSkills::Uniform(100),
+                skills: SquadSkills::Uniform(squad::ONE_PLAYER_SKILL.into()),
             },
             leg_duration: HALF_LENGTH_SECONDS,
             min_credits: 0,
@@ -112,14 +152,14 @@ impl MatchRules {
         team1.full_name = texts.text(TextId::Player1Full).clone();
         team1.short_name = texts.text(TextId::Player1Short).clone();
         Self {
-            mode: GameMode::TwoPlayers,
+            kind: MatchKind::TWO_PLAYERS,
             team1: Lineup {
                 team: team1,
-                skills: SquadSkills::Uniform(170),
+                skills: SquadSkills::Uniform(squad::TWO_PLAYER_SKILL.into()),
             },
             team2: Lineup {
                 team: rom.teams().player_two(),
-                skills: SquadSkills::Uniform(170),
+                skills: SquadSkills::Uniform(squad::TWO_PLAYER_SKILL.into()),
             },
             leg_duration: HALF_LENGTH_SECONDS,
             min_credits: 0,
@@ -133,7 +173,7 @@ impl MatchRules {
     /// The demo game: Fatal Justice against Turbo Hammers, 20 second halves.
     pub fn demo(rom: &AtariRom) -> Self {
         Self {
-            mode: GameMode::Demo,
+            kind: MatchKind::DEMO,
             team1: Lineup {
                 team: league_team(rom, 14),
                 skills: SquadSkills::FromTeam,
@@ -193,13 +233,13 @@ impl MatchSetup {
             &mut roster.attributes_team2,
             &mut roster.persons_team2,
         );
-        if rules.mode == GameMode::Practice {
+        if !rules.kind.team2_on_pitch {
             for id in PlayerId::team(false) {
                 players[id.0].entity.flags.set_invisible(true);
             }
         }
         Self {
-            mode: rules.mode,
+            kind: rules.kind,
             players,
             roster,
             team1: rules.team1.team,
@@ -242,7 +282,7 @@ fn set_skills(lineup: &Lineup, attributes: &mut [Attributes], persons: &mut [Per
 fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRules {
     let (team1, team2) = random_distinct_teams(seeds, config);
     MatchRules {
-        mode: GameMode::Knockout,
+        kind: MatchKind::KNOCKOUT,
         team1: Lineup {
             team: league_team(rom, team1),
             skills: SquadSkills::FromTeam,
@@ -264,11 +304,11 @@ fn practice(rom: &AtariRom, config: &Config) -> MatchRules {
     MatchRules {
         team1: Lineup {
             team: league_team(rom, config.team1.unwrap_or(0)),
-            skills: SquadSkills::Uniform(100),
+            skills: SquadSkills::Uniform(squad::ONE_PLAYER_SKILL.into()),
         },
         team2: Lineup {
             team: league_team(rom, config.team2.unwrap_or(1)),
-            skills: SquadSkills::Uniform(100),
+            skills: SquadSkills::Uniform(squad::ONE_PLAYER_SKILL.into()),
         },
         max_credits: PerTeam::new(0, 0),
         ..MatchRules::practice(rom)

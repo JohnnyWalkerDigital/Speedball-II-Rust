@@ -7,9 +7,8 @@ use super::flow::{
 use super::manager::Standings;
 use super::saving;
 use super::ui::{Flow, Ui};
-use crate::game::career::BRUTAL_DELUXE;
+use crate::game::career::{cash_cap, BRUTAL_DELUXE};
 use crate::game::cup::Cup;
-use crate::game::geometry::PerTeam;
 use crate::game::league::team2_won;
 use crate::game::save::Progress;
 use crate::game::squad::Competition;
@@ -23,13 +22,13 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
 }
 
 fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
-    game.career.set_cash_cap(2000);
+    game.career.set_cash_cap(cash_cap::CUP);
     let (mut cup, mut resume) = if list_menu(ui, game, &game.text.menus.cup)? == 0 {
         // A new cup.
         game.career.market.init(&mut game.rng);
         let cup = Cup::new(&mut game.rng);
         game.career.clear_records();
-        game.career.money.cash = PerTeam::new(2000, 2000);
+        game.career.start_cup_cash();
         (cup, None)
     } else {
         // A loaded cup goes straight to the round in progress, its draw as

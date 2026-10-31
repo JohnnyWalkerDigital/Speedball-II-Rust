@@ -25,16 +25,22 @@ use crate::game::start::StartTable;
 use crate::graphics::ilbm::IlbmError;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
+use crate::menu::flow::MenuContent;
 use crate::menu::intro::{IntroGraphics, IntroText};
 use crate::menu::manager::data::ManagerTables;
 use crate::menu::strings::MenuText;
 use crate::menu::tables::MenuTables;
 use crate::sound::data::SoundContent;
 
-pub use originals::{AmigaOriginals, Originals};
+pub use originals::{OriginalFiles, Originals};
 pub use pack::Pack;
 
 /// Supplies decoded graphics and text.
+///
+/// Parts a source may not have (the Amiga match graphics, the menus, the
+/// sound) are [`ContentError::Unavailable`] when absent, and the intro is
+/// `Ok(None)`, its graphics and text together. Any other error means a part
+/// is there but can't be used.
 pub trait ContentSource {
     /// Everything a match draws, in one platform's style.
     fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError>;
@@ -79,6 +85,8 @@ pub enum ContentError {
         message: String,
     },
     Missing(String),
+    /// Data that is there but can't be made sense of.
+    Unreadable(String),
     Picture(IlbmError),
     /// The originals needed are not there (the Amiga files).
     Unavailable(&'static str),
@@ -115,6 +123,7 @@ impl fmt::Display for ContentError {
             ContentError::Manifest(message) => write!(f, "{message}"),
             ContentError::Invalid { path, message } => write!(f, "{}: {message}", path.display()),
             ContentError::Missing(what) => write!(f, "missing {what}"),
+            ContentError::Unreadable(message) => write!(f, "{message}"),
             ContentError::Picture(error) => write!(f, "{error}"),
             ContentError::Unavailable(what) => write!(f, "needs {what}"),
         }
@@ -127,6 +136,16 @@ impl From<IlbmError> for ContentError {
     fn from(error: IlbmError) -> Self {
         ContentError::Picture(error)
     }
+}
+
+/// Everything the menus show and play with, from `source`.
+pub fn menu_content(source: &dyn ContentSource) -> Result<MenuContent, ContentError> {
+    Ok(MenuContent {
+        assets: source.menu_graphics()?,
+        text: source.menu_text()?,
+        tables: source.menu_tables()?,
+        manager: source.manager_tables()?,
+    })
 }
 
 /// What [`extract`] wrote.
@@ -187,6 +206,10 @@ pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, Cont
     Ok(extracted)
 }
 
+/// Where a pack keeps the intro's pictures: the intro is in a pack if this
+/// is.
+const INTRO: &str = "intro";
+
 impl ContentSource for Pack {
     fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError> {
         graphics::read_match(self, platform)
@@ -197,7 +220,7 @@ impl ContentSource for Pack {
     }
 
     fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError> {
-        if !self.has("intro/title") {
+        if !self.has_dir(INTRO) {
             return Ok(None);
         }
         graphics::read_intro(self).map(Some)
@@ -208,7 +231,10 @@ impl ContentSource for Pack {
     }
 
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
-        text::read_intro(self)
+        if !self.has_dir(INTRO) {
+            return Ok(None);
+        }
+        text::read_intro(self).map(Some)
     }
 
     fn lookups(&self) -> Result<Lookups, ContentError> {
@@ -244,10 +270,8 @@ impl ContentSource for Pack {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::data::amiga::{menu_ram, Overlays};
     use crate::data::files::{read_amiga_intro_dump, GameFiles};
     use crate::data::AtariRom;
-    use crate::menu::ram::MenuRam;
 
     #[test]
     fn a_pack_loads_back_exactly_what_was_extracted() {
@@ -256,21 +280,17 @@ mod tests {
             eprintln!("skipping: no originals");
             return;
         };
-        let rom = AtariRom::new(files.atari_disk.clone());
-        let amiga = files.amiga.as_ref().expect("loaded for the Amiga");
-        let overlays = Overlays::new(&amiga.disk).expect("the disk has overlays");
-        let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
         let intro_dump = read_amiga_intro_dump(&config.data_dir).ok();
-        let originals = Originals {
-            rom: &rom,
-            amiga: Some(AmigaOriginals {
-                files: amiga,
-                overlays: &overlays,
-                menu_ram: &ram,
-            }),
-            match_dump: Some(&amiga.match_dump),
-            intro_dump: intro_dump.as_deref(),
-        };
+        let has_intro = intro_dump.is_some();
+        let files = OriginalFiles::new(
+            AtariRom::new(files.atari_disk),
+            files.amiga,
+            true,
+            None,
+            intro_dump,
+        )
+        .expect("the originals load");
+        let originals = files.originals();
         let dir = std::env::temp_dir().join(format!("sb2-pack-{}", std::process::id()));
         let extracted = extract(&originals, &dir).expect("the pack is written");
         assert_eq!(extracted.platforms, [Platform::Amiga, Platform::Atari]);
@@ -305,10 +325,7 @@ mod tests {
             originals.manager_tables().unwrap()
         );
         assert_eq!(pack.sound().unwrap(), originals.sound().unwrap());
-        assert_eq!(
-            pack.intro_graphics().unwrap().is_some(),
-            intro_dump.is_some()
-        );
+        assert_eq!(pack.intro_graphics().unwrap().is_some(), has_intro);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

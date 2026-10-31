@@ -17,21 +17,18 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::driver::{
-    EFFECT_SIZE, INSTRUMENT_SIZE, INSTRUMENT_TABLE_INDEX, PITCH_TABLES, SOUND_BASE, SOUND_EFFECTS,
-    SOUND_TABLE,
+use super::layout::{
+    effect, instrument, sound_entry, EFFECT_SIZE, INSTRUMENT_SIZE, INSTRUMENT_TABLE_INDEX,
+    PITCH_TABLES, SOUND_BASE, SOUND_COUNT, SOUND_EFFECTS, SOUND_ENTRY_SIZE, SOUND_TABLE,
 };
-use super::export::SOUND_COUNT;
+pub use super::layout::{EFFECTS, PITCHES};
 use super::sequences::Sequence;
 use crate::data::bytes::BigEndian;
 
-/// Entries in the effect table.
-pub const EFFECTS: usize = 23;
-/// Words in each of the three pitch tables (an octave in quarter semitones).
-pub const PITCHES: usize = 48;
-const SOUND_ENTRY_SIZE: usize = 6;
-/// The no-play flag in a sound's second byte.
-const SILENT: u8 = 0x80;
+/// A layout constant as an index into an image.
+const fn idx(value: u32) -> usize {
+    value as usize
+}
 
 /// The driver's tables, shared by every bank.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,21 +69,22 @@ pub struct Vibrato {
 impl SoundTables {
     pub fn read(image: &[u8]) -> Self {
         let sounds = (0..usize::from(SOUND_COUNT))
-            .map(|i| SOUND_TABLE as usize + i * SOUND_ENTRY_SIZE)
+            .map(|i| idx(SOUND_TABLE) + i * idx(SOUND_ENTRY_SIZE))
             .collect::<Vec<_>>();
         let effects = (0..EFFECTS)
             .map(|i| {
-                let at = SOUND_EFFECTS as usize + i * EFFECT_SIZE as usize;
+                let record = idx(SOUND_EFFECTS) + i * idx(EFFECT_SIZE);
+                let field = |offset: u32| record + idx(offset);
                 Effect {
                     tremolo: Tremolo {
-                        length: signed_bytes(image, at),
-                        rate: signed_bytes(image, at + 5),
-                        pause: signed_bytes(image, at + 10),
+                        length: signed_bytes(image, field(effect::TREMOLO_LENGTH)),
+                        rate: signed_bytes(image, field(effect::TREMOLO_RATE)),
+                        pause: signed_bytes(image, field(effect::TREMOLO_PAUSE)),
                     },
                     vibrato: Vibrato {
-                        length: signed_bytes(image, at + 2),
-                        rate: signed_bytes(image, at + 7),
-                        pause: signed_bytes(image, at + 12),
+                        length: signed_bytes(image, field(effect::VIBRATO_LENGTH)),
+                        rate: signed_bytes(image, field(effect::VIBRATO_RATE)),
+                        pause: signed_bytes(image, field(effect::VIBRATO_PAUSE)),
                     },
                 }
             })
@@ -94,17 +92,20 @@ impl SoundTables {
         Self {
             sounds: sounds
                 .iter()
-                .map(|&at| [0, 1, 2, 3].map(|c| image[at + 2 + c]))
+                .map(|&entry| [0, 1, 2, 3].map(|c| image[entry + idx(sound_entry::SEQUENCES) + c]))
                 .collect(),
             silent: (0..SOUND_COUNT)
-                .filter(|&i| image[sounds[usize::from(i)] + 1] & SILENT != 0)
+                .filter(|&i| {
+                    image[sounds[usize::from(i)] + idx(sound_entry::FLAGS)] & sound_entry::SILENT
+                        != 0
+                })
                 .collect(),
             effects,
             pitch_tables: PITCH_TABLES
                 .iter()
-                .map(|&at| {
+                .map(|&table| {
                     (0..PITCHES)
-                        .map(|i| image.u16_at(at as usize + i * 2))
+                        .map(|i| image.u16_at(idx(table) + i * 2))
                         .collect()
                 })
                 .collect(),
@@ -147,30 +148,34 @@ impl SoundTables {
     /// driver never reads) is left as it was.
     fn write(&self, image: &mut [u8]) {
         for (i, channels) in self.sounds.iter().enumerate() {
-            let at = SOUND_TABLE as usize + i * SOUND_ENTRY_SIZE;
+            let entry = idx(SOUND_TABLE) + i * idx(SOUND_ENTRY_SIZE);
+            let flags = entry + idx(sound_entry::FLAGS);
             let silent = self.silent.contains(&(i as u8));
-            image[at + 1] = (image[at + 1] & !SILENT) | if silent { SILENT } else { 0 };
-            image[at + 2..at + 6].copy_from_slice(channels);
+            image[flags] = (image[flags] & !sound_entry::SILENT)
+                | if silent { sound_entry::SILENT } else { 0 };
+            let sequences = entry + idx(sound_entry::SEQUENCES);
+            image[sequences..sequences + 4].copy_from_slice(channels);
         }
         for (i, effect) in self.effects.iter().enumerate() {
-            let at = SOUND_EFFECTS as usize + i * EFFECT_SIZE as usize;
+            let record = idx(SOUND_EFFECTS) + i * idx(EFFECT_SIZE);
             let (t, v) = (&effect.tremolo, &effect.vibrato);
-            let bytes = [
-                t.length.as_slice(),
-                &v.length,
-                &t.rate,
-                &v.rate,
-                &t.pause,
-                &v.pause,
-            ];
-            for (k, &b) in bytes.concat().iter().enumerate() {
-                image[at + k] = b as u8;
+            for (offset, values) in [
+                (effect::TREMOLO_LENGTH, t.length.as_slice()),
+                (effect::VIBRATO_LENGTH, &v.length),
+                (effect::TREMOLO_RATE, &t.rate),
+                (effect::VIBRATO_RATE, &v.rate),
+                (effect::TREMOLO_PAUSE, &t.pause),
+                (effect::VIBRATO_PAUSE, &v.pause),
+            ] {
+                for (k, &value) in values.iter().enumerate() {
+                    image[record + idx(offset) + k] = value as u8;
+                }
             }
         }
-        for (&at, table) in PITCH_TABLES.iter().zip(&self.pitch_tables) {
+        for (&start, table) in PITCH_TABLES.iter().zip(&self.pitch_tables) {
             for (i, period) in table.iter().enumerate() {
-                let at = at as usize + i * 2;
-                image[at..at + 2].copy_from_slice(&period.to_be_bytes());
+                let word = idx(start) + i * 2;
+                image[word..word + 2].copy_from_slice(&period.to_be_bytes());
             }
         }
     }
@@ -276,16 +281,17 @@ impl SoundData {
             .flat_map(|s| s.references().instruments)
             .max()
             .map_or(0, |n| usize::from(n) + 1);
-        let instruments_at = base + image.u32_at(INSTRUMENT_TABLE_INDEX as usize) as usize;
+        let instruments_at = base + image.u32_at(idx(INSTRUMENT_TABLE_INDEX)) as usize;
         let records: Vec<_> = (0..instrument_count)
             .map(|i| {
-                let at = instruments_at + i * INSTRUMENT_SIZE as usize;
+                let record = instruments_at + i * idx(INSTRUMENT_SIZE);
+                let field = |offset: u32| record + idx(offset);
                 (
-                    image.i16_at(at),
-                    image.u16_at(at + 2),
-                    image.u16_at(at + 4),
-                    base + image.u32_at(at + 6) as usize,
-                    image.u32_at(at + 10),
+                    image.i16_at(field(instrument::ONE_SHOT)),
+                    image.u16_at(field(instrument::LOOP_START)),
+                    image.u16_at(field(instrument::LENGTH)),
+                    base + image.u32_at(field(instrument::SAMPLE)) as usize,
+                    image.u32_at(field(instrument::OCTAVE)),
                 )
             })
             .collect();
@@ -447,12 +453,18 @@ impl SoundData {
                 .length
                 .unwrap_or((self.samples[i].data.len() / 2) as u16);
             let one_shot: i16 = if instrument.looping { -1 } else { 1 };
-            let mut record = Vec::with_capacity(INSTRUMENT_SIZE as usize);
-            record.extend_from_slice(&one_shot.to_be_bytes());
-            record.extend_from_slice(&instrument.loop_start.to_be_bytes());
-            record.extend_from_slice(&length.to_be_bytes());
-            record.extend_from_slice(&((sample_at[i] - sound_base) as u32).to_be_bytes());
-            record.extend_from_slice(&instrument.octave.to_be_bytes());
+            let mut record = [0; INSTRUMENT_SIZE as usize];
+            let sample = (sample_at[i] - sound_base) as u32;
+            for (offset, bytes) in [
+                (instrument::ONE_SHOT, &one_shot.to_be_bytes()[..]),
+                (instrument::LOOP_START, &instrument.loop_start.to_be_bytes()),
+                (instrument::LENGTH, &length.to_be_bytes()),
+                (instrument::SAMPLE, &sample.to_be_bytes()),
+                (instrument::OCTAVE, &instrument.octave.to_be_bytes()),
+            ] {
+                let field = offset as usize;
+                record[field..field + bytes.len()].copy_from_slice(bytes);
+            }
             put(&mut image, at, &record);
             at += record.len();
         }

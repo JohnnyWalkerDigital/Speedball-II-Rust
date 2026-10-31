@@ -21,6 +21,6 @@ pub fn read_menus(pack: &Pack) -> Result<MenuText, ContentError> {
     pack.checked_json(MENUS, MenuText::check)
 }
 
-pub fn read_intro(pack: &Pack) -> Result<Option<IntroText>, ContentError> {
-    pack.json(INTRO)
+pub fn read_intro(pack: &Pack) -> Result<IntroText, ContentError> {
+    pack.checked_json(INTRO, |_| Ok(()))
 }

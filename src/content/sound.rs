@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use super::pack::{Pack, PackWriter};
 use super::ContentError;
-use crate::data::sounds::EXPORT_RATE;
 use crate::sound::data::{Instrument, Sample, SoundContent, SoundData, SoundTables};
 use crate::sound::{sequences, wav};
 
@@ -34,8 +33,8 @@ pub fn write(w: &mut PackWriter, sound: &SoundContent) -> Result<(), ContentErro
         if (&menus.sequences, &menus.instruments)
             != (&sound.game.sequences, &sound.game.instruments)
         {
-            return Err(ContentError::Missing(
-                "the menus' sound: it differs from the match's in more than samples".into(),
+            return Err(ContentError::Unreadable(
+                "the menus' sound differs from the match's in more than samples".into(),
             ));
         }
         for sample in &menus.samples {
@@ -75,7 +74,7 @@ fn sample_file(dir: &str, name: &str) -> String {
 fn write_sample(w: &mut PackWriter, dir: &str, sample: &Sample) -> Result<(), ContentError> {
     w.file(
         &sample_file(dir, &sample.name),
-        &wav::mono_8(&sample.data, EXPORT_RATE),
+        &wav::mono_8(&sample.data, wav::SAMPLE_RATE),
     )
 }
 
@@ -90,6 +89,7 @@ pub fn read(pack: &Pack) -> Result<SoundContent, ContentError> {
     game.check_sounds(&tables)
         .map_err(|e| ContentError::invalid(&pack.json_path(TABLES), e))?;
     let mut menus = game.clone();
+    let has_menus = pack.has_dir(super::graphics::MENUS);
     for sample in &mut menus.samples {
         let file = sample_file(MENUS, &sample.name);
         if pack.file_path(&file).exists() {
@@ -104,7 +104,7 @@ pub fn read(pack: &Pack) -> Result<SoundContent, ContentError> {
     Ok(SoundContent {
         tables,
         game,
-        menus: Some(menus),
+        menus: has_menus.then_some(menus),
         intro,
     })
 }

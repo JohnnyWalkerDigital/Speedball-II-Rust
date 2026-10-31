@@ -5,20 +5,14 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use crate::config::{Config, Platform};
-use crate::data::amiga::{menu_ram, Overlays};
+use crate::content::{self, ContentSource, OriginalFiles};
 use crate::data::save_disk::SaveDisk;
 use crate::data::{AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
-use crate::graphics::{Assets, Canvas};
-use crate::menu::assets::MenuAssets;
-use crate::menu::flow::MenuContent;
+use crate::graphics::Canvas;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
-use crate::menu::manager::data::ManagerTables;
-use crate::menu::ram::MenuRam;
-use crate::menu::strings::MenuText;
-use crate::menu::tables::MenuTables;
 use crate::menu::ui::Ui;
 use crate::render::MatchRenderer;
 
@@ -40,20 +34,15 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
             return None;
         }
     };
-    let amiga = files.amiga.as_ref().expect("loaded for the Amiga");
-    let overlays = Overlays::new(&amiga.disk).expect("the disk has overlays");
-    let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
-    let assets = MenuAssets::load(&ram, &overlays).expect("menu pictures decode");
-    let rom = Rc::new(AtariRom::new(files.atari_disk.clone()));
-    let renderer = MatchRenderer::new(Assets::load_amiga(amiga), &rom);
-    let text = MenuText::read(&ram);
-    let tables = MenuTables::read(&ram);
-    let content = MenuContent {
-        assets,
-        text,
-        tables,
-        manager: ManagerTables::read(&ram),
-    };
+    let rom = AtariRom::new(files.atari_disk);
+    let originals = OriginalFiles::new(rom, files.amiga, true, None, None).expect("loaded");
+    let source = originals.originals();
+    let content = content::menu_content(&source).expect("the menus load");
+    let matches = source.match_graphics(Platform::Amiga).expect("loaded");
+    let OriginalFiles { rom, menu_ram, .. } = originals;
+    let rom = Rc::new(rom);
+    let renderer = MatchRenderer::new(matches, &rom);
+    let ram = menu_ram.expect("built for the menus");
     Some(Game::new(rom, ram, content, renderer, save_disk, 1))
 }
 

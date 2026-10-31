@@ -34,6 +34,7 @@ const SECTOR_SIZE: usize = 512;
 const ENTRIES_OFFSET: usize = 0x10;
 
 /// The overlay directory of an Amiga disk image.
+#[derive(Clone, Copy)]
 pub struct Overlays<'a> {
     disk: &'a [u8],
     directory: usize,

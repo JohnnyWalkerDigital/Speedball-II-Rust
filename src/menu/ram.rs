@@ -113,7 +113,7 @@ pub mod addr {
     /// to its full and short names, then its record.
     pub const TEAMS: usize = 0x7B50;
     pub const TEAM_PLAYER_2: usize = 0x7B10;
-    pub const TEAM_SIZE: usize = 0x40;
+    pub const TEAM_SIZE: usize = crate::game::save::TEAM_RECORD_SIZE;
 
     // Fonts, all in overlay 1.
     /// 16x16 letters for menus and messages.

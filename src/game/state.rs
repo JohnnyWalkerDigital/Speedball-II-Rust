@@ -28,10 +28,10 @@ use super::replay::Replay;
 use super::rng::Rng;
 use super::roster::{Roster, Team};
 use super::scene::DrawOrder;
+use super::setup::MatchKind;
 use super::setup::MatchSetup;
 use super::text::TextPanel;
-use super::token::ActiveToken;
-use crate::config::GameMode;
+use super::token::HeldToken;
 use crate::data::AtariRom;
 
 pub use camera::{Camera, KICK_OFF_SCROLL_Y, VIEW_HEIGHT};
@@ -44,14 +44,15 @@ pub const PITCH_CENTER: Point = Point::new(320, 576);
 pub struct Match {
     pub(crate) rom: Rc<AtariRom>,
     pub(crate) rng: Rng,
-    pub(crate) mode: GameMode,
+    pub(crate) kind: MatchKind,
     pub(crate) players: Vec<Player>,
     pub(crate) props: Props,
     pub(crate) arena: Arena,
     pub(crate) roster: Roster,
     pub(crate) teams: PerTeam<Team>,
     pub(crate) text_panel: TextPanel,
-    pub(crate) token: ActiveToken,
+    /// The timed token in effect, if any.
+    pub(crate) token: Option<HeldToken>,
     /// Token icon shown in each team's status bar slot.
     pub(crate) status_tokens: PerTeam<Option<i32>>,
 
@@ -112,22 +113,17 @@ impl Match {
         let players = setup.players;
         let presentation = std::array::from_fn(|i| players[i].entity.pos);
         let kick_off = PlayerId::of(true, 8);
-        let first_leg = match setup.mode {
-            GameMode::Practice => 3,
-            GameMode::Demo => 1,
-            _ => 0,
-        };
         let mut m = Self {
             props: Props::read(&rom),
             arena: Arena::new(&rom),
             text_panel: TextPanel::new(),
             rom,
             rng: setup.rng,
-            mode: setup.mode,
+            kind: setup.kind,
             players,
             roster: setup.roster,
             teams: PerTeam::new(setup.team1, setup.team2),
-            token: ActiveToken::default(),
+            token: None,
             status_tokens: PerTeam::default(),
             computer: setup.computer,
             inputs: PerTeam::default(),
@@ -146,7 +142,7 @@ impl Match {
             launcher_started: false,
             reverse_side: false,
             camera: Camera::default(),
-            clock: Clock::new(first_leg, setup.leg_duration),
+            clock: Clock::new(setup.kind.first_leg, setup.leg_duration),
             ball_speed: 0,
             injury: Injury::default(),
             equipment_on_floor: 0,
@@ -288,8 +284,9 @@ impl Match {
         self.presentation[index]
     }
 
-    pub(crate) fn is_practice(&self) -> bool {
-        self.mode == GameMode::Practice
+    /// Whether team 2 is on the pitch (not in practice).
+    pub(crate) fn team2_on_pitch(&self) -> bool {
+        self.kind.team2_on_pitch
     }
 
     // -- Frame update --------------------------------------------------------------

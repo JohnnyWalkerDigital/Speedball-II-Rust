@@ -6,8 +6,7 @@ use super::geometry::Point;
 use super::player::PlayerId;
 use super::roster::Skill;
 use super::state::{EntityRef, Match};
-use super::token::ActiveToken;
-use crate::config::GameMode;
+use super::token::Token;
 
 /// Where an item is in its appearance countdown.
 enum Appearance {
@@ -55,13 +54,12 @@ impl Match {
         let (timer, sprite) = loop {
             let random = self.rng.next();
             let timer = 128 + (random & 127) as i32;
-            let sprite = ActiveToken::FREEZE_TEAM + ((random >> 16) & 15) as i32;
-            let reverse_not_allowed =
-                sprite == ActiveToken::REVERSE_CONTROLS && self.mode != GameMode::TwoPlayers;
-            if sprite >= ActiveToken::UNUSED || reverse_not_allowed {
-                continue;
+            let sprite = Token::FIRST_SPRITE + ((random >> 16) & 15) as i32;
+            match Token::from_sprite(sprite) {
+                None => continue,
+                Some(Token::ReverseControls) if !self.kind.reverse_token => continue,
+                Some(_) => break (timer, sprite),
             }
-            break (timer, sprite);
         };
         let token = &mut self.props.tokens[i];
         token.pos = Point::new(x, y);
@@ -98,7 +96,7 @@ impl Match {
                     return;
                 }
                 let team1_capped = self.credits_earned.team1 >= self.max_credits.team1;
-                let team2_capped = self.mode != GameMode::TwoPlayers
+                let team2_capped = !self.kind.coins_for_team2
                     || self.credits_earned.team2 >= self.max_credits.team2;
                 if team1_capped && team2_capped {
                     return;

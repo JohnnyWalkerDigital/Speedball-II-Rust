@@ -7,7 +7,7 @@ use super::manager::Standings;
 use super::panels;
 use super::saving;
 use super::ui::{Flow, Stop, Ui};
-use crate::game::career::BRUTAL_DELUXE;
+use crate::game::career::{cash_cap, BRUTAL_DELUXE};
 use crate::game::geometry::Side;
 use crate::game::league::{team2_won, League, DIVISION_SIZE, MATCHES_PER_ROUND, ROUNDS};
 use crate::game::save::Progress;
@@ -23,15 +23,14 @@ struct Resume {
 
 /// Plays a new or loaded league.
 pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
-    game.career.set_cash_cap(550);
+    game.career.set_cash_cap(cash_cap::LEAGUE);
     let (mut league, mut resume) = match list_menu(ui, game, &game.text.menus.league)? {
         choice @ (0 | 1) => {
             if choice == 1 {
                 // "TEAM MANAGER": the computer plays Brutal Deluxe's
                 // matches, for a guaranteed 300 a match and more prize money.
                 game.manager_mode = true;
-                game.career.money.start = 300;
-                game.career.set_cash_cap(650);
+                game.career.use_manager_prizes(false);
             }
             let league = League::new_game(&mut game.career);
             game.career.market.init(&mut game.rng);
@@ -41,8 +40,7 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
             let save = saving::load(ui, game, false)?;
             let (teams, initial_dir) = saving::restore(game, &save);
             if game.manager_mode {
-                game.career.money.start = 300;
-                game.career.money.cap_base = 650;
+                game.career.use_manager_prizes(true);
             }
             let Progress::League { round, game: index } = save.progress else {
                 unreachable!("a league save")

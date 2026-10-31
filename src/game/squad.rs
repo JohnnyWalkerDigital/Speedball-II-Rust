@@ -7,6 +7,10 @@ use super::rng::Rng;
 
 /// Players in a squad: nine on the pitch, then three substitutes.
 pub const SQUAD_SIZE: usize = 12;
+/// Every skill of a one-player squad at the start of a game.
+pub const ONE_PLAYER_SKILL: u8 = 100;
+/// Every skill of both squads at the start of a two-player game.
+pub const TWO_PLAYER_SKILL: u8 = 170;
 /// Players on the transfer market.
 pub const MARKET_SIZE: usize = 18;
 /// Face numbers above this are market players (bought or for sale).

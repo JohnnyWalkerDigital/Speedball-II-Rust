@@ -37,6 +37,23 @@ pub struct TeamRecord {
     pub old_league_placing: u8,
 }
 
+/// Each game mode's cap per match on what a team earns.
+pub mod cash_cap {
+    pub const KNOCKOUT: u16 = 1100;
+    pub const LEAGUE: u16 = 550;
+    pub const LEAGUE_MANAGER: u16 = 650;
+    pub const CUP: u16 = 2000;
+    pub const PRACTICE: u16 = 10_000;
+    pub const TWO_PLAYERS: u16 = 2000;
+}
+
+/// What a team manager earns from each match, coins or not.
+const MANAGER_START: u16 = 300;
+/// What both players have to spend at the main menu, and at the start of a
+/// cup.
+const MAIN_MENU_CASH: u16 = 1100;
+const CUP_CASH: u16 = 2000;
+
 /// Prize money. Each match a team keeps what it picked up in coins, at
 /// least `start` and at most its `cap`; whatever it fell short of the cap
 /// is added to the next match's.
@@ -114,7 +131,7 @@ impl Career {
     /// `main_menu`: both players start with 1100 and no statistics. The
     /// caps are left as the last game set them.
     pub fn start_main_menu(&mut self) {
-        self.money.cash = PerTeam::new(1100, 1100);
+        self.money.cash = PerTeam::new(MAIN_MENU_CASH, MAIN_MENU_CASH);
         self.money.start = 0;
         self.last_match = None;
     }
@@ -136,10 +153,26 @@ impl Career {
         }
     }
 
-    /// A game mode's cap per match, for both teams.
+    /// A game mode's cap per match ([`cash_cap`]), for both teams.
     pub fn set_cash_cap(&mut self, base: u16) {
         self.money.cap_base = base;
         self.money.cap = PerTeam::new(base, base);
+    }
+
+    /// A team manager's prize money: a guaranteed 300 a match and a higher
+    /// cap. A loaded game keeps the caps it saved, so only the base changes.
+    pub fn use_manager_prizes(&mut self, loaded: bool) {
+        self.money.start = MANAGER_START;
+        if loaded {
+            self.money.cap_base = cash_cap::LEAGUE_MANAGER;
+        } else {
+            self.set_cash_cap(cash_cap::LEAGUE_MANAGER);
+        }
+    }
+
+    /// A new cup: both players start with 2000 to spend.
+    pub fn start_cup_cash(&mut self) {
+        self.money.cash = PerTeam::new(CUP_CASH, CUP_CASH);
     }
 
     /// Every team back to no games played.

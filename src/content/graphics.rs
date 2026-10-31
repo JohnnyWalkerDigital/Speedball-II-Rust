@@ -7,6 +7,10 @@ use crate::graphics::Assets;
 use crate::menu::assets::{ManagerGraphics, MenuAssets};
 use crate::menu::intro::IntroGraphics;
 
+/// Where a pack keeps the menus' pictures: the menus are in a pack if this
+/// is.
+pub const MENUS: &str = "menus";
+
 fn match_dir(platform: Platform) -> &'static str {
     match platform {
         Platform::Amiga => "match/amiga",
@@ -32,6 +36,12 @@ pub fn write_match(w: &mut PackWriter, assets: &Assets) -> Result<(), ContentErr
 
 pub fn read_match(pack: &Pack, platform: Platform) -> Result<Assets, ContentError> {
     let dir = match_dir(platform);
+    if !pack.has_dir(dir) {
+        return Err(ContentError::Unavailable(match platform {
+            Platform::Amiga => "the Amiga match graphics in the pack",
+            Platform::Atari => "the Atari match graphics in the pack",
+        }));
+    }
     let name = |file: &str| format!("{dir}/{file}");
     Ok(Assets {
         platform,
@@ -119,6 +129,9 @@ pub fn write_menus(w: &mut PackWriter, menus: &MenuAssets) -> Result<(), Content
 }
 
 pub fn read_menus(pack: &Pack) -> Result<MenuAssets, ContentError> {
+    if !pack.has_dir(MENUS) {
+        return Err(ContentError::Unavailable("the menus in the pack"));
+    }
     let picture = |name: &str| pack.picture(&format!("menus/pictures/{name}"));
     let font = |name: &str| pack.indexed_sheet(&format!("menus/fonts/{name}"));
     let sheet = |name: &str| pack.indexed_sheet(&format!("menus/manager/{name}"));

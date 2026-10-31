@@ -5,6 +5,12 @@
 //! teams are stored as offsets from fixed addresses in the original's
 //! memory; turning them back into names is the caller's job.
 
+use super::career::TeamId;
+
+/// The space between teams' records in the original's memory, which saves
+/// count teams by.
+pub const TEAM_RECORD_SIZE: usize = 0x40;
+
 /// A player as saved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedPlayer {
@@ -28,6 +34,21 @@ pub struct SavedTeam {
     pub league_points: u16,
     pub league_placing: u16,
     pub old_league_placing: u16,
+}
+
+impl SavedTeam {
+    /// The offset a league team is saved as. Player 2 is never saved.
+    pub fn offset_of(team: TeamId) -> u32 {
+        match team {
+            TeamId::League(index) => (index * TEAM_RECORD_SIZE) as u32,
+            TeamId::PlayerTwo => unreachable!("player 2 is never saved"),
+        }
+    }
+
+    /// The league team this record is for.
+    pub fn team(&self) -> TeamId {
+        TeamId::League(self.team_offset as usize / TEAM_RECORD_SIZE)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
