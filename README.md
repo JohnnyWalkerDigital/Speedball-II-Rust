@@ -38,9 +38,9 @@ team's controls, as in the C# port.
 
 ## Asset packs
 
-The graphics, the menus' and intro's words and the game's tables can be
-extracted from your originals into a folder of PNG and JSON files, edited,
-and played with:
+The graphics, the menus' and intro's words, the game's tables and its
+sound can be extracted from your originals into a folder of PNG, JSON,
+text and WAV files, edited, and played with:
 
 ```bash
 cargo run --release -- --extract assets
@@ -94,17 +94,43 @@ editing.
   roster (`game/start.rs`), with scripts, behaviours and sprite banks by
   name. Entities are known by `EntityId` rather than their addresses.
 
-Each is checked when it loads. A test extracts a pack and checks every
-image, sheet, palette, string and table loads back identical to the
+`sound/` holds what the sound driver plays (`sound/data.rs`):
+- `sounds.json`: the driver's tables, shared by every bank: the sequence
+  each of the 56 sounds starts on each channel, the tremolo and vibrato
+  effects, and the pitch tables.
+- `game/`: the match's bank. `sequences.txt` is the sequencer's bytecode
+  as text (`sound/sequences.rs`): notes as numbers, commands as words
+  (`tempo 188 instrument 12 length 10 53 stop`), any byte that is no
+  command as `byte 0xNN`, so it reads back exactly. `instruments.json`
+  names each instrument's sample, whether it loops and its octave, and
+  `samples/` holds the samples as 8-bit WAV files.
+- `menus/samples/`: the samples the menus load over the match's (the
+  menus play the match's sequences and instruments).
+- `intro/`: the intro's bank, with its music.
+
+In memory a bank is the sequences, their table, the samples and the
+instrument table, back to back. Some instruments share a sample or play
+on past its end into the next, so a sample here is the run of bytes from
+one instrument's start to the next's, and an instrument whose length is
+not its sample's says so. Each bank is laid back out over a copy of the
+original memory in the same order, so unedited it is byte for byte the
+original (a test checks all three); edited, what follows moves along,
+and reads past the end still find the original memory. The no-play
+flags, sequences and effects are written into the driver's tables in
+place; envelopes, which no sequence uses, are still read from the
 originals.
+
+Each is checked when it loads. A test extracts a pack and checks every
+image, sheet, palette, string, table and sound loads back identical to
+the originals.
 
 `fingerprint_matches` (an ignored test) plays 22 whole matches and prints
 a hash of every frame drawn and sound requested; refactors are checked
 against its output from before, and `SPEEDBALL_PACK=<dir>` plays the same
 matches from a pack's tables.
 
-The match's own panel messages and sound still come from the originals, so
-they are still needed. `/assets`
+The match's own panel messages still come from the originals, as does the
+memory the sound banks are laid over, so they are still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should
 not be shared.
 
@@ -223,8 +249,9 @@ Brutal Deluxe.
 The C# port had no sound. `sound/` is a port of the original Amiga sound
 driver (`sound_play` and its sequencer, recovered from the disassembly) plus a
 small emulation of the Amiga's sound chip. It plays the original sequences,
-instruments, envelopes and effects straight from `Amiga.dmp`, ticking at
-50 Hz like the original's vertical-blank interrupt. Channels 0 and 3 play on
+instruments, envelopes and effects from the memory they were in
+(`Amiga.dmp`, with the sound data laid back over it from the originals or
+a pack), ticking at 50 Hz like the original's vertical-blank interrupt. Channels 0 and 3 play on
 the left and 1 and 2 on the right, as on the Amiga. It needs `Amiga.dmp` even
 with `--atari` graphics; without it, or with `--mute`, the game is silent.
 

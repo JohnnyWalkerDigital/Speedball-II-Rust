@@ -2,14 +2,15 @@
 //! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
 //! files extracted from them, which can be edited.
 //!
-//! The game asks a [`ContentSource`], so it does not matter which. Sound
-//! and the match's panel messages still come from the originals.
+//! The game asks a [`ContentSource`], so it does not matter which. The
+//! match's panel messages still come from the originals.
 
 mod graphics;
 mod json;
 mod originals;
 mod pack;
 mod png_files;
+mod sound;
 mod tables;
 mod text;
 
@@ -29,6 +30,7 @@ use crate::menu::intro::{IntroGraphics, IntroText};
 use crate::menu::manager::data::ManagerTables;
 use crate::menu::strings::MenuText;
 use crate::menu::tables::MenuTables;
+use crate::sound::data::SoundContent;
 
 pub use originals::{AmigaOriginals, Originals};
 pub use pack::Pack;
@@ -57,6 +59,8 @@ pub trait ContentSource {
     fn menu_tables(&self) -> Result<MenuTables, ContentError>;
     /// The manager screens' layout: keypads, gym buttons, labels.
     fn manager_tables(&self) -> Result<ManagerTables, ContentError>;
+    /// The sound driver's tables, sequences, instruments and samples.
+    fn sound(&self) -> Result<SoundContent, ContentError>;
 }
 
 #[derive(Debug)]
@@ -132,6 +136,7 @@ pub struct Extracted {
     pub platforms: Vec<Platform>,
     pub menus: bool,
     pub intro: bool,
+    pub sound: bool,
 }
 
 /// Writes everything `source` has into a pack at `dir`. Parts whose
@@ -170,6 +175,14 @@ pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, Cont
             text::write_intro(&mut writer, &intro)?;
         }
         extracted.intro = true;
+    }
+    match source.sound() {
+        Ok(content) => {
+            sound::write(&mut writer, &content)?;
+            extracted.sound = true;
+        }
+        Err(ContentError::Unavailable(_)) => {}
+        Err(error) => return Err(error),
     }
     writer.finish()?;
     Ok(extracted)
@@ -222,6 +235,10 @@ impl ContentSource for Pack {
     fn manager_tables(&self) -> Result<ManagerTables, ContentError> {
         tables::read_manager(self)
     }
+
+    fn sound(&self) -> Result<SoundContent, ContentError> {
+        sound::read(self)
+    }
 }
 
 #[cfg(test)]
@@ -252,12 +269,14 @@ mod tests {
                 overlays: &overlays,
                 menu_ram: &ram,
             }),
+            match_dump: Some(&amiga.match_dump),
             intro_dump: intro_dump.as_deref(),
         };
         let dir = std::env::temp_dir().join(format!("sb2-pack-{}", std::process::id()));
         let extracted = extract(&originals, &dir).expect("the pack is written");
         assert_eq!(extracted.platforms, [Platform::Amiga, Platform::Atari]);
         assert!(extracted.menus);
+        assert!(extracted.sound);
 
         let pack = Pack::open(&dir).expect("the pack opens");
         for platform in [Platform::Amiga, Platform::Atari] {
@@ -286,6 +305,7 @@ mod tests {
             pack.manager_tables().unwrap(),
             originals.manager_tables().unwrap()
         );
+        assert_eq!(pack.sound().unwrap(), originals.sound().unwrap());
         assert_eq!(
             pack.intro_graphics().unwrap().is_some(),
             intro_dump.is_some()

@@ -11,6 +11,7 @@ use std::io;
 use std::path::Path;
 
 use super::bytes::BigEndian;
+use crate::sound::wav;
 
 const TABLE: usize = 0x35F7C;
 const ENTRY_SIZE: usize = 14;
@@ -44,42 +45,8 @@ pub fn export_wavs(match_dump: &[u8], dir: &Path) -> io::Result<usize> {
     for (i, sample) in samples.iter().enumerate() {
         fs::write(
             dir.join(format!("sample_{i:02}.wav")),
-            wav(sample.data, EXPORT_RATE),
+            wav::mono_8(sample.data, EXPORT_RATE),
         )?;
     }
     Ok(samples.len())
-}
-
-/// A mono 8-bit WAV file. WAV 8-bit samples are unsigned, so the signed
-/// Amiga data is offset by 128.
-fn wav(signed_pcm: &[u8], rate: u32) -> Vec<u8> {
-    let data_len = signed_pcm.len() as u32;
-    let mut out = Vec::with_capacity(44 + signed_pcm.len());
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36 + data_len).to_le_bytes());
-    out.extend_from_slice(b"WAVEfmt ");
-    out.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
-    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    out.extend_from_slice(&1u16.to_le_bytes()); // mono
-    out.extend_from_slice(&rate.to_le_bytes());
-    out.extend_from_slice(&rate.to_le_bytes()); // bytes per second
-    out.extend_from_slice(&1u16.to_le_bytes()); // block align
-    out.extend_from_slice(&8u16.to_le_bytes()); // bits per sample
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_len.to_le_bytes());
-    out.extend(signed_pcm.iter().map(|&b| b.wrapping_add(128)));
-    out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wav_header_and_sign_conversion() {
-        let file = wav(&[0x00, 0x80, 0x7F], 8287);
-        assert_eq!(&file[0..4], b"RIFF");
-        assert_eq!(file.len(), 47);
-        assert_eq!(&file[44..], &[128, 0, 255]);
-    }
 }

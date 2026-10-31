@@ -17,11 +17,14 @@ use crate::menu::manager::data::ManagerTables;
 use crate::menu::ram::MenuRam;
 use crate::menu::strings::MenuText;
 use crate::menu::tables::MenuTables;
+use crate::sound::data::{SoundContent, SoundData, SoundTables};
 
 /// The original files, as loaded.
 pub struct Originals<'a> {
     pub rom: &'a AtariRom,
     pub amiga: Option<AmigaOriginals<'a>>,
+    /// The Amiga match dump, which holds the sound.
+    pub match_dump: Option<&'a [u8]>,
     pub intro_dump: Option<&'a [u8]>,
 }
 
@@ -33,6 +36,7 @@ pub struct AmigaOriginals<'a> {
 }
 
 const AMIGA_FILES: &str = "the Amiga disk and dump";
+const AMIGA_DUMP: &str = "the Amiga dump";
 
 impl Originals<'_> {
     fn amiga(&self) -> Result<&AmigaOriginals<'_>, ContentError> {
@@ -92,5 +96,24 @@ impl ContentSource for Originals<'_> {
 
     fn manager_tables(&self) -> Result<ManagerTables, ContentError> {
         Ok(ManagerTables::read(self.amiga()?.menu_ram))
+    }
+
+    fn sound(&self) -> Result<SoundContent, ContentError> {
+        let dump = self
+            .match_dump
+            .ok_or(ContentError::Unavailable(AMIGA_DUMP))?;
+        let read = |image: &[u8]| {
+            SoundData::read(image).map_err(|e| ContentError::Missing(format!("sound data ({e})")))
+        };
+        Ok(SoundContent {
+            tables: SoundTables::read(dump),
+            game: read(dump)?,
+            menus: self
+                .amiga
+                .as_ref()
+                .map(|amiga| read(amiga.menu_ram.bytes()))
+                .transpose()?,
+            intro: self.intro_dump.map(read).transpose()?,
+        })
     }
 }

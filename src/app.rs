@@ -32,6 +32,7 @@ use crate::menu::play::{run_match, Controls};
 use crate::menu::ram::MenuRam;
 use crate::menu::ui::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::render::MatchRenderer;
+use crate::sound::data::{SoundContent, SoundData};
 use crate::sound::SoundOutput;
 
 const WINDOW_TITLE: &str = "Speedball 2";
@@ -87,6 +88,9 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
 struct Loaded {
     rom: AtariRom,
     amiga: Option<AmigaFiles>,
+    /// The Amiga match dump for sound, when the rest of the Amiga files
+    /// are not needed.
+    sound_dump: Option<Vec<u8>>,
     intro_dump: Option<Vec<u8>>,
 }
 
@@ -111,11 +115,28 @@ impl Loaded {
         } else {
             None
         };
+        // The sound driver runs on the Amiga data, whichever graphics are
+        // shown. Without it the game is silent.
+        let sound_dump = if amiga.is_none() && !config.mute {
+            read_amiga_match_dump(&config.data_dir)
+                .map_err(|error| eprintln!("sound off: {error}"))
+                .ok()
+        } else {
+            None
+        };
         Ok(Self {
             rom: AtariRom::new(files.atari_disk),
             amiga,
+            sound_dump,
             intro_dump,
         })
+    }
+
+    fn match_dump(&self) -> Option<&[u8]> {
+        match &self.amiga {
+            Some(amiga) => Some(&amiga.match_dump),
+            None => self.sound_dump.as_deref(),
+        }
     }
 }
 
@@ -133,6 +154,7 @@ struct Content {
     teams: Teams,
     animations: Animations,
     start: MatchStart,
+    sound: Option<SoundContent>,
     matches: Assets,
     menus: Option<MenuContent>,
     intro: Option<IntroAssets>,
@@ -153,6 +175,14 @@ impl Content {
         let teams = source.teams()?;
         let animations = source.animations()?.lay_out()?;
         let start = source.match_start()?.resolve(&animations)?;
+        let sound = match source.sound() {
+            Ok(sound) => Some(sound),
+            Err(content::ContentError::Unavailable(what)) => {
+                eprintln!("sound off: needs {what}");
+                None
+            }
+            Err(error) => return Err(error.into()),
+        };
         let matches = source.match_graphics(config.platform)?;
         if !with_menus {
             return Ok(Self {
@@ -160,6 +190,7 @@ impl Content {
                 teams,
                 animations,
                 start,
+                sound,
                 matches,
                 menus: None,
                 intro: None,
@@ -171,6 +202,7 @@ impl Content {
             teams,
             animations,
             start,
+            sound,
             matches,
             menus: Some(MenuContent {
                 assets: source.menu_graphics()?,
@@ -199,22 +231,28 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 menu_ram,
             },
         ),
+        match_dump: loaded.match_dump(),
         intro_dump: loaded.intro_dump.as_deref(),
     };
     let content = Content::load(&config, &originals, with_menus)?;
+    let sound = SoundBanks::new(
+        &config,
+        content.sound.as_ref(),
+        loaded.match_dump(),
+        menu_memory.as_ref().map(|(_, ram)| ram.bytes()),
+        loaded.intro_dump.as_deref(),
+    );
     let mut rom = loaded.rom;
     rom.set_lookups(content.lookups);
     rom.set_teams(content.teams);
     rom.set_animations(content.animations, content.start);
     let renderer = MatchRenderer::new(content.matches, &rom);
     let rom = Rc::new(rom);
-    match (menu_memory, loaded.amiga.as_ref(), content.menus) {
-        (Some((_, ram)), Some(amiga), Some(menus)) => {
-            // The intro's music is in its dump.
-            let intro = content.intro.zip(loaded.intro_dump);
-            play_with_menus(&config, rom, renderer, amiga, ram, menus, intro)
+    match (menu_memory, content.menus) {
+        (Some((_, ram)), Some(menus)) => {
+            play_with_menus(&config, rom, renderer, ram, menus, content.intro, sound)
         }
-        _ => play_one_match(&config, rom, renderer),
+        _ => play_one_match(&config, rom, renderer, sound),
     }
 }
 
@@ -240,6 +278,7 @@ pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
                 overlays,
                 menu_ram,
             }),
+        match_dump: amiga.as_ref().map(|a| a.match_dump.as_slice()),
         intro_dump: intro_dump.as_deref(),
     };
     let extracted = content::extract(&originals, dir)?;
@@ -249,11 +288,12 @@ pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
         .map(|p| format!("{p:?}"))
         .collect();
     println!(
-        "Wrote an asset pack to {}: match graphics ({}){}{}. Play with it using --assets.",
+        "Wrote an asset pack to {}: match graphics ({}){}{}{}. Play with it using --assets.",
         dir.display(),
         platforms.join(", "),
         if extracted.menus { ", menus" } else { "" },
         if extracted.intro { ", intro" } else { "" },
+        if extracted.sound { ", sound" } else { "" },
     );
     Ok(())
 }
@@ -263,6 +303,7 @@ fn play_one_match(
     config: &Config,
     rom: Rc<AtariRom>,
     renderer: MatchRenderer,
+    sound: Option<SoundBanks>,
 ) -> Result<(), Box<dyn Error>> {
     let mut game = Match::new(MatchSetup::from_config(&rom, config), Rc::clone(&rom));
     let title = format!(
@@ -271,7 +312,6 @@ fn play_one_match(
         game.teams.team2.full_name.to_display_string()
     );
     println!("{title} (seed {})", config.seed);
-    let sound = SoundBanks::without_menus(config);
     let mut host = WindowHost::open(config.scale, &title, sound)?;
     let mut ui = Ui::new(&mut host);
     let mut sped_up = false;
@@ -291,13 +331,11 @@ fn play_with_menus(
     config: &Config,
     rom: Rc<AtariRom>,
     renderer: MatchRenderer,
-    amiga: &AmigaFiles,
     ram: MenuRam,
     menus: MenuContent,
-    intro: Option<(IntroAssets, Vec<u8>)>,
+    intro: Option<IntroAssets>,
+    sound: Option<SoundBanks>,
 ) -> Result<(), Box<dyn Error>> {
-    let (intro, intro_dump) = intro.unzip();
-    let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes(), intro_dump);
     let mut host = WindowHost::open(config.scale, WINDOW_TITLE, sound)?;
     let mut ui = Ui::new(&mut host);
     if let Some(intro) = &intro {
@@ -320,43 +358,40 @@ struct SoundBanks {
 }
 
 impl SoundBanks {
-    fn with_menus(
+    /// The sound content laid over the original memory of the match, the
+    /// menus and the intro (whichever there are). Without the match's (or
+    /// without an audio device) the game is silent.
+    fn new(
         config: &Config,
-        match_dump: &[u8],
-        menu_ram: &[u8],
-        intro_ram: Option<Vec<u8>>,
+        content: Option<&SoundContent>,
+        match_base: Option<&[u8]>,
+        menu_base: Option<&[u8]>,
+        intro_base: Option<&[u8]>,
     ) -> Option<Self> {
         if config.mute {
             return None;
         }
-        let output = start_sound(menu_ram.to_vec())?;
-        Some(Self {
-            output,
-            match_ram: match_dump.to_vec(),
-            menu_ram: Some(menu_ram.to_vec()),
-            intro_ram,
-        })
-    }
-
-    /// The sound driver runs on the Amiga data, whichever graphics are
-    /// shown. Without it (or without an audio device) the game is silent.
-    fn without_menus(config: &Config) -> Option<Self> {
-        if config.mute {
-            return None;
-        }
-        let dump = match read_amiga_match_dump(&config.data_dir) {
-            Ok(dump) => dump,
-            Err(error) => {
-                eprintln!("sound off: {error}");
-                return None;
-            }
+        let (content, match_base) = (content?, match_base?);
+        let lay_out = |data: &SoundData, base: &[u8]| {
+            data.lay_out(&content.tables, base)
+                .map_err(|error| eprintln!("sound off: {error}"))
+                .ok()
         };
-        let output = start_sound(dump.clone())?;
+        let match_ram = lay_out(&content.game, match_base)?;
+        let menu_ram = match menu_base {
+            Some(base) => Some(lay_out(content.menus.as_ref()?, base)?),
+            None => None,
+        };
+        let intro_ram = match content.intro.as_ref().zip(intro_base) {
+            Some((data, base)) => Some(lay_out(data, base)?),
+            None => None,
+        };
+        let output = start_sound(menu_ram.clone().unwrap_or_else(|| match_ram.clone()))?;
         Some(Self {
             output,
-            match_ram: dump,
-            menu_ram: None,
-            intro_ram: None,
+            match_ram,
+            menu_ram,
+            intro_ram,
         })
     }
 

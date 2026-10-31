@@ -92,6 +92,30 @@ Rules:
     as in animations.json.
   Skills are always in this order: aggression, attack, defence, speed,
   throwing, power, stamina, intelligence. Tables must keep their sizes.
+- sound/: what the sound driver plays.
+  - sounds.json: by sound number (from 0), the sequence each of the four
+    channels plays (0 for none); the tremolo and vibrato effects; and
+    the pitch tables, note periods from each starting octave (lower is
+    higher). Sounds that never play can be listed in 'silent'.
+  - game/: the match's sounds. sequences.txt holds the sequences, each
+    starting 'sequence N'. Numbers are notes (in semitones, from the
+    instrument's octave); the commands are: tempo (beats a minute),
+    length (of the notes after, in quarter beats), rest (wait a length,
+    the note sounding on), volume (0 to 63), instrument, effect,
+    transpose (add quarter semitones; 0 resets), set_transpose,
+    repeat N ... next (plays the part N + 1 times), call N ... return,
+    jump N, restart, stop, envelope, no_envelope, loop_effects. 'byte 0xNN' is any other byte. # starts a comment.
+    instruments.json lists the samples in the order they are laid out
+    and each instrument by number: its sample, whether it loops (from
+    loop_start, in bytes), its octave (0 to 2), and a length in words
+    if it plays other than the whole sample (it can run on into the
+    samples after). samples/ holds them as 8-bit mono WAV files (16-bit
+    is read too); the rate does not matter, notes set the pitch.
+  - menus/samples/: the samples the menus have instead of the match's.
+    The menus play the match's sequences and instruments.
+  - intro/: the intro's music, laid out like game/.
+  Each bank is laid out in memory in the order listed, as in the
+  original, so a sample that changes length moves the ones after it.
 
 Don't share a pack you extracted: the art belongs to the game's owners.
 ";
@@ -247,6 +271,15 @@ impl PackWriter {
         std::fs::write(&path, json::to_string(value)).map_err(|e| ContentError::io(&path, e))
     }
 
+    /// Writes `name` (a path in the pack, with its extension).
+    pub fn file(&mut self, name: &str, bytes: &[u8]) -> Result<(), ContentError> {
+        let path = self.dir.join(name);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| ContentError::io(dir, e))?;
+        }
+        std::fs::write(&path, bytes).map_err(|e| ContentError::io(&path, e))
+    }
+
     /// Writes `pack.json`, and a README for whoever edits the pack.
     pub fn finish(self) -> Result<(), ContentError> {
         let readme = self.dir.join(README);
@@ -290,6 +323,20 @@ impl Pack {
 
     pub fn json_path(&self, name: &str) -> PathBuf {
         self.dir.join(format!("{name}.json"))
+    }
+
+    /// Where `name` (a path in the pack, with its extension) is.
+    pub fn file_path(&self, name: &str) -> PathBuf {
+        self.dir.join(name)
+    }
+
+    /// Reads `name`, which must be there.
+    pub fn read_file(&self, name: &str) -> Result<Vec<u8>, ContentError> {
+        let path = self.file_path(name);
+        if !path.exists() {
+            return Err(ContentError::Missing(path.display().to_string()));
+        }
+        std::fs::read(&path).map_err(|e| ContentError::io(&path, e))
     }
 
     /// Reads `{name}.json`, which must be there and pass `check`.

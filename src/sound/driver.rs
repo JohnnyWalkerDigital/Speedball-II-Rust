@@ -18,24 +18,24 @@ use super::paula::Paula;
 // ---------------------------------------------------------------------------
 
 /// `sound_table`: 6 bytes per sound (priority, no-play flag, 4 sequences).
-const SOUND_TABLE: u32 = 0x13958;
+pub(super) const SOUND_TABLE: u32 = 0x13958;
 /// `sound_effects`: 15 bytes per effect.
-const SOUND_EFFECTS: u32 = 0x13B5A;
+pub(super) const SOUND_EFFECTS: u32 = 0x13B5A;
 /// `sound_envelopes`: 8 bytes per envelope.
 const SOUND_ENVELOPES: u32 = 0x13CB4;
 /// `sound_pitch_table_0..2`: note periods per octave, in quarter semitones.
-const PITCH_TABLES: [u32; 3] = [0x14A9A, 0x14AFA, 0x14B5A];
+pub(super) const PITCH_TABLES: [u32; 3] = [0x14A9A, 0x14AFA, 0x14B5A];
 /// `sound_default_instrument`; also played as a tiny looping sample.
 const DEFAULT_INSTRUMENT: u32 = 0x14E5A;
 /// `sound_zero_sample`: 8 silent words.
 const ZERO_SAMPLE: u32 = 0x14E68;
 /// `sound_base`. Its first long is the offset of the sequence table.
-const SOUND_BASE: u32 = 0x1BC3E;
+pub(super) const SOUND_BASE: u32 = 0x1BC3E;
 /// `instrument_table_index`: offset of the instrument table from `sound_base`.
-const INSTRUMENT_TABLE_INDEX: u32 = 0x1BC42;
+pub(super) const INSTRUMENT_TABLE_INDEX: u32 = 0x1BC42;
 
-const INSTRUMENT_SIZE: u32 = 14;
-const EFFECT_SIZE: u32 = 15;
+pub(super) const INSTRUMENT_SIZE: u32 = 14;
+pub(super) const EFFECT_SIZE: u32 = 15;
 const ENVELOPE_SIZE: u32 = 8;
 const STACK_SIZE: usize = 128;
 const TICKS_PER_SECOND: u32 = 50;
