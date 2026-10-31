@@ -2,8 +2,7 @@
 //! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
 //! files extracted from them, which can be edited.
 //!
-//! The game asks a [`ContentSource`], so it does not matter which. The
-//! match's panel messages still come from the originals.
+//! The game asks a [`ContentSource`], so it does not matter which.
 
 mod graphics;
 mod json;

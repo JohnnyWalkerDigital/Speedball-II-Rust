@@ -121,7 +121,7 @@ impl Match {
         let mut m = Self {
             props: Props::read(&rom),
             arena: Arena::new(&rom),
-            text_panel: TextPanel::new(&rom),
+            text_panel: TextPanel::new(),
             rom,
             rng: setup.rng,
             mode: setup.mode,

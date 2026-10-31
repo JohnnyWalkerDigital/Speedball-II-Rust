@@ -108,7 +108,7 @@ impl MatchRules {
 
     /// `game_two_player`: "PLAYER 1" against "PLAYER 2", all skills 170.
     pub fn two_players(rom: &AtariRom, initial_dir_team1: i32) -> Self {
-        let texts = TextPanel::new(rom);
+        let texts = TextPanel::new();
         let mut team1 = league_team(rom, BRUTAL_DELUXE);
         team1.full_name = texts.text(TextId::Player1Full).clone();
         team1.short_name = texts.text(TextId::Player1Short).clone();

@@ -101,7 +101,8 @@ impl Text {
     }
 }
 
-/// The fixed messages, by their address in the original data segment.
+/// The fixed messages. Each is numbered by the address it had in the
+/// original data segment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TextId {
     Replay = 0xEB8,
@@ -119,6 +120,26 @@ pub enum TextId {
 }
 
 impl TextId {
+    /// The message as the original held it: the cursor (column, row) and
+    /// the text, where a column or row byte below `' '` moves the cursor
+    /// and `0` is a blank the match writes a digit into.
+    fn bytes(self) -> &'static [u8] {
+        match self {
+            TextId::Replay => b"\x03\x03  REPLAY",
+            TextId::HalfTime => b"\x03\x03HALF  TIME\x03\x0F000 TO 000",
+            TextId::MatchOver => b"\x03\x05MATCH OVER\x03\x09  SCORE\x03\x0D000 TO 000",
+            TextId::GameOver => b"\x03\x09GAME  OVER",
+            TextId::Team1Scored | TextId::Team2Scored => b"\x03\x0B  SCORED",
+            TextId::Injured => b"\x03\x07          \x03\x0B INJURED",
+            TextId::OwnGoal => b"\x03\x09 OWN GOAL",
+            TextId::Goal => b"\x03\x09  GOAL 0",
+            TextId::Vs => b"\x03\x09    VS",
+            // `\\` is the font's "1".
+            TextId::Player1Full => b"\x00\x00PLAYER \\",
+            TextId::Player1Short => b"\x03\x00 PLAYER \\",
+        }
+    }
+
     const ALL: [TextId; 12] = [
         TextId::Replay,
         TextId::HalfTime,
@@ -147,13 +168,13 @@ pub struct TextPanel {
 }
 
 impl TextPanel {
-    pub fn new(rom: &AtariRom) -> Self {
+    pub fn new() -> Self {
         Self {
             current: Some(TextId::Vs),
             counter: 0,
             texts: TextId::ALL
                 .into_iter()
-                .map(|id| (id, Text::read(rom, id as i32)))
+                .map(|id| (id, Text::new(id.bytes().to_vec())))
                 .collect(),
         }
     }
@@ -204,5 +225,20 @@ mod tests {
         text.write_number(2, 7, 3);
         assert_eq!(text.bytes(), &[1, 2, b'A' + 26, b'A' + 26, b'A' + 33, b'D']);
         assert_eq!(text.with_row(9).bytes()[1], 9);
+    }
+
+    #[test]
+    fn messages_are_the_originals() {
+        let config = crate::config::Config::default();
+        let Ok(files) =
+            crate::data::GameFiles::load(&config.data_dir, crate::config::Platform::Atari)
+        else {
+            eprintln!("skipping: no originals");
+            return;
+        };
+        let rom = AtariRom::new(files.atari_disk);
+        for id in TextId::ALL {
+            assert_eq!(id.bytes(), Text::read(&rom, id as i32).bytes(), "{id:?}");
+        }
     }
 }
