@@ -332,7 +332,7 @@ impl MatchRenderer {
         const GOAL: usize = 0;
         const INJURED: usize = 1;
         let plain_panel = if m.player_injured {
-            (m.injury.stage <= 1).then_some(INJURED)
+            (!m.injury.medics_lifting()).then_some(INJURED)
         } else {
             m.text_panel.message().is_none().then_some(GOAL)
         };

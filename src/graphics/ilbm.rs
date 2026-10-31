@@ -1,6 +1,7 @@
 //! IFF ILBM pictures, as the game reads them.
 
 use super::indexed::{ColorWords, IndexedImage};
+use super::palette::color_word;
 
 /// A decoded picture and its colour map.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,8 +92,7 @@ fn chunk<'a>(bytes: &'a [u8], name: &[u8; 4]) -> Option<&'a [u8]> {
 fn color_words(cmap: &[u8]) -> ColorWords {
     let mut words = [0; 32];
     for (word, rgb) in words.iter_mut().zip(cmap.chunks_exact(3)) {
-        *word =
-            (u16::from(rgb[0] >> 4) << 8) | (u16::from(rgb[1] >> 4) << 4) | u16::from(rgb[2] >> 4);
+        *word = color_word([rgb[0], rgb[1], rgb[2]]);
     }
     words
 }

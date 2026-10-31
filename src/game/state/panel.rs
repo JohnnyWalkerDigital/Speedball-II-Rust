@@ -22,7 +22,7 @@ impl Match {
     pub fn text_panel_shown(&self) -> bool {
         self.clock_paused
             && if self.player_injured {
-                self.injury.stage > 1
+                self.injury.medics_lifting()
             } else {
                 self.text_panel.message().is_some()
             }

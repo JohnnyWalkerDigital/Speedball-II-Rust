@@ -4,19 +4,18 @@
 use super::draw::{self, Scene};
 use super::standings::Standings;
 use super::view::{BuyMode, Screen, View};
-use crate::game::career::TeamId;
+use crate::game::career::{TeamId, BRUTAL_DELUXE};
 use crate::game::geometry::Side;
 use crate::game::squad::{self, Context};
 use crate::menu::flow::Game;
 use crate::menu::host::Button;
-use crate::menu::panels::Competition as Fixtures;
 use crate::menu::ui::{Flow, Page, Ui};
 
 pub(super) struct Session<'a> {
     /// Whose squad and joystick.
     pub side: Side,
     pub context: Context,
-    pub fixtures: Fixtures,
+    pub competition: squad::Competition,
     pub teams: (TeamId, TeamId),
     pub standings: Standings<'a>,
     pub view: View,
@@ -26,7 +25,7 @@ impl<'a> Session<'a> {
     pub fn new(
         game: &Game,
         side: Side,
-        fixtures: Fixtures,
+        competition: squad::Competition,
         teams: (TeamId, TeamId),
         standings: Standings<'a>,
         screen: Screen,
@@ -34,8 +33,8 @@ impl<'a> Session<'a> {
     ) -> Self {
         Self {
             side,
-            context: context(game, fixtures),
-            fixtures,
+            context: context(game, competition),
+            competition,
             teams,
             standings,
             view: View::new(&game.cursors, screen, mode),
@@ -47,7 +46,7 @@ impl<'a> Session<'a> {
         Session {
             side: self.side,
             context: self.context,
-            fixtures: self.fixtures,
+            competition: self.competition,
             teams: self.teams,
             standings: Standings::None,
             view: View::new(&game.cursors, Screen::Gym, BuyMode::Team),
@@ -105,15 +104,10 @@ impl<'a> Session<'a> {
 }
 
 /// The rules the gym and market follow for this competition.
-fn context(game: &Game, fixtures: Fixtures) -> Context {
-    let placing = game.career.record(TeamId::League(0)).league_placing;
+fn context(game: &Game, competition: squad::Competition) -> Context {
+    let placing = game.career.record(BRUTAL_DELUXE).league_placing;
     Context {
-        competition: match fixtures {
-            Fixtures::Knockout => squad::Competition::Knockout,
-            Fixtures::League => squad::Competition::League,
-            Fixtures::Cup => squad::Competition::Cup,
-            Fixtures::TwoPlayers => squad::Competition::TwoPlayers,
-        },
+        competition,
         manager_mode: game.manager_mode,
         in_division_1: placing <= 8,
     }

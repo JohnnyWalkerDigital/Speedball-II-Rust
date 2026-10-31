@@ -163,6 +163,12 @@ impl<T> PerTeam<T> {
     }
 }
 
+impl<T> From<(T, T)> for PerTeam<T> {
+    fn from((team1, team2): (T, T)) -> Self {
+        Self::new(team1, team2)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

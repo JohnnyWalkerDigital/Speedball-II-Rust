@@ -10,7 +10,7 @@ use super::assets::{MenuAssets, SmallFont};
 use super::host::{Button, Control};
 use super::manager::data::ManagerTables;
 use super::manager::{self, Cursors, Standings};
-use super::panels::{self, Competition};
+use super::panels;
 use super::play::{run_match, Controls, ReplaySaves};
 use super::ram::MenuRam;
 use super::strings::{MenuSpec, MenuText, Title};
@@ -19,12 +19,13 @@ use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
 use crate::data::AtariRom;
-use crate::game::career::{compare_scores, Career, LastMatch, TeamId};
+use crate::game::career::{compare_scores, Career, LastMatch, TeamId, BRUTAL_DELUXE};
 use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Side};
 use crate::game::league::ScoresTable;
 use crate::game::rng::Rng;
-use crate::game::setup::{MatchRules, SquadSkills, BRUTAL_DELUXE};
+use crate::game::setup::{MatchRules, SquadSkills};
+use crate::game::squad::Competition;
 use crate::game::squad::Market;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::ilbm::Picture;
@@ -350,7 +351,7 @@ fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(1100);
     let mut round = 1;
     while round <= KNOCKOUT_ROUNDS {
-        let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(round));
+        let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::League(round));
         let (score1, score2) =
             brutal_deluxe_match(ui, game, Competition::Knockout, round, 0, Standings::None)?;
         let scores = PerTeam::new(score1, score2);
@@ -380,7 +381,7 @@ fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
     game.one_player = false;
     let mut rules = MatchRules::practice(&game.rom);
     rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
-    let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::League(1));
+    let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::League(1));
     play_match(ui, game, rules, teams, ResultScreen::None, false).map(|_| ())
 }
 
@@ -397,7 +398,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.manager_mode = false;
     game.one_player = false;
     let matches = list_menu(ui, game, &game.text.menus.two_players)? * 2 + 1;
-    let teams = PerTeam::new(TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
+    let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::PlayerTwo);
     let mut wins = PerTeam::new(0, 0);
     for number in 1..=matches {
         let mut text = game.text.messages.match_number.clone();
@@ -439,7 +440,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
 
 /// Each player in turn gets the gym, with their own joystick and money.
 fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
-    let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
+    let teams = (BRUTAL_DELUXE, TeamId::PlayerTwo);
     for (side, digit) in [(Side::Team1, 0x5C), (Side::Team2, 0x5D)] {
         let mut text = game.text.messages.player_turn.clone();
         text[9] = digit;
@@ -493,7 +494,7 @@ pub(super) fn cup_league_match(
         TeamId::League(index) => index,
         TeamId::PlayerTwo => unreachable!("player 2 only plays two-player games"),
     };
-    let brutal_deluxe = TeamId::League(BRUTAL_DELUXE);
+    let brutal_deluxe = BRUTAL_DELUXE;
     if teams.0 == brutal_deluxe {
         brutal_deluxe_match(
             ui,
@@ -528,7 +529,7 @@ fn brutal_deluxe_match(
     initial_dir: i32,
     standings: Standings,
 ) -> Flow<(i32, i32)> {
-    let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::League(opponent));
+    let teams = (BRUTAL_DELUXE, TeamId::League(opponent));
     ui.transition(&panels::next_fixture(game, competition, teams))?;
     wait_fire(ui)?;
     if competition == Competition::Knockout {
@@ -541,7 +542,7 @@ fn brutal_deluxe_match(
     rules.computer.team1 = game.manager_mode;
     rules.initial_dir_team1 = initial_dir;
     rules.coin_value = game.coin_value;
-    let teams = PerTeam::new(teams.0, teams.1);
+    let teams = PerTeam::from(teams);
     let may_speed_up =
         game.manager_mode && matches!(competition, Competition::League | Competition::Cup);
     let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures, may_speed_up)?;
@@ -626,7 +627,7 @@ pub(super) fn display_total_match_result(
     teams: (TeamId, TeamId),
     total: (i32, i32),
 ) -> Flow {
-    let scores = PerTeam::new(total.0, total.1);
+    let scores = PerTeam::from(total);
     let (picture, winner) = match compare_scores(total.0, total.1) {
         std::cmp::Ordering::Equal => {
             return result_screen(ui, game, scores, &game.text.messages.total)

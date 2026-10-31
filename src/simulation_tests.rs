@@ -17,6 +17,16 @@ struct Harness {
     files: GameFiles,
 }
 
+impl Harness {
+    /// The match graphics for `platform`, which `load` loaded the files for.
+    fn assets(&self, platform: Platform) -> Assets {
+        match platform {
+            Platform::Atari => Assets::load_atari(&self.rom),
+            Platform::Amiga => Assets::load_amiga(self.files.amiga.as_ref().expect("loaded")),
+        }
+    }
+}
+
 fn load(platform: Platform) -> Option<Harness> {
     let config = Config::default();
     match GameFiles::load(&config.data_dir, platform) {
@@ -54,7 +64,7 @@ fn config(platform: Platform, mode: GameMode, seed: u64) -> Config {
 /// Plays a match to the end, rendering every frame. Returns the match and
 /// how many frames it took.
 fn play(h: &Harness, config: &Config, max_frames: usize) -> (Match, usize) {
-    let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), config.platform);
+    let assets = h.assets(config.platform);
     let mut game = Match::new(MatchSetup::from_config(&h.rom, config), Rc::clone(&h.rom));
     let renderer = MatchRenderer::new(assets, &h.rom);
     let mut canvas = Canvas::new(320, 200);
@@ -168,7 +178,7 @@ fn dump_frames() {
     for platform in [Platform::Atari, Platform::Amiga] {
         let Some(h) = load(platform) else { continue };
         let config = config(platform, GameMode::Knockout, 2);
-        let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), platform);
+        let assets = h.assets(platform);
         let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
         let renderer = MatchRenderer::new(assets, &h.rom);
         let mut canvas = Canvas::new(320, 200);
@@ -493,7 +503,7 @@ fn fingerprint_matches() {
     use std::hash::{Hash, Hasher};
     for platform in [Platform::Atari, Platform::Amiga] {
         let Some(h) = load(platform) else { continue };
-        let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), platform);
+        let assets = h.assets(platform);
         let renderer = MatchRenderer::new(assets, &h.rom);
         let scenarios = (1..=8).map(|seed| (GameMode::Knockout, seed)).chain([
             (GameMode::Demo, 1),

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use super::addr;
 use super::lookups::DIRECTIONS;
 use super::rom::AtariRom;
-use crate::game::entity::{EntityId, PLAYER_RECORD};
+use crate::game::entity::EntityId;
 
 /// The scripts' block of memory.
 const BLOCK_START: i32 = 0x54C6;
@@ -287,7 +287,7 @@ impl AnimationTable {
                 }
             })
             .collect();
-        for (id, address) in entity_addresses() {
+        for (id, address) in EntityId::records() {
             let script = rom.u32(address + 12);
             if in_block(script) {
                 name(script, snake_case(&format!("{id:?}")));
@@ -418,37 +418,6 @@ impl Animations {
 /// Where each animation list is in memory, for reads past the table.
 pub(super) fn list_address(animation: Animation, dir: i32) -> i32 {
     ANIMATIONS_START + animation as i32 * 32 + dir * 4
-}
-
-/// The entity records and where they are, for the scripts they start with.
-pub(crate) fn entity_addresses() -> Vec<(EntityId, i32)> {
-    let mut addresses = vec![
-        addr::BALL,
-        addr::LAUNCHER,
-        addr::BIG_BALL,
-        addr::EQUIPMENT,
-        addr::STATUS_LED,
-        addr::TERRAIN_CENTER,
-    ];
-    for list in [
-        &addr::COINS[..],
-        &addr::TOKENS,
-        &addr::GOAL_INDICATORS,
-        &addr::PLAYER_INDICATORS,
-        &addr::SCORE_MULTIPLIERS,
-        &addr::BOUNCE_DOMES,
-        &addr::ELECTROBOUNCES,
-        &addr::MEDICS,
-    ] {
-        addresses.extend_from_slice(list);
-    }
-    for first in [addr::PLAYERS_TEAM1, addr::PLAYERS_TEAM2] {
-        addresses.extend((0..9).map(|i| first + i * PLAYER_RECORD));
-    }
-    addresses
-        .into_iter()
-        .map(|address| (EntityId::at(address), address))
-        .collect()
 }
 
 /// `BigBall` as `big_ball`, `Coin(0)` as `coin_0`.

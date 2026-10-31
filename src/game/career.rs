@@ -11,6 +11,10 @@ use super::statistics::TeamStatistics;
 /// The 16 league teams, in the original's order.
 pub const LEAGUE_TEAMS: usize = 16;
 
+/// The player's team in one-player games: the first league team.
+pub const BRUTAL_DELUXE_INDEX: usize = 0;
+pub const BRUTAL_DELUXE: TeamId = TeamId::League(BRUTAL_DELUXE_INDEX);
+
 /// Which record a team keeps its results in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TeamId {

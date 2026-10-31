@@ -4,14 +4,14 @@
 use super::flow::{cup_league_match, list_menu, message, wait_fire, win_shared, Game};
 use super::host::{Button, Control};
 use super::manager::Standings;
-use super::panels::{self, Competition};
+use super::panels;
 use super::saving;
 use super::ui::{Flow, Stop, Ui};
+use crate::game::career::BRUTAL_DELUXE;
 use crate::game::geometry::Side;
-use crate::game::league::{
-    team2_won, League, BRUTAL_DELUXE, DIVISION_SIZE, MATCHES_PER_ROUND, ROUNDS,
-};
+use crate::game::league::{team2_won, League, DIVISION_SIZE, MATCHES_PER_ROUND, ROUNDS};
 use crate::game::save::Progress;
+use crate::game::squad::Competition;
 
 /// Where a loaded league picks up (the round, the match and the
 /// half-season's playing direction).
@@ -148,7 +148,7 @@ fn league_round(
             };
             let scores =
                 cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
-            game.career.record_result(per_team(teams), per_team(scores));
+            game.career.record_result(teams.into(), scores.into());
             league.results[division][game_index] = scores;
         }
     }
@@ -245,8 +245,4 @@ fn promote_relegate_announce(ui: &mut Ui, game: &mut Game, league: &mut League) 
 fn relegated(ui: &mut Ui, game: &Game) -> Flow {
     let text = &game.text;
     message(ui, game, &text.titles.speedball_2, &text.messages.relegated)
-}
-
-fn per_team<T>(pair: (T, T)) -> crate::game::geometry::PerTeam<T> {
-    crate::game::geometry::PerTeam::new(pair.0, pair.1)
 }

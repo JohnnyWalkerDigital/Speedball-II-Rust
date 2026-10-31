@@ -24,11 +24,11 @@ mod transfers;
 mod view;
 
 use super::flow::{wait_any_fire, Game};
-use super::panels::Competition as Fixtures;
 use super::ui::{Flow, Ui};
-use crate::game::career::TeamId;
+use crate::game::career::{TeamId, BRUTAL_DELUXE};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
+use crate::game::squad::Competition;
 use keypad::{keypad, KeypadExit};
 use session::Session;
 use squad_table::squad_table;
@@ -55,14 +55,14 @@ const FLASH: Sound = Sound { id: 8, priority: 2 };
 pub fn manager_screen(
     ui: &mut Ui,
     game: &mut Game,
-    fixtures: Fixtures,
+    competition: Competition,
     teams: (TeamId, TeamId),
     standings: Standings,
 ) -> Flow {
     let mut session = Session::new(
         game,
         Side::Team1,
-        fixtures,
+        competition,
         teams,
         standings,
         Screen::Manager,
@@ -111,13 +111,13 @@ pub fn gym_screen(
     ui: &mut Ui,
     game: &mut Game,
     side: Side,
-    fixtures: Fixtures,
+    competition: Competition,
     teams: (TeamId, TeamId),
 ) -> Flow {
     let mut session = Session::new(
         game,
         side,
-        fixtures,
+        competition,
         teams,
         Standings::None,
         Screen::Gym,
@@ -133,8 +133,8 @@ pub fn show_off(ui: &mut Ui, game: &mut Game) -> Flow {
         let session = Session::new(
             game,
             Side::Team1,
-            Fixtures::League,
-            (TeamId::League(0), TeamId::League(1)),
+            Competition::League,
+            (BRUTAL_DELUXE, TeamId::League(1)),
             Standings::None,
             screen,
             BuyMode::Player,

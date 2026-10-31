@@ -45,10 +45,7 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
     let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
     let assets = MenuAssets::load(&ram, &overlays).expect("menu pictures decode");
     let rom = Rc::new(AtariRom::new(files.atari_disk.clone()));
-    let renderer = MatchRenderer::new(
-        Assets::load(&rom, files.amiga.as_ref(), Platform::Amiga),
-        &rom,
-    );
+    let renderer = MatchRenderer::new(Assets::load_amiga(amiga), &rom);
     let text = MenuText::read(&ram);
     let tables = MenuTables::read(&ram);
     let content = MenuContent {

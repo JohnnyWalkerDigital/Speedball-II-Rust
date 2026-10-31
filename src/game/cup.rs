@@ -1,7 +1,7 @@
 //! The cup: sixteen teams, knocked out over four rounds of two-legged ties.
 
-use super::career::{TeamId, LEAGUE_TEAMS};
-use super::league::{put_first, shuffle, BRUTAL_DELUXE};
+use super::career::{TeamId, BRUTAL_DELUXE, LEAGUE_TEAMS};
+use super::league::{put_first, shuffle};
 use super::rng::Rng;
 
 pub const ROUNDS: usize = 4;

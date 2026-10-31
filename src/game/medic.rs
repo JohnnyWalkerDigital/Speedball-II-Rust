@@ -37,6 +37,15 @@ impl Default for Injury {
     }
 }
 
+impl Injury {
+    /// Whether the medics are lifting the player or carrying them off. Until
+    /// then the panel shows plain "INJURED"; from then, the player's
+    /// position too.
+    pub fn medics_lifting(&self) -> bool {
+        self.stage > 1
+    }
+}
+
 impl Match {
     /// Stops play and sends the medics on.
     pub(crate) fn start_injury(&mut self, p: PlayerId) {

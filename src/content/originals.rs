@@ -49,10 +49,10 @@ impl Originals<'_> {
 impl ContentSource for Originals<'_> {
     fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError> {
         match platform {
-            Platform::Atari => Ok(Assets::load(self.rom, None, Platform::Atari)),
+            Platform::Atari => Ok(Assets::load_atari(self.rom)),
             Platform::Amiga => {
                 let amiga = self.amiga()?;
-                Ok(Assets::load(self.rom, Some(amiga.files), Platform::Amiga))
+                Ok(Assets::load_amiga(amiga.files))
             }
         }
     }

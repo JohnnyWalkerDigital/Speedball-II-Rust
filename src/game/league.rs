@@ -4,7 +4,7 @@
 //! Division 1 is index 0 and division 2 index 1, as the original stores
 //! them. League placings (1 to 16) live in the teams' records.
 
-use super::career::{compare_scores, Career, TeamId, LEAGUE_TEAMS};
+use super::career::{compare_scores, Career, TeamId, BRUTAL_DELUXE, LEAGUE_TEAMS};
 use super::rng::Rng;
 
 pub const DIVISION_SIZE: usize = 8;
@@ -22,8 +22,6 @@ const MATCH_PERMUTATIONS: [[u8; 8]; ROUNDS] = [
     [1, 7, 2, 8, 3, 5, 4, 6],
     [1, 6, 2, 5, 3, 8, 4, 7],
 ];
-
-pub const BRUTAL_DELUXE: TeamId = TeamId::League(0);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct League {

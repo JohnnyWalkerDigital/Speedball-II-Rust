@@ -1,6 +1,7 @@
 //! Building the initial state for a match: what the menus set up before
 //! `play_match`.
 
+use super::career::BRUTAL_DELUXE_INDEX;
 use super::geometry::PerTeam;
 use super::player::{Player, PlayerId};
 use super::rng::Rng;
@@ -67,7 +68,7 @@ impl MatchRules {
         Self {
             mode: GameMode::Knockout,
             team1: Lineup {
-                team: league_team(rom, BRUTAL_DELUXE),
+                team: league_team(rom, BRUTAL_DELUXE_INDEX),
                 skills: SquadSkills::Uniform(100),
             },
             team2: Lineup {
@@ -88,7 +89,7 @@ impl MatchRules {
         Self {
             mode: GameMode::Practice,
             team1: Lineup {
-                team: league_team(rom, BRUTAL_DELUXE),
+                team: league_team(rom, BRUTAL_DELUXE_INDEX),
                 skills: SquadSkills::Uniform(100),
             },
             team2: Lineup {
@@ -107,7 +108,7 @@ impl MatchRules {
     /// Two players: "PLAYER 1" against "PLAYER 2", all skills 170.
     pub fn two_players(rom: &AtariRom, initial_dir_team1: i32) -> Self {
         let texts = TextPanel::new();
-        let mut team1 = league_team(rom, BRUTAL_DELUXE);
+        let mut team1 = league_team(rom, BRUTAL_DELUXE_INDEX);
         team1.full_name = texts.text(TextId::Player1Full).clone();
         team1.short_name = texts.text(TextId::Player1Short).clone();
         Self {
@@ -151,8 +152,6 @@ impl MatchRules {
     }
 }
 
-/// The player's team in one-player games.
-pub const BRUTAL_DELUXE: usize = 0;
 const HALF_LENGTH_SECONDS: i32 = 90;
 
 /// One of the 16 league teams, in the original's order.

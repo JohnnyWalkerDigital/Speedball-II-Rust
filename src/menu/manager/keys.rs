@@ -42,7 +42,11 @@ pub(super) fn press_key(
             session.transition(ui, game)
         }
         KeyAction::Fixture => {
-            ui.transition(&panels::next_fixture(game, session.fixtures, session.teams))?;
+            ui.transition(&panels::next_fixture(
+                game,
+                session.competition,
+                session.teams,
+            ))?;
             wait_fire(ui)?;
             session.transition(ui, game)
         }

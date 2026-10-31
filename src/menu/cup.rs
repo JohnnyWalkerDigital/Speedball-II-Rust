@@ -5,13 +5,14 @@ use super::flow::{
     cup_league_match, display_total_match_result, list_menu, message, win_shared, Game,
 };
 use super::manager::Standings;
-use super::panels::Competition;
 use super::saving;
 use super::ui::{Flow, Ui};
+use crate::game::career::BRUTAL_DELUXE;
 use crate::game::cup::Cup;
 use crate::game::geometry::PerTeam;
-use crate::game::league::{team2_won, BRUTAL_DELUXE};
+use crate::game::league::team2_won;
 use crate::game::save::Progress;
+use crate::game::squad::Competition;
 
 /// Plays a new or loaded cup, with coins worth double while it lasts.
 pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
@@ -114,7 +115,7 @@ fn tie_lost_by_brutal_deluxe(
                 0,
                 standings(cup, (0, 0), 0),
             )?;
-            game.career.record_result(per_team(teams), per_team(first));
+            game.career.record_result(teams.into(), first.into());
             if playing {
                 let text = &game.text;
                 message(
@@ -138,7 +139,7 @@ fn tie_lost_by_brutal_deluxe(
             initial_dir,
             standings(cup, total, initial_dir),
         )?;
-        game.career.record_result(per_team(teams), per_team(leg));
+        game.career.record_result(teams.into(), leg.into());
         initial_dir ^= 4;
         total = (total.0 + leg.0, total.1 + leg.1);
         if playing {
@@ -153,8 +154,4 @@ fn tie_lost_by_brutal_deluxe(
         cup.second_team_won(tie);
     }
     Ok(playing && second_won)
-}
-
-fn per_team<T>(pair: (T, T)) -> PerTeam<T> {
-    PerTeam::new(pair.0, pair.1)
 }

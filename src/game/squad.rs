@@ -47,7 +47,8 @@ pub struct MarketPlayer {
     pub buyable: bool,
 }
 
-/// The competition being played, for its effect on prices and limits.
+/// The competition being played: it sets prices and limits, and what the
+/// fixture screen shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Competition {
     Knockout,

@@ -85,37 +85,76 @@ pub enum EntityId {
 }
 
 /// The size of a player's record, after which the next one starts.
-pub(crate) const PLAYER_RECORD: i32 = 0x72;
+const PLAYER_RECORD: i32 = 0x72;
 
 impl EntityId {
+    /// Where the entity's record starts in the game data, if it has one.
+    pub fn address(self) -> Option<i32> {
+        let i = |n: u8| usize::from(n);
+        let player = |first: i32, n: u8| first + i32::from(n) * PLAYER_RECORD;
+        Some(match self {
+            EntityId::Ball => addr::BALL,
+            EntityId::Launcher => addr::LAUNCHER,
+            EntityId::BigBall => addr::BIG_BALL,
+            EntityId::Equipment => addr::EQUIPMENT,
+            EntityId::StatusLed => addr::STATUS_LED,
+            EntityId::TerrainCenter => addr::TERRAIN_CENTER,
+            EntityId::Coin(n) => *addr::COINS.get(i(n))?,
+            EntityId::Token(n) => *addr::TOKENS.get(i(n))?,
+            EntityId::GoalIndicator(n) => *addr::GOAL_INDICATORS.get(i(n))?,
+            EntityId::PlayerIndicator(n) => *addr::PLAYER_INDICATORS.get(i(n))?,
+            EntityId::ScoreMultiplier(n) => *addr::SCORE_MULTIPLIERS.get(i(n))?,
+            EntityId::BounceDome(n) => *addr::BOUNCE_DOMES.get(i(n))?,
+            EntityId::Electrobounce(n) => *addr::ELECTROBOUNCES.get(i(n))?,
+            EntityId::Medic(n) => *addr::MEDICS.get(i(n))?,
+            EntityId::Player(n @ 0..=8) => player(addr::PLAYERS_TEAM1, n),
+            EntityId::Player(n @ 9..=17) => player(addr::PLAYERS_TEAM2, n - 9),
+            EntityId::Player(_) | EntityId::Unattached => return None,
+        })
+    }
+
+    /// Every entity with a record, and where it starts, in the order the
+    /// records are read.
+    pub fn records() -> Vec<(EntityId, i32)> {
+        let counted = |id: fn(u8) -> EntityId, count: usize| (0..count as u8).map(id);
+        [
+            EntityId::Ball,
+            EntityId::Launcher,
+            EntityId::BigBall,
+            EntityId::Equipment,
+            EntityId::StatusLed,
+            EntityId::TerrainCenter,
+        ]
+        .into_iter()
+        .chain(counted(EntityId::Coin, addr::COINS.len()))
+        .chain(counted(EntityId::Token, addr::TOKENS.len()))
+        .chain(counted(
+            EntityId::GoalIndicator,
+            addr::GOAL_INDICATORS.len(),
+        ))
+        .chain(counted(
+            EntityId::PlayerIndicator,
+            addr::PLAYER_INDICATORS.len(),
+        ))
+        .chain(counted(
+            EntityId::ScoreMultiplier,
+            addr::SCORE_MULTIPLIERS.len(),
+        ))
+        .chain(counted(EntityId::BounceDome, addr::BOUNCE_DOMES.len()))
+        .chain(counted(EntityId::Electrobounce, addr::ELECTROBOUNCES.len()))
+        .chain(counted(EntityId::Medic, addr::MEDICS.len()))
+        .chain(counted(EntityId::Player, 18))
+        .map(|id| (id, id.address().expect("every listed entity has a record")))
+        .collect()
+    }
+
     /// The entity whose record starts at `address`.
     pub fn at(address: i32) -> Self {
-        let index = |list: &[i32]| list.iter().position(|&a| a == address).map(|i| i as u8);
-        let player = |first: i32| {
-            let offset = address - first;
-            (offset >= 0 && offset % PLAYER_RECORD == 0 && offset / PLAYER_RECORD < 9)
-                .then_some((offset / PLAYER_RECORD) as u8)
-        };
-        match address {
-            addr::BALL => EntityId::Ball,
-            addr::LAUNCHER => EntityId::Launcher,
-            addr::BIG_BALL => EntityId::BigBall,
-            addr::EQUIPMENT => EntityId::Equipment,
-            addr::STATUS_LED => EntityId::StatusLed,
-            addr::TERRAIN_CENTER => EntityId::TerrainCenter,
-            _ => None
-                .or(index(&addr::COINS).map(EntityId::Coin))
-                .or(index(&addr::TOKENS).map(EntityId::Token))
-                .or(index(&addr::GOAL_INDICATORS).map(EntityId::GoalIndicator))
-                .or(index(&addr::PLAYER_INDICATORS).map(EntityId::PlayerIndicator))
-                .or(index(&addr::SCORE_MULTIPLIERS).map(EntityId::ScoreMultiplier))
-                .or(index(&addr::BOUNCE_DOMES).map(EntityId::BounceDome))
-                .or(index(&addr::ELECTROBOUNCES).map(EntityId::Electrobounce))
-                .or(index(&addr::MEDICS).map(EntityId::Medic))
-                .or(player(addr::PLAYERS_TEAM1).map(EntityId::Player))
-                .or(player(addr::PLAYERS_TEAM2).map(|i| EntityId::Player(i + 9)))
-                .unwrap_or_else(|| panic!("no entity record at {address:#X}")),
-        }
+        Self::records()
+            .into_iter()
+            .find(|&(_, a)| a == address)
+            .map(|(id, _)| id)
+            .unwrap_or_else(|| panic!("no entity record at {address:#X}"))
     }
 }
 

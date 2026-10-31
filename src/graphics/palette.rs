@@ -67,6 +67,12 @@ pub fn amiga_color(word: u16) -> u32 {
     0xFF00_0000 | (channel(8) << 16) | (channel(4) << 8) | channel(0)
 }
 
+/// 8-bit RGB as an Amiga colour word, keeping the top four bits of each
+/// channel (as the original read IFF colour maps).
+pub fn color_word([r, g, b]: [u8; 3]) -> u16 {
+    (u16::from(r >> 4) << 8) | (u16::from(g >> 4) << 4) | u16::from(b >> 4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -57,14 +57,6 @@ impl Assets {
     pub const RED: usize = 15;
     pub const BACKGROUND: usize = 0;
 
-    pub fn load(rom: &AtariRom, amiga: Option<&AmigaFiles>, platform: Platform) -> Self {
-        match (platform, amiga) {
-            (Platform::Amiga, Some(files)) => Self::load_amiga(files),
-            (Platform::Amiga, None) => panic!("Amiga graphics need the Amiga files"),
-            (Platform::Atari, _) => Self::load_atari(rom),
-        }
-    }
-
     pub fn sheet(&self, sheet: Sheet) -> &[Image] {
         match sheet {
             Sheet::Entities => &self.entities,
@@ -74,7 +66,7 @@ impl Assets {
         }
     }
 
-    fn load_atari(rom: &AtariRom) -> Self {
+    pub fn load_atari(rom: &AtariRom) -> Self {
         let disk = rom.disk();
         let palette = Palette::read(
             disk,
@@ -146,7 +138,7 @@ impl Assets {
         }
     }
 
-    fn load_amiga(files: &AmigaFiles) -> Self {
+    pub fn load_amiga(files: &AmigaFiles) -> Self {
         let dump = &files.match_dump[..];
         let disk = &files.disk[..];
         let palette = Palette::read(dump, 0xF2, 32, ColorModel::Amiga);

@@ -13,7 +13,7 @@ use super::entity::{Entity, EntityId, Flags, Gfx, Think};
 use super::geometry::Point;
 use super::player::{MatchStats, Player};
 use super::roster::{Attributes, AttributesRef, Roster, Skills};
-use crate::data::animations::{entity_addresses, snake_case, Animations, ScriptRef};
+use crate::data::animations::{snake_case, Animations, ScriptRef};
 use crate::data::AtariRom;
 
 /// Players on the pitch, both teams.
@@ -30,7 +30,7 @@ impl MatchStart {
     pub fn read(rom: &AtariRom) -> Self {
         let mut players = Vec::new();
         let mut entities = Vec::new();
-        for (id, address) in entity_addresses() {
+        for (id, address) in EntityId::records() {
             match id {
                 EntityId::Player(i) => players.push(Player::read(rom, address, i as usize % 9)),
                 _ => entities.push(Entity::read(rom, address)),
@@ -96,7 +96,7 @@ impl StartTable {
             .iter()
             .map(|e| e.entity(animations))
             .collect::<Result<_, _>>()?;
-        for (id, _) in entity_addresses() {
+        for (id, _) in EntityId::records() {
             let count = entities.iter().filter(|e| e.id == id).count();
             if !matches!(id, EntityId::Player(_)) && count != 1 {
                 return Err(format!(
@@ -263,7 +263,7 @@ impl EntityStart {
     }
 
     fn entity(&self, animations: &Animations) -> Result<Entity, String> {
-        let id = entity_addresses()
+        let id = EntityId::records()
             .into_iter()
             .map(|(id, _)| id)
             .find(|&id| snake_case(&format!("{id:?}")) == self.id)

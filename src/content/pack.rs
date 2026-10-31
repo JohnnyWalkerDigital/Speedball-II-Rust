@@ -23,7 +23,7 @@ use super::ContentError;
 use crate::graphics::ilbm::Picture;
 use crate::graphics::image::Image;
 use crate::graphics::indexed::{ColorWords, IndexedImage};
-use crate::graphics::palette::{amiga_color, Palette};
+use crate::graphics::palette::{amiga_color, color_word, Palette};
 
 /// Bumped when the layout of a pack changes.
 const FORMAT: u32 = 1;
@@ -569,12 +569,6 @@ fn rgb_list(words: &ColorWords) -> Vec<[u8; 3]> {
             [r, g, b]
         })
         .collect()
-}
-
-/// 8-bit RGB as an Amiga colour word, keeping the top four bits of each
-/// channel (as the original read IFF colour maps).
-fn color_word([r, g, b]: [u8; 3]) -> u16 {
-    (u16::from(r >> 4) << 8) | (u16::from(g >> 4) << 4) | u16::from(b >> 4)
 }
 
 fn parse_color(hex: &str) -> Result<[u8; 3], ContentError> {

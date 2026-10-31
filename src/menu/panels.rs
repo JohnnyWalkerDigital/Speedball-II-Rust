@@ -6,21 +6,12 @@ use super::flow::Game;
 use super::strings::{FixtureNumber, Statistic, Title};
 use super::text::write_digits;
 use super::ui::{Page, PANEL_COLOUR};
-use crate::game::career::{TeamId, TeamRecord};
+use crate::game::career::{TeamId, TeamRecord, BRUTAL_DELUXE};
 use crate::game::cup::Cup;
 use crate::game::geometry::Side;
 use crate::game::league::{League, DIVISION_SIZE, MATCHES_PER_ROUND};
 use crate::game::setup::league_team;
-use crate::game::squad;
-
-/// The kind of game, for what the fixture screen shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Competition {
-    Knockout,
-    League,
-    Cup,
-    TwoPlayers,
-}
+use crate::game::squad::{self, Competition};
 
 /// The two teams' records and skills side by side.
 pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamId)) -> Page {
@@ -118,7 +109,7 @@ fn fill_fixture_column(
 /// each group's three players, otherwise the team's templates.
 fn skill_groups(game: &Game, team: TeamId) -> [[i32; 8]; 4] {
     let human = match team {
-        TeamId::League(0) => Some(Side::Team1),
+        BRUTAL_DELUXE => Some(Side::Team1),
         TeamId::PlayerTwo => Some(Side::Team2),
         TeamId::League(_) => None,
     };
@@ -154,7 +145,7 @@ pub fn league_table(game: &Game, league: &League, division: usize, show_player: 
     }
     // Brutal Deluxe's name blinks: while it is hidden, a box in the panel
     // colour covers it.
-    let player = game.career.record(TeamId::League(0)).league_placing;
+    let player = game.career.record(BRUTAL_DELUXE).league_placing;
     if !show_player && League::division_of(player) == division {
         let y = usize::from(player - first_placing) * 16 + 0x20;
         page.fill_box(0x28, 0x60, y, 8, PANEL_COLOUR);
