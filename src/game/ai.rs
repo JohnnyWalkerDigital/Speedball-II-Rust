@@ -70,10 +70,10 @@ impl Match {
 
     fn roll_decision(&mut self, p: PlayerId) {
         let random = self.rng.next_byte();
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let player = &mut self.players[p.0];
         player.random = random;
-        player.reset_think_delay(&rom);
+        player.reset_think_delay(rom);
     }
 
     /// Without the ball: go for the ball, an item or the opposing carrier.
@@ -125,7 +125,7 @@ impl Match {
         };
         if !pass {
             self.start_move(p);
-        } else if self.players[p.0].attributes.pos < 3 {
+        } else if !self.players[p.0].is_forward() {
             self.pass_from_defence(p, blocked);
         } else {
             self.attack_goal(p, opponent);
@@ -144,7 +144,7 @@ impl Match {
         }
         let me = &self.players[p.0];
         let mut int = me.skills().int;
-        if me.attributes.pos > 2 {
+        if me.is_forward() {
             int /= 2;
         }
         if int > me.random && self.find_reachable_item(p, blocked).is_some() {
@@ -401,14 +401,10 @@ impl Match {
         let mate = &self.players[q.0];
         let me = &self.players[p.0];
         let target = me.predict(&self.rom, &mate.entity);
-        let short_pass = (!me.is_goalkeeper() || mate.attributes.pos == 1)
+        let short_pass = (!me.is_goalkeeper() || mate.is_defender())
             && me.skills().thr * 2 > mate.distance_to_ball;
         self.players[p.0].target = target;
-        if short_pass {
-            self.throw_low(p);
-        } else {
-            self.throw_high(p);
-        }
+        self.throw_low_if(p, short_pass);
     }
 
     /// Whether a pass from `passer` to `receiver` avoids the blocked directions.
@@ -446,11 +442,7 @@ impl Match {
                     let mate = &self.players[q.0];
                     let short_pass = me.skills().thr * 2 > mate.distance_to_ball;
                     self.players[p.0].target = me.predict(&self.rom, &mate.entity);
-                    if short_pass {
-                        self.throw_low(p);
-                    } else {
-                        self.throw_high(p);
-                    }
+                    self.throw_low_if(p, short_pass);
                     return;
                 }
             }
@@ -514,11 +506,8 @@ impl Match {
         let goal = self.aim_at_goal(p);
         let me = &mut self.players[p.0];
         me.target = goal;
-        if me.entity.distance_to(goal) <= me.skills().thr * 2 {
-            self.throw_low(p);
-        } else {
-            self.throw_high(p);
-        }
+        let in_reach = me.entity.distance_to(goal) <= me.skills().thr * 2;
+        self.throw_low_if(p, in_reach);
     }
 
     /// Lobs it upfield, angling for a wall if the goal is blocked.
@@ -634,9 +623,9 @@ impl Match {
 
         let mut target = mate_entity.pos + mate_entity.velocity;
         let mate_pos = self.players[mate.0].attributes.pos;
-        if mate_pos >= 3 && me.attributes.pos >= 3 {
+        if self.players[mate.0].is_forward() && me.is_forward() {
             self.support_position(p, mate, &mut target);
-        } else if me.attributes.pos == 1 {
+        } else if me.is_defender() {
             // Defenders shadow their goalkeeper once the ball is upfield.
             if mate_pos >= 2 {
                 mate = PlayerId::of(me.entity.is_team1(), 0);
@@ -807,20 +796,7 @@ impl Match {
             let x = shifted_left(target);
             Cover::Exactly(if x >= 288 { x.min(384) } else { 320 })
         } else {
-            let close = if me.attacks_up() {
-                target.y >= 1024
-            } else {
-                target.y <= 128
-            };
-            // Which way the threat is heading, mirrored for the top goal.
-            let heading = match (me.attacks_up(), threat_entity.dir) {
-                _ if !close => None,
-                (true, 4) | (false, 0) => Some(Heading::Straight),
-                (true, 3) | (false, 1) => Some(Heading::Right),
-                (true, 5) | (false, 7) => Some(Heading::Left),
-                _ => Some(Heading::Other),
-            };
-            match heading {
+            match Heading::near_goal(me.attacks_up(), target, threat_entity.dir) {
                 None => Cover::Track,
                 Some(Heading::Straight) if thrown => Cover::Track,
                 Some(Heading::Right) => {
@@ -876,18 +852,16 @@ impl Match {
 
     /// Active goalkeeper: dive at a shot or come off the line.
     fn ai_goalkeeper_active(&mut self, p: PlayerId) {
-        let holder_is_teammate = self.holder_player().is_some_and(|h| {
-            self.players[h.0].attributes.initial_dir == self.players[p.0].attributes.initial_dir
-        });
+        let holder_is_teammate = self.holder_player().is_some_and(|h| self.same_team(h, p));
         let threat = self.holder.unwrap_or(EntityRef::Ball);
-        let rom = self.rom.clone();
+        let rom = &self.rom;
 
         if !holder_is_teammate {
             if !self.players[p.0].entity.flags.offscreen() {
-                let jump_bonus = self.players[p.0].speed_jump_bonus(&rom);
+                let jump_bonus = self.players[p.0].speed_jump_bonus(rom);
                 self.players[p.0].jump_bonus = jump_bonus;
                 if jump_bonus * 8 >= self.players[p.0].distance_to_ball {
-                    let target = self.players[p.0].lead_within_zone(&rom, self.entity(threat));
+                    let target = self.players[p.0].lead_within_zone(rom, self.entity(threat));
                     self.dive_at(p, target);
                     return;
                 }
@@ -909,7 +883,7 @@ impl Match {
 
         let threat_entity = self.entity(threat);
         let me = &self.players[p.0];
-        let mut target = me.lead_within_zone(&rom, threat_entity);
+        let mut target = me.lead_within_zone(rom, threat_entity);
         let line = if me.attacks_up() { 1120 } else { 32 };
         let thrown = threat == EntityRef::Ball || threat_entity.think == Think::Throw;
         let shifted_right = |t: Point| t.x + (line - t.y).abs();
@@ -923,19 +897,7 @@ impl Match {
             let x = shifted_left(target);
             Cover::Halfway(if x <= 272 { x } else { 320 })
         } else {
-            let close = if me.attacks_up() {
-                target.y >= 1024
-            } else {
-                target.y <= 128
-            };
-            let heading = match (me.attacks_up(), threat_entity.dir) {
-                _ if !close => None,
-                (true, 4) | (false, 0) => Some(Heading::Straight),
-                (true, 3) | (false, 1) => Some(Heading::Right),
-                (true, 5) | (false, 7) => Some(Heading::Left),
-                _ => Some(Heading::Other),
-            };
-            match heading {
+            match Heading::near_goal(me.attacks_up(), target, threat_entity.dir) {
                 None => Cover::Track,
                 Some(Heading::Straight) if thrown => Cover::Track,
                 Some(Heading::Right) => {
@@ -998,4 +960,26 @@ enum Heading {
     Right,
     Left,
     Other,
+}
+
+impl Heading {
+    /// Which way a threat at `target`, moving in `dir`, is heading, mirrored
+    /// for the top goal; `None` when it is not yet close to the goal of a
+    /// keeper whose team attacks up (or down).
+    fn near_goal(attacks_up: bool, target: Point, dir: i32) -> Option<Heading> {
+        let close = if attacks_up {
+            target.y >= 1024
+        } else {
+            target.y <= 128
+        };
+        if !close {
+            return None;
+        }
+        Some(match (attacks_up, dir) {
+            (true, 4) | (false, 0) => Heading::Straight,
+            (true, 3) | (false, 1) => Heading::Right,
+            (true, 5) | (false, 7) => Heading::Left,
+            _ => Heading::Other,
+        })
+    }
 }

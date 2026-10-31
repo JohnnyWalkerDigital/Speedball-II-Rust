@@ -13,15 +13,8 @@ use crate::game::league::team2_won;
 use crate::game::save::Progress;
 use crate::game::squad::Competition;
 
-/// Plays a new or loaded cup, with coins worth double while it lasts.
+/// Plays a new or loaded cup.
 pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
-    game.coin_value *= 2;
-    let result = play_cup(ui, game);
-    game.coin_value /= 2;
-    result
-}
-
-fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(cash_cap::CUP);
     let (mut cup, mut resume) = if list_menu(ui, game, &game.text.menus.cup)? == 0 {
         // A new cup.

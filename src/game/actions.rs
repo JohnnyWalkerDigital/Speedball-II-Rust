@@ -62,9 +62,9 @@ impl Match {
             player.launch
         };
         let scroll = self.camera.position();
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let player = &mut self.players[p.0];
-        player.reset_think_delay(&rom);
+        player.reset_think_delay(rom);
         player.target = target;
         if player.entity.flags.invisible() {
             player.entity.pos = target;
@@ -163,11 +163,10 @@ impl Match {
             return;
         }
         let ball = &self.props.ball;
-        if ball.sprite > 2 && !flags.jumping() {
+        if ball.is_high() && !flags.jumping() {
             return; // Ball is overhead.
         }
-        let thrower_dir = self.players[self.thrower.0].attributes.initial_dir;
-        let is_opponent_ball = player.attributes.initial_dir != thrower_dir;
+        let is_opponent_ball = !self.same_team(p, self.thrower);
         if ball.is_charged()
             && self.charged_hits_left != 0
             && self.shield_allows_hit(p)
@@ -223,12 +222,10 @@ impl Match {
 
     /// A diving goalkeeper punches the ball away.
     fn goalie_deflect(&mut self, p: PlayerId) {
-        if self.props.ball.sprite > 2 {
+        if self.props.ball.is_high() {
             return;
         }
-        let thrower_dir = self.players[self.thrower.0].attributes.initial_dir;
-        let keeper = &self.players[p.0];
-        let is_opponent_ball = keeper.attributes.initial_dir != thrower_dir;
+        let is_opponent_ball = !self.same_team(p, self.thrower);
         if self.props.ball.is_charged() && self.charged_hits_left != 0 && is_opponent_ball {
             self.hit_by_charged_ball(p);
             return;
@@ -311,7 +308,7 @@ impl Match {
                 let ball_overhead_in_reach = jump_bonus * 6 >= self.players[p.0].distance_to_ball
                     && self.holder.is_none()
                     && !self.ball_in_multiplier
-                    && self.props.ball.sprite > 2;
+                    && self.props.ball.is_high();
                 let entity = &mut self.players[p.0].entity;
                 entity.flags.set_busy(true);
                 if ball_overhead_in_reach {
@@ -398,8 +395,8 @@ impl Match {
         }
         player.entity.dir = self.rom.dir_from_bits(bits);
         let (list, speed) = self.run_animation(p);
-        let rom = self.rom.clone();
-        self.players[p.0].entity.set_animation(&rom, list, speed);
+        let rom = &self.rom;
+        self.players[p.0].entity.set_animation(rom, list, speed);
         true
     }
 
@@ -456,9 +453,9 @@ impl Match {
             player.entity.timer = 2;
         }
         let (list, speed) = self.stand_animation(p);
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let entity = &mut self.players[p.0].entity;
-        entity.set_animation(&rom, list, speed);
+        entity.set_animation(rom, list, speed);
         entity.script_index = 0;
         entity.think = Think::Idle;
     }
@@ -477,7 +474,7 @@ impl Match {
         let jump_for_ball = self.holder.is_none()
             && jump_bonus * 6 >= player.distance_to_ball
             && !self.ball_in_multiplier
-            && self.props.ball.sprite > 2;
+            && self.props.ball.is_high();
         if !jump_for_ball {
             player.entity.dir = if bits.has_direction() {
                 rom.dir_from_bits(bits)
@@ -533,19 +530,14 @@ impl Match {
 
     /// Standing tackle towards an opponent.
     pub(crate) fn standing_tackle(&mut self, p: PlayerId, opponent: PlayerId) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let opponent_pos = self.players[opponent.0].entity.pos;
         let player = &mut self.players[p.0];
-        let bits = player.entity.dir_bits_towards(opponent_pos);
-        player.entity.dir = if bits.has_direction() {
-            rom.dir_from_bits(bits)
-        } else {
-            player.attributes.initial_dir
-        };
+        player.entity.dir = player.dir_towards(rom, opponent_pos);
         let entity = &mut player.entity;
         entity.script_index = 0;
         entity.flags.set_busy(true);
-        entity.set_animation(&rom, Animation::StandingTackle, 0);
+        entity.set_animation(rom, Animation::StandingTackle, 0);
         entity.think = Think::StandingTackle;
     }
 
@@ -561,9 +553,9 @@ impl Match {
         };
         player.entity.script_index &= 7;
         let (list, speed) = self.run_animation(p);
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let entity = &mut self.players[p.0].entity;
-        entity.set_animation(&rom, list, speed);
+        entity.set_animation(rom, list, speed);
         entity.think = Think::Idle;
     }
 
@@ -634,13 +626,13 @@ impl Match {
 
     /// Puts a player on the floor, sliding at `speed` in its current direction.
     pub(crate) fn knock_down(&mut self, p: PlayerId, speed: i32) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let entity = &mut self.players[p.0].entity;
         entity.script_index = 0;
         entity.flags.set_busy(true);
         entity.flags.set_falling(true);
         entity.think = Think::Idle;
-        entity.set_animation(&rom, Animation::KnockedDown, speed);
+        entity.set_animation(rom, Animation::KnockedDown, speed);
     }
 
     /// Chance out of 256 that `attacker`'s tackle on `defender` lands.
@@ -719,17 +711,22 @@ impl Match {
         self.start_throw(p);
     }
 
+    /// Throws towards `target`: along the ground if it is in reach,
+    /// otherwise lobbed.
+    pub(crate) fn throw_low_if(&mut self, p: PlayerId, in_reach: bool) {
+        if in_reach {
+            self.throw_low(p);
+        } else {
+            self.throw_high(p);
+        }
+    }
+
     /// Turns towards the target and starts the throw animation.
     fn start_throw(&mut self, p: PlayerId) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let player = &mut self.players[p.0];
-        let bits = player.entity.dir_bits_towards(player.target);
-        player.entity.dir = if bits.has_direction() {
-            rom.dir_from_bits(bits)
-        } else {
-            player.attributes.initial_dir
-        };
-        player.entity.set_animation(&rom, Animation::Throw, 0);
+        player.entity.dir = player.dir_towards(rom, player.target);
+        player.entity.set_animation(rom, Animation::Throw, 0);
         self.begin_throw(p);
     }
 
@@ -796,7 +793,7 @@ impl Match {
 
     /// The scorer's team celebrates; the scorer runs back holding the ball.
     pub(crate) fn start_goal_celebration(&mut self, scorer: PlayerId) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         for id in self.teammates(scorer) {
             let flags = self.players[id.0].entity.flags;
             if flags.falling() || flags.invisible() {
@@ -817,7 +814,7 @@ impl Match {
                 (Animation::Celebrate, 0)
             };
             let entity = &mut self.players[id.0].entity;
-            entity.set_animation(&rom, list, speed);
+            entity.set_animation(rom, list, speed);
             entity.think = Think::Idle;
         }
     }

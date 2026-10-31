@@ -294,7 +294,7 @@ impl Match {
 
     pub(crate) fn arena_check_multiplier_entry(&mut self) {
         let ball = &self.props.ball;
-        if self.holder.is_some() || self.ball_in_multiplier || ball.sprite > 2 {
+        if self.holder.is_some() || self.ball_in_multiplier || ball.is_high() {
             return;
         }
         if ball.pos.x < 24 || ball.pos.x > 616 {
@@ -335,7 +335,7 @@ impl Match {
     }
 
     fn bounce_off_multiplier(&mut self, left: bool, top: i32, bottom: i32) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let ball = &mut self.props.ball;
         let previous = Point::new(
             ball.pos.x - 2 * ball.velocity.x,
@@ -383,7 +383,7 @@ impl Match {
     }
 
     pub(crate) fn arena_check_dome_hits(&mut self) {
-        if self.holder.is_some() || self.props.ball.sprite > 2 {
+        if self.holder.is_some() || self.props.ball.is_high() {
             return;
         }
         for dome in 0..2 {
@@ -419,7 +419,7 @@ impl Match {
                 }
             }
         }
-        if !self.ball_is_free_or_being_thrown() || self.props.ball.sprite > 2 {
+        if !self.ball_is_free_or_being_thrown() || self.props.ball.is_high() {
             return;
         }
         for pad in 0..2 {

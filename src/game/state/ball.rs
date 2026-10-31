@@ -13,7 +13,7 @@ impl Match {
     pub(super) fn move_all(&mut self) {
         let rom = Rc::clone(&self.rom);
         if self.holder.is_none() && !self.ball_in_multiplier {
-            let low = self.props.ball.sprite <= 2;
+            let low = !self.props.ball.is_high();
             let margin = if low { 32 } else { 24 };
             let hits = self.props.ball.move_within_walls(&rom, margin);
             // The ball sounds different high and low.
@@ -108,7 +108,7 @@ impl Match {
 
     /// The tunnels on the side walls teleport the ball across the pitch.
     pub(crate) fn check_warp_gates(&mut self) {
-        if self.holder.is_some() || self.props.ball.sprite > 2 {
+        if self.holder.is_some() || self.props.ball.is_high() {
             return;
         }
         let ball = &mut self.props.ball;

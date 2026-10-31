@@ -118,9 +118,7 @@ fn read_bank(pack: &Pack, dir: &str) -> Result<SoundData, ContentError> {
     let sequences = sequences::parse(&text)
         .map_err(|e| ContentError::invalid(&pack.file_path(&sequences_file), e))?;
     let name = format!("{dir}/{INSTRUMENTS}");
-    let file: Instruments = pack
-        .json(&name)?
-        .ok_or_else(|| ContentError::Missing(pack.json_path(&name).display().to_string()))?;
+    let file: Instruments = pack.json(&name)?;
     let samples = file
         .samples
         .iter()

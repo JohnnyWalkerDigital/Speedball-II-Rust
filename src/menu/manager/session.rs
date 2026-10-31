@@ -62,7 +62,7 @@ impl<'a> Session<'a> {
             squad: career.squads.get(self.side),
             market: &career.market.players,
             buyable_count: career.market.buyable_count,
-            rounds: career.market.rounds,
+            may_save: career.market.may_save(),
             cash: *career.money.cash.get(self.side),
             upgrades: &game.tables.upgrades,
             context: self.context,

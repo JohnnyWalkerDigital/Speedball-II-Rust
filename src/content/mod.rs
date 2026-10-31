@@ -162,48 +162,45 @@ pub struct Extracted {
 pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, ContentError> {
     let mut writer = pack::PackWriter::new(dir);
     let mut extracted = Extracted::default();
-    tables::write_lookups(&mut writer, &source.lookups()?)?;
-    tables::write_teams(&mut writer, &source.teams()?)?;
-    tables::write_animations(&mut writer, &source.animations()?)?;
-    tables::write_start(&mut writer, &source.match_start()?)?;
+    writer.json(tables::LOOKUPS, &source.lookups()?)?;
+    writer.json(tables::TEAMS, &source.teams()?)?;
+    writer.json(tables::ANIMATIONS, &source.animations()?)?;
+    writer.json(tables::START, &source.match_start()?)?;
     for platform in [Platform::Amiga, Platform::Atari] {
-        match source.match_graphics(platform) {
-            Ok(assets) => {
-                graphics::write_match(&mut writer, &assets)?;
-                extracted.platforms.push(platform);
-            }
-            Err(ContentError::Unavailable(_)) => {}
-            Err(error) => return Err(error),
+        if let Some(assets) = optional(source.match_graphics(platform))? {
+            graphics::write_match(&mut writer, &assets)?;
+            extracted.platforms.push(platform);
         }
     }
-    match source.menu_graphics() {
-        Ok(menus) => {
-            graphics::write_menus(&mut writer, &menus)?;
-            text::write_menus(&mut writer, &source.menu_text()?)?;
-            tables::write_menus(&mut writer, &source.menu_tables()?)?;
-            tables::write_manager(&mut writer, &source.manager_tables()?)?;
-            extracted.menus = true;
-        }
-        Err(ContentError::Unavailable(_)) => {}
-        Err(error) => return Err(error),
+    if let Some(menus) = optional(source.menu_graphics())? {
+        graphics::write_menus(&mut writer, &menus)?;
+        writer.json(text::MENUS, &source.menu_text()?)?;
+        writer.json(tables::SQUADS, &source.menu_tables()?)?;
+        writer.json(tables::MANAGER, &source.manager_tables()?)?;
+        extracted.menus = true;
     }
     if let Some(intro) = source.intro_graphics()? {
         graphics::write_intro(&mut writer, &intro)?;
         if let Some(intro) = source.intro_text()? {
-            text::write_intro(&mut writer, &intro)?;
+            writer.json(text::INTRO, &intro)?;
         }
         extracted.intro = true;
     }
-    match source.sound() {
-        Ok(content) => {
-            sound::write(&mut writer, &content)?;
-            extracted.sound = true;
-        }
-        Err(ContentError::Unavailable(_)) => {}
-        Err(error) => return Err(error),
+    if let Some(content) = optional(source.sound())? {
+        sound::write(&mut writer, &content)?;
+        extracted.sound = true;
     }
     writer.finish()?;
     Ok(extracted)
+}
+
+/// A part the source may not have, as `None` when it doesn't.
+fn optional<T>(part: Result<T, ContentError>) -> Result<Option<T>, ContentError> {
+    match part {
+        Ok(part) => Ok(Some(part)),
+        Err(ContentError::Unavailable(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// Where a pack keeps the intro's pictures: the intro is in a pack if this
@@ -227,22 +224,22 @@ impl ContentSource for Pack {
     }
 
     fn menu_text(&self) -> Result<MenuText, ContentError> {
-        text::read_menus(self)
+        self.checked_json(text::MENUS, MenuText::check)
     }
 
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
         if !self.has_dir(INTRO) {
             return Ok(None);
         }
-        text::read_intro(self).map(Some)
+        self.json(text::INTRO).map(Some)
     }
 
     fn lookups(&self) -> Result<Lookups, ContentError> {
-        tables::read_lookups(self)
+        self.checked_json(tables::LOOKUPS, Lookups::check)
     }
 
     fn teams(&self) -> Result<Teams, ContentError> {
-        tables::read_teams(self)
+        self.checked_json(tables::TEAMS, Teams::check)
     }
 
     fn animations(&self) -> Result<AnimationTable, ContentError> {
@@ -254,11 +251,11 @@ impl ContentSource for Pack {
     }
 
     fn menu_tables(&self) -> Result<MenuTables, ContentError> {
-        tables::read_menus(self)
+        self.checked_json(tables::SQUADS, MenuTables::check)
     }
 
     fn manager_tables(&self) -> Result<ManagerTables, ContentError> {
-        tables::read_manager(self)
+        self.checked_json(tables::MANAGER, ManagerTables::check)
     }
 
     fn sound(&self) -> Result<SoundContent, ContentError> {

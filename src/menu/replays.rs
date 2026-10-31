@@ -5,6 +5,7 @@ use super::flow::{wait_fire, Game};
 use super::host::{Button, Control, SoundBank};
 use super::play::FRAME_TIME;
 use super::ram::addr;
+use super::text::DIGIT_ZERO;
 use super::ui::{Flow, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::data::save_disk::{replay_sector, REPLAY_SECTORS};
 use crate::game::replay::{Replay, ReplayTick, SavedReplay};
@@ -93,7 +94,6 @@ fn run_replay(
 /// "GOAL 1" to "GOAL 9" (the message with the slot's digit).
 fn goal_message(game: &Game, slot: u8) -> Text {
     let mut text = game.text.messages.replay_goal.clone();
-    // Digits follow the letters in the panel font.
-    text[addr::STR_GOAL_DIGIT] = b'Z' + 1 + slot;
+    text[addr::STR_GOAL_DIGIT] = DIGIT_ZERO + slot;
     Text::new(text)
 }

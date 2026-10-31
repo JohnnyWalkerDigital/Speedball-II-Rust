@@ -143,7 +143,9 @@ struct Band {
 }
 
 impl Band {
-    fn columns(&self) -> usize {
+    /// The columns the band fills: fewer than `columns` if its sprites
+    /// don't fill a row.
+    fn used_columns(&self) -> usize {
         self.count.clamp(1, self.columns)
     }
 
@@ -152,12 +154,27 @@ impl Band {
     }
 
     fn width(&self) -> usize {
-        self.columns() * self.cell_width
+        self.used_columns() * self.cell_width
     }
 
     fn height(&self) -> usize {
         self.rows() * self.cell_height
     }
+
+    /// The top-left corner of sprite `i`, in a band that starts at row `top`.
+    fn cell_origin(&self, i: usize, top: usize) -> (usize, usize) {
+        (
+            (i % self.columns) * self.cell_width,
+            top + (i / self.columns) * self.cell_height,
+        )
+    }
+}
+
+/// The width and height of a sheet holding `bands`, one under another.
+fn sheet_size(bands: &[Band]) -> (usize, usize) {
+    let width = bands.iter().map(Band::width).max().unwrap_or(0);
+    let height = bands.iter().map(Band::height).sum();
+    (width, height)
 }
 
 /// Writes a pack.
@@ -264,11 +281,7 @@ impl PackWriter {
 
     /// Writes `value` as `{name}.json`.
     pub fn json<T: Serialize>(&mut self, name: &str, value: &T) -> Result<(), ContentError> {
-        let path = self.dir.join(format!("{name}.json"));
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| ContentError::io(dir, e))?;
-        }
-        std::fs::write(&path, json::to_string(value)).map_err(|e| ContentError::io(&path, e))
+        self.file(&format!("{name}.json"), json::to_string(value).as_bytes())
     }
 
     /// Writes `name` (a path in the pack, with its extension).
@@ -345,24 +358,17 @@ impl Pack {
         name: &str,
         check: impl FnOnce(&T) -> Result<(), String>,
     ) -> Result<T, ContentError> {
-        let path = self.json_path(name);
-        let value = self
-            .json(name)?
-            .ok_or_else(|| ContentError::Missing(path.display().to_string()))?;
-        check(&value).map_err(|problems| ContentError::invalid(&path, problems))?;
+        let value = self.json(name)?;
+        check(&value).map_err(|problems| ContentError::invalid(&self.json_path(name), problems))?;
         Ok(value)
     }
 
-    /// Reads `{name}.json`, `None` if there is none.
-    pub fn json<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>, ContentError> {
-        let path = self.json_path(name);
-        if !path.exists() {
-            return Ok(None);
-        }
-        let json = std::fs::read_to_string(&path).map_err(|e| ContentError::io(&path, e))?;
+    /// Reads `{name}.json`, which must be there.
+    pub fn json<T: DeserializeOwned>(&self, name: &str) -> Result<T, ContentError> {
+        let json = String::from_utf8(self.read_file(&format!("{name}.json"))?)
+            .map_err(|_| ContentError::invalid(&self.json_path(name), "is not UTF-8".into()))?;
         serde_json::from_str(&json)
-            .map(Some)
-            .map_err(|e| ContentError::invalid(&path, e.to_string()))
+            .map_err(|e| ContentError::invalid(&self.json_path(name), e.to_string()))
     }
 
     fn path(&self, name: &str) -> PathBuf {
@@ -496,8 +502,7 @@ fn lay_out<P: Copy + Default>(sprites: &[Cell<P>], columns: usize) -> (Vec<Band>
             }),
         }
     }
-    let width = bands.iter().map(Band::width).max().unwrap_or(0);
-    let height = bands.iter().map(Band::height).sum();
+    let (width, height) = sheet_size(&bands);
     let mut sheet = Grid {
         width,
         height,
@@ -507,8 +512,7 @@ fn lay_out<P: Copy + Default>(sprites: &[Cell<P>], columns: usize) -> (Vec<Band>
     let mut top = 0;
     for band in &bands {
         for (i, sprite) in sprites.by_ref().take(band.count).enumerate() {
-            let x = (i % band.columns) * band.cell_width;
-            let y = top + (i / band.columns) * band.cell_height;
+            let (x, y) = band.cell_origin(i, top);
             for row in 0..sprite.height {
                 let start = (y + row) * width + x;
                 sheet.pixels[start..start + sprite.width]
@@ -526,8 +530,7 @@ fn cut<P: Copy>(
     bands: &[Band],
     path: &Path,
 ) -> Result<Vec<Grid<P>>, ContentError> {
-    let width = bands.iter().map(Band::width).max().unwrap_or(0);
-    let height: usize = bands.iter().map(Band::height).sum();
+    let (width, height) = sheet_size(bands);
     if sheet.width < width || sheet.height < height {
         return Err(ContentError::png(
             path,
@@ -541,8 +544,7 @@ fn cut<P: Copy>(
     let mut top = 0;
     for band in bands {
         for i in 0..band.count {
-            let x = (i % band.columns) * band.cell_width;
-            let y = top + (i / band.columns) * band.cell_height;
+            let (x, y) = band.cell_origin(i, top);
             let pixels = (0..band.cell_height)
                 .flat_map(|row| {
                     let start = (y + row) * sheet.width + x;

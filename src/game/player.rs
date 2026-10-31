@@ -116,6 +116,15 @@ impl Player {
         self.attributes.pos == 0
     }
 
+    pub fn is_defender(&self) -> bool {
+        self.attributes.pos == 1
+    }
+
+    /// One of the attackers (formation positions 3 and up).
+    pub fn is_forward(&self) -> bool {
+        self.attributes.pos >= 3
+    }
+
     /// Whether this team attacks upwards (initial direction 0).
     pub fn attacks_up(&self) -> bool {
         self.attributes.initial_dir == 0
@@ -217,6 +226,17 @@ impl Player {
     /// Direction bits on each axis where `target` differs.
     pub fn dir_bits_towards_exact(&self, target: Point) -> DirBits {
         self.entity.dir_bits_towards_exact(target)
+    }
+
+    /// The direction to face `target`, or the way the team attacks when
+    /// already there.
+    pub fn dir_towards(&self, rom: &AtariRom, target: Point) -> i32 {
+        let bits = self.entity.dir_bits_towards(target);
+        if bits.has_direction() {
+            rom.dir_from_bits(bits)
+        } else {
+            self.attributes.initial_dir
+        }
     }
 
     // -- Damage and power-ups -------------------------------------------------

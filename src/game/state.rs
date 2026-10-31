@@ -259,6 +259,12 @@ impl Match {
         Side::from_is_team1(self.players[p.0].entity.is_team1())
     }
 
+    /// Whether `a` and `b` play for the same team, by the end they started
+    /// attacking.
+    pub(crate) fn same_team(&self, a: PlayerId, b: PlayerId) -> bool {
+        self.players[a.0].attributes.initial_dir == self.players[b.0].attributes.initial_dir
+    }
+
     pub(crate) fn teammates(&self, p: PlayerId) -> impl Iterator<Item = PlayerId> {
         PlayerId::team(self.players[p.0].entity.is_team1())
     }

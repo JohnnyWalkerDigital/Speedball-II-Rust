@@ -561,7 +561,6 @@ fn losing_a_cup_tie_ends_the_cup_and_restores_the_coins() {
     });
     flow::run(&mut Ui::new(&mut host), &mut game);
 
-    assert_eq!(game.coin_value, 100, "the cup's double coins end with it");
     let brutal_deluxe = game.career.record(TeamId::League(0));
     assert_eq!(brutal_deluxe.played, 2, "{brutal_deluxe:?}");
     assert_eq!(brutal_deluxe.lost, 2);

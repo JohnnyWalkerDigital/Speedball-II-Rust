@@ -83,10 +83,10 @@ pub(super) fn press_key(
     }
 }
 
-/// Saves the game: only every fourth management round (the key is blank
+/// Saves the game, when the market allows it (the key is blank
 /// otherwise).
 fn save(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
-    if game.career.market.rounds & 3 != 0 {
+    if !game.career.market.may_save() {
         return Ok(());
     }
     if let Some(snapshot) = session.standings.snapshot() {

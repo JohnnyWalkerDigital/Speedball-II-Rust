@@ -227,11 +227,6 @@ impl Match {
             .filter(|held| held.token == token)
             .map(|held| held.holder)
     }
-
-    /// Whether `a` and `b` play for the same team, by their direction.
-    fn same_team(&self, a: PlayerId, b: PlayerId) -> bool {
-        self.players[a.0].attributes.initial_dir == self.players[b.0].attributes.initial_dir
-    }
 }
 
 #[cfg(test)]

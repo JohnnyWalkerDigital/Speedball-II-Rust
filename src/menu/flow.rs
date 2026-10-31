@@ -16,7 +16,7 @@ use super::ram::MenuRam;
 use super::saving::SavedNames;
 use super::strings::{MenuSpec, MenuText, Title};
 use super::tables::MenuTables;
-use super::text::write_digits;
+use super::text::{write_digits, DIGIT_ZERO};
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
 use crate::data::AtariRom;
@@ -77,8 +77,6 @@ pub struct Game {
     /// The menus' random numbers, for draws and other results.
     pub rng: Rng,
     pub scores_table: ScoresTable,
-    /// Doubled while the cup is on.
-    pub coin_value: i32,
     /// The computer plays Brutal Deluxe's matches ("TEAM MANAGER" in the
     /// league).
     pub manager_mode: bool,
@@ -137,7 +135,6 @@ impl Game {
             career,
             rng: Rng::new(seed as u32, (seed >> 32) as u32 | 1),
             scores_table,
-            coin_value: 100,
             manager_mode: false,
             one_player: false,
             sped_up: false,
@@ -405,7 +402,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     let mut wins = PerTeam::new(0, 0);
     for number in 1..=matches {
         let mut text = game.text.messages.match_number.clone();
-        text[8] = 0x5B + number as u8;
+        text[8] = DIGIT_ZERO + number as u8;
         message(ui, game, &game.text.titles.two_player, &text)?;
 
         let mut initial_dir = 0;
@@ -437,16 +434,16 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
         game.career.record_result(teams, total);
     }
     let mut text = game.text.messages.player_wins.clone();
-    text[9] = if wins.team1 < wins.team2 { 0x5D } else { 0x5C };
+    text[9] = DIGIT_ZERO + if wins.team1 < wins.team2 { 2 } else { 1 };
     message(ui, game, &game.text.titles.two_player, &text)
 }
 
 /// Each player in turn gets the gym, with their own joystick and money.
 fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
     let teams = (BRUTAL_DELUXE, TeamId::PlayerTwo);
-    for (side, digit) in [(Side::Team1, 0x5C), (Side::Team2, 0x5D)] {
+    for (side, player) in [(Side::Team1, 1), (Side::Team2, 2)] {
         let mut text = game.text.messages.player_turn.clone();
-        text[9] = digit;
+        text[9] = DIGIT_ZERO + player;
         message(ui, game, &game.text.titles.two_player, &text)?;
         manager::gym_screen(ui, game, side, Competition::TwoPlayers, teams)?;
     }
@@ -544,7 +541,10 @@ fn brutal_deluxe_match(
     rules.team1.skills = SquadSkills::Players(Box::new(game.career.squads.team1.clone()));
     rules.computer.team1 = game.manager_mode;
     rules.initial_dir_team1 = initial_dir;
-    rules.coin_value = game.coin_value;
+    if competition == Competition::Cup {
+        // Coins are worth double in the cup.
+        rules.coin_value *= 2;
+    }
     let teams = PerTeam::from(teams);
     let may_speed_up =
         game.manager_mode && matches!(competition, Competition::League | Competition::Cup);

@@ -111,7 +111,7 @@ impl Match {
             return ball_on_floor;
         }
         match self.holder {
-            None | Some(EntityRef::TerrainCenter) => ball.sprite <= 2 && ball_on_floor,
+            None | Some(EntityRef::TerrainCenter) => !ball.is_high() && ball_on_floor,
             Some(holder) => {
                 let carrier = self.entity(holder);
                 // A jumping carrier facing away from us hides the ball.

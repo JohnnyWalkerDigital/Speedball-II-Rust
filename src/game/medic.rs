@@ -117,14 +117,14 @@ impl Match {
 
     /// Steers the rear medic towards its target; `false` once it is there.
     fn steer_rear_medic(&mut self, restart_animation: bool) -> bool {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let rear = &mut self.props.medics[REAR];
         let bits = rear.dir_bits_towards_exact(self.injury.rear_medic_target);
         if !bits.has_direction() {
             return false;
         }
         rear.dir = rom.dir_from_bits(bits);
-        rear.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
+        rear.set_animation(rom, Animation::MedicWalk, MEDIC_SPEED);
         if restart_animation {
             rear.script_index = 0;
         }
@@ -138,7 +138,7 @@ impl Match {
     }
 
     fn steer_front_medic(&mut self, injured: PlayerId) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let target = self.front_medic_target(injured);
         let front = &mut self.props.medics[FRONT];
         let dir = rom.dir_from_bits(front.dir_bits_towards_exact(target));
@@ -146,7 +146,7 @@ impl Match {
             front.velocity = Point::ZERO;
         } else {
             front.dir = dir;
-            front.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
+            front.set_animation(rom, Animation::MedicWalk, MEDIC_SPEED);
             front.script_index = 0;
         }
     }
@@ -196,7 +196,7 @@ impl Match {
     }
 
     fn medics_lift(&mut self, injured: PlayerId) {
-        let rom = self.rom.clone();
+        let rom = &self.rom;
         let target = self.front_medic_target(injured);
         let front = &mut self.props.medics[FRONT];
         if target.y != front.pos.y {
@@ -204,7 +204,7 @@ impl Match {
                 .dir_from_bits(front.dir_bits_towards_exact(target))
                 .max(0);
             front.dir = dir;
-            front.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
+            front.set_animation(rom, Animation::MedicWalk, MEDIC_SPEED);
             return;
         }
         // The original reads the seed without advancing it, so this does not

@@ -32,7 +32,8 @@ pub struct Scene<'a> {
     pub squad: &'a Squad,
     pub market: &'a [MarketPlayer],
     pub buyable_count: u16,
-    pub rounds: u16,
+    /// Whether the save key works this round.
+    pub may_save: bool,
     pub cash: u16,
     pub upgrades: &'a [Upgrade],
     pub context: Context,
@@ -99,7 +100,7 @@ fn attribute_labels(canvas: &mut Canvas, scene: &Scene) {
 
 /// The keypad, with the chosen key lit or pressed.
 fn keypad(canvas: &mut Canvas, scene: &Scene, keypad: &Keypad, view: &View) {
-    let save_hidden = scene.rounds & 3 != 0;
+    let save_hidden = !scene.may_save;
     for key in keypad.iter().flatten().flatten() {
         let mut sprite = key.sprite;
         if save_hidden && sprite == SAVE_KEY {

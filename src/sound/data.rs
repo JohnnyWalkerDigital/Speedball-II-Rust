@@ -30,6 +30,17 @@ const fn idx(value: u32) -> usize {
     value as usize
 }
 
+/// The address a pointer at `at` points to: pointers are offsets from the
+/// start of the sound bank.
+fn pointer(image: &[u8], at: usize) -> usize {
+    idx(SOUND_BASE) + image.u32_at(at) as usize
+}
+
+/// The pointer to `address`.
+fn offset_of(address: usize) -> u32 {
+    (address - idx(SOUND_BASE)) as u32
+}
+
 /// The driver's tables, shared by every bank.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SoundTables {
@@ -232,12 +243,20 @@ pub struct SoundContent {
     pub intro: Option<SoundData>,
 }
 
-/// Where the sequence table is, how many entries it has, and the sequences
-/// it lists (number and address). Entry 0, which no sound plays, is empty;
-/// the table ends at the next empty entry (the samples start with silence).
-fn sequence_table(image: &[u8]) -> (usize, usize, Vec<(u8, usize)>) {
-    let base = SOUND_BASE as usize;
-    let table = base + image.u32_at(base) as usize;
+/// The table of sequences.
+struct SequenceTable {
+    at: usize,
+    /// Entries, including the empty one for sequence 0.
+    count: usize,
+    /// Each sequence's number and address.
+    starts: Vec<(u8, usize)>,
+}
+
+/// Reads the sequence table. Entry 0, which no sound plays, is empty; the
+/// table ends at the next empty entry (the samples start with silence).
+fn sequence_table(image: &[u8]) -> SequenceTable {
+    let base = idx(SOUND_BASE);
+    let table = pointer(image, base);
     let mut count = 0;
     let mut starts = Vec::new();
     for number in 0..=255u8 {
@@ -254,15 +273,44 @@ fn sequence_table(image: &[u8]) -> (usize, usize, Vec<(u8, usize)>) {
             starts.push((number, base + offset));
         }
     }
-    (table, count, starts)
+    SequenceTable {
+        at: table,
+        count,
+        starts,
+    }
+}
+
+/// An instrument as the image holds it.
+struct InstrumentRecord {
+    one_shot: i16,
+    loop_start: u16,
+    length: u16,
+    sample_at: usize,
+    octave: u32,
+}
+
+impl InstrumentRecord {
+    fn read(image: &[u8], at: usize) -> Self {
+        let field = |offset: u32| at + idx(offset);
+        Self {
+            one_shot: image.i16_at(field(instrument::ONE_SHOT)),
+            loop_start: image.u16_at(field(instrument::LOOP_START)),
+            length: image.u16_at(field(instrument::LENGTH)),
+            sample_at: pointer(image, field(instrument::SAMPLE)),
+            octave: image.u32_at(field(instrument::OCTAVE)),
+        }
+    }
 }
 
 impl SoundData {
     /// Reads the bank in `image`. Its instruments are those the sequences
     /// use.
     pub fn read(image: &[u8]) -> Result<Self, String> {
-        let base = SOUND_BASE as usize;
-        let (table, count, mut starts) = sequence_table(image);
+        let SequenceTable {
+            at: table,
+            count,
+            mut starts,
+        } = sequence_table(image);
         let table_end = table + count * 4;
         starts.sort_by_key(|&(_, address)| address);
         let mut sequences = Vec::new();
@@ -281,21 +329,11 @@ impl SoundData {
             .flat_map(|s| s.references().instruments)
             .max()
             .map_or(0, |n| usize::from(n) + 1);
-        let instruments_at = base + image.u32_at(idx(INSTRUMENT_TABLE_INDEX)) as usize;
+        let instruments_at = pointer(image, idx(INSTRUMENT_TABLE_INDEX));
         let records: Vec<_> = (0..instrument_count)
-            .map(|i| {
-                let record = instruments_at + i * idx(INSTRUMENT_SIZE);
-                let field = |offset: u32| record + idx(offset);
-                (
-                    image.i16_at(field(instrument::ONE_SHOT)),
-                    image.u16_at(field(instrument::LOOP_START)),
-                    image.u16_at(field(instrument::LENGTH)),
-                    base + image.u32_at(field(instrument::SAMPLE)) as usize,
-                    image.u32_at(field(instrument::OCTAVE)),
-                )
-            })
+            .map(|i| InstrumentRecord::read(image, instruments_at + i * idx(INSTRUMENT_SIZE)))
             .collect();
-        let mut sample_starts: Vec<usize> = records.iter().map(|r| r.3).collect();
+        let mut sample_starts: Vec<usize> = records.iter().map(|r| r.sample_at).collect();
         sample_starts.sort_unstable();
         sample_starts.dedup();
         if sample_starts.first().is_some_and(|&s| s != table_end)
@@ -316,15 +354,15 @@ impl SoundData {
             .collect();
         let instruments = records
             .iter()
-            .map(|&(one_shot, loop_start, length, start, octave)| {
-                let i = sample_starts.binary_search(&start).unwrap();
+            .map(|record| {
+                let i = sample_starts.binary_search(&record.sample_at).unwrap();
                 let whole = samples[i].data.len() / 2;
                 Instrument {
                     sample: samples[i].name.clone(),
-                    looping: one_shot < 0,
-                    loop_start,
-                    length: (usize::from(length) != whole).then_some(length),
-                    octave,
+                    looping: record.one_shot < 0,
+                    loop_start: record.loop_start,
+                    length: (usize::from(record.length) != whole).then_some(record.length),
+                    octave: record.octave,
                 }
             })
             .collect();
@@ -409,9 +447,8 @@ impl SoundData {
         self.check()?;
         let mut image = base.to_vec();
         tables.write(&mut image);
-        let sound_base = SOUND_BASE as usize;
-        let (_, _, starts) = sequence_table(base);
-        let mut at = starts
+        let mut at = sequence_table(base)
+            .starts
             .iter()
             .map(|&(_, address)| address)
             .min()
@@ -431,7 +468,7 @@ impl SoundData {
             .max()
             .unwrap_or(0);
         for address in &addresses[..count] {
-            let offset = address.map_or(0, |a| (a - sound_base) as u32);
+            let offset = address.map_or(0, offset_of);
             put(&mut image, at, &offset.to_be_bytes());
             at += 4;
         }
@@ -453,8 +490,8 @@ impl SoundData {
                 .length
                 .unwrap_or((self.samples[i].data.len() / 2) as u16);
             let one_shot: i16 = if instrument.looping { -1 } else { 1 };
-            let mut record = [0; INSTRUMENT_SIZE as usize];
-            let sample = (sample_at[i] - sound_base) as u32;
+            let mut record = [0; idx(INSTRUMENT_SIZE)];
+            let sample = offset_of(sample_at[i]);
             for (offset, bytes) in [
                 (instrument::ONE_SHOT, &one_shot.to_be_bytes()[..]),
                 (instrument::LOOP_START, &instrument.loop_start.to_be_bytes()),
@@ -462,22 +499,18 @@ impl SoundData {
                 (instrument::SAMPLE, &sample.to_be_bytes()),
                 (instrument::OCTAVE, &instrument.octave.to_be_bytes()),
             ] {
-                let field = offset as usize;
+                let field = idx(offset);
                 record[field..field + bytes.len()].copy_from_slice(bytes);
             }
             put(&mut image, at, &record);
             at += record.len();
         }
 
+        put(&mut image, idx(SOUND_BASE), &offset_of(table).to_be_bytes());
         put(
             &mut image,
-            sound_base,
-            &((table - sound_base) as u32).to_be_bytes(),
-        );
-        put(
-            &mut image,
-            INSTRUMENT_TABLE_INDEX as usize,
-            &((instruments - sound_base) as u32).to_be_bytes(),
+            idx(INSTRUMENT_TABLE_INDEX),
+            &offset_of(instruments).to_be_bytes(),
         );
         Ok(image)
     }

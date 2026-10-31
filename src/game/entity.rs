@@ -293,6 +293,12 @@ impl Entity {
         self.flags.bit3()
     }
 
+    /// Ball: in the air. Its first three sprites are on the ground; the
+    /// rest show it higher up.
+    pub fn is_high(&self) -> bool {
+        self.sprite > 2
+    }
+
     /// Ball: it went through an electrobounce and now knocks players over.
     pub fn is_charged(&self) -> bool {
         self.flags.bit3()

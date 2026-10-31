@@ -275,6 +275,11 @@ pub struct Market {
 }
 
 impl Market {
+    /// Whether the game may be saved: only every fourth management round.
+    pub fn may_save(&self) -> bool {
+        self.rounds & 3 == 0
+    }
+
     pub fn new(players: Vec<MarketPlayer>) -> Self {
         Self {
             players,

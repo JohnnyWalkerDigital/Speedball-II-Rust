@@ -62,7 +62,7 @@ impl Match {
     /// `true` if the goal replay started; the rest of the goal is handled by
     /// [`Match::finish_goal`] once it ends.
     pub(super) fn check_goal(&mut self) -> bool {
-        if self.holder.is_some() || self.clock_paused || self.props.ball.sprite > 2 {
+        if self.holder.is_some() || self.clock_paused || self.props.ball.is_high() {
             return false;
         }
         let ball = &self.props.ball;
