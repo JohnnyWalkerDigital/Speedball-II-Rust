@@ -366,6 +366,10 @@ Design choices:
   keeps its sideways drift through a warp tunnel when moving straight up or
   down (`step_warp`), and the ball launcher shows during a launch and hides
   once the ball is in play (`step_prepare_ball_launch`, `step_ball_launch`).
+- Coins, tokens and equipment are placed as on the Amiga
+  (`randomise_coin`, `randomise_powerup`, `randomise_armour`): on a
+  16-pixel grid from 72. The C# placed them as the ST does, on a 32-pixel
+  grid from 80.
 - The status bar's team 2 midfield light tests team 2's own player, as the
   original does (`green_light_active_player`); the C# tested team 1's.
 - Each team has its own earnings cap (`match_cash_max_p1`, `_p2`); the C#

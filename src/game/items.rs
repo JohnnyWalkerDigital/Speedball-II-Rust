@@ -17,18 +17,22 @@ enum Appearance {
     Visible,
 }
 
+/// The least x or y an item is placed at.
+const ITEM_MARGIN: i32 = 72;
+
 impl Match {
     // -- Placement ---------------------------------------------------------------
 
     /// Hides a coin and schedules it to reappear somewhere in its quarter
-    /// of the pitch (`InitItemCoins`).
+    /// of the pitch (`randomise_coin`). Items sit on the Amiga's 16-pixel
+    /// grid from 72; the ST used a 32-pixel grid from 80.
     pub(crate) fn place_coins(&mut self, i: usize) {
-        let mut x = 80 + self.rng.next_word_masked(224);
+        let mut x = ITEM_MARGIN + self.rng.next_word_masked(0xF0);
         // Coins 1 and 3 live on the left half, 2 and 4 on the right.
         if i % 2 == 1 {
             x += 256;
         }
-        let mut y = 80 + self.rng.next_word_masked(480);
+        let mut y = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
         // Coins 3 and 4 live in the bottom half.
         if i >= 2 {
             y += 512;
@@ -40,10 +44,11 @@ impl Match {
         coins.timer = timer;
     }
 
-    /// Hides a token and picks which power-up it will be (`InitItemToken`).
+    /// Hides a token and picks which power-up it will be
+    /// (`randomise_powerup`).
     pub(crate) fn place_token(&mut self, i: usize) {
-        let x = 80 + self.rng.next_word_masked(480);
-        let mut y = 80 + self.rng.next_word_masked(480);
+        let x = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
+        let mut y = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
         // Token 1 lives in the top half, token 2 in the bottom half.
         if i == 1 {
             y += 512;
@@ -66,10 +71,10 @@ impl Match {
         token.sprite = sprite;
     }
 
-    /// Hides the equipment item and picks a new piece (`InitItemEquipment`).
+    /// Hides the equipment item and picks a new piece (`randomise_armour`).
     pub(crate) fn place_equipment(&mut self) {
-        let x = 80 + self.rng.next_word_masked(480);
-        let y = 80 + self.rng.next_word_masked(992);
+        let x = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
+        let y = ITEM_MARGIN + self.rng.next_word_masked(0x3F0);
         let random = self.rng.next();
         let sprite = 80 + ((random >> 16) & 7) as i32;
         let equipment = &mut self.props.equipment;
