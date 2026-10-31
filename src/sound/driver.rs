@@ -515,8 +515,8 @@ impl Driver {
             0x94 => {
                 let bpm = u16::from(operand(pc));
                 // (A zero would be a division-by-zero trap on the 68000.)
-                if bpm != 0 {
-                    self.tempo = 750 / bpm;
+                if let Some(tempo) = 750u16.checked_div(bpm) {
+                    self.tempo = tempo;
                 }
             }
             // sound_op_silence: sum the next n bytes into the next duration.
