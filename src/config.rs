@@ -14,8 +14,7 @@ pub enum Platform {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameMode {
     /// One player against the computer. From the command line, two random
-    /// teams, both computer controlled until you touch the controls (the
-    /// C# port's "work in progress" setup).
+    /// teams, both computer controlled until you touch the controls.
     Knockout,
     /// Two humans; team stats are all 170.
     TwoPlayers,

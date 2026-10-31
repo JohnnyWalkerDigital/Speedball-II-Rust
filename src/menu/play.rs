@@ -1,6 +1,5 @@
-//! Running a match: the loop in `play_match` and the keys `run_replay`
-//! reads during a goal replay, plus the port's pause, step and fast-forward
-//! keys.
+//! Running a match: the match loop and the keys read during a goal
+//! replay, plus the port's pause, step and fast-forward keys.
 
 use std::time::Duration;
 
@@ -39,19 +38,18 @@ pub struct Controls<'a> {
     pub hold_at_end: bool,
     /// Where keys 1 to 9 save a goal replay, if they may.
     pub replay_saves: Option<ReplaySaves<'a>>,
-    /// `misc_flags` bit 4: the match is sped up. It outlasts the match.
+    /// The match is sped up. It outlasts the match.
     pub sped_up: &'a mut bool,
     /// F speeds the match up or slows it down (league and cup matches in
     /// manager mode). Elsewhere F is the port's fast forward.
     pub may_speed_up: bool,
 }
 
-/// `maybe_serial`: a long the loader leaves at boot, saved with each
-/// replay. It was at `$80` in the original's memory.
+/// A long the loader leaves at boot, saved with each replay.
 pub const SERIAL: u32 = 0x167F;
 
-/// Saving goal replays (`save_replay`): the original allowed it in one
-/// player games, but not in manager mode.
+/// Saving goal replays: the original allowed it in one player games, but
+/// not in manager mode.
 pub struct ReplaySaves<'a> {
     pub disk: &'a SaveDisk,
     /// [`SERIAL`], saved with each replay.
@@ -69,8 +67,8 @@ impl<'a> ReplaySaves<'a> {
         }
     }
 
-    /// Writes a replay to `slot`, asking to retry on a disk error
-    /// (`save_replay`). `frame` is what is on screen.
+    /// Writes a replay to `slot`, asking to retry on a disk error. `frame`
+    /// is what is on screen.
     pub fn save(
         &self,
         ui: &mut Ui,
@@ -88,7 +86,7 @@ impl<'a> ReplaySaves<'a> {
         Ok(())
     }
 
-    /// `disk_error_message`: player 1's fire retries, Escape gives up.
+    /// After a disk error: player 1's fire retries, Escape gives up.
     fn disk_error(&self, ui: &mut Ui, renderer: &MatchRenderer, frame: &Canvas) -> Flow<bool> {
         let mut shown = frame.clone();
         renderer.render_message(&self.disk_error, &mut shown);
@@ -153,12 +151,12 @@ pub fn run_match(
                     }
                 }
                 Button::Number(_) => {}
-                // `run_replay`: F speeds the match up and ends the replay.
+                // In a replay, F speeds the match up and ends the replay.
                 Button::FastForward if controls.may_speed_up && game.is_replaying() => {
                     game.set_accelerated(true);
                     game.end_replay();
                 }
-                // `play_match`: F toggles it.
+                // In a match, F toggles it.
                 Button::FastForward if controls.may_speed_up => {
                     game.set_accelerated(!game.is_accelerated());
                 }

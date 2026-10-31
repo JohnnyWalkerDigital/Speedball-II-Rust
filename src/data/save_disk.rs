@@ -22,7 +22,7 @@ pub const GAME_SECTORS: usize = 2;
 pub const REPLAY_SECTORS: usize = 6;
 
 /// Where goal replay `slot` (1 to 9) goes: from the third track, a track
-/// each (`save_replay`).
+/// each.
 pub fn replay_sector(slot: u8) -> usize {
     2 * TRACK + (usize::from(slot) - 1) * TRACK
 }

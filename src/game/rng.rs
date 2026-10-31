@@ -1,7 +1,7 @@
 //! The game's own pseudo-random generator, bit-for-bit.
 //!
 //! It is a pair of 32-bit registers mixed with 16-bit add-with-extend
-//! operations, exactly as the 68000 code does it. Reproducing it matters:
+//! operations, exactly as the original game does it. Reproducing it matters:
 //! item placement and every AI decision depend on the sequence.
 
 #[derive(Clone, Debug)]
@@ -45,8 +45,7 @@ impl Rng {
         self.a
     }
 
-    /// The top byte of the first seed (`rand_seed_1` in memory), without
-    /// advancing the generator.
+    /// The top byte of the first seed, without advancing the generator.
     pub fn high_byte(&self) -> u8 {
         (self.a >> 24) as u8
     }
@@ -65,7 +64,7 @@ impl Rng {
 }
 
 impl Default for Rng {
-    /// The seed the game boots with (RAM 0x14930).
+    /// The seed the game boots with.
     fn default() -> Self {
         Self::new(0x3141_5926, 0x5358_9793)
     }
@@ -75,7 +74,7 @@ impl Default for Rng {
 mod tests {
     use super::*;
 
-    /// Reference values produced by the original C# `MyRandom`.
+    /// An independent reference implementation to check the generator against.
     fn reference_next(a: &mut i64, b: &mut i64) -> i64 {
         let mut d0a = ((*a >> 16) & 0xFFFF) as i32;
         let mut d0b = (*a & 0xFFFF) as i32;

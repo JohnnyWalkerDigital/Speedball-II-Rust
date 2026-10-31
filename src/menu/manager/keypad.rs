@@ -1,4 +1,4 @@
-//! `do_keypad`: moving round the keypad and pressing its keys.
+//! Moving round the keypad and pressing its keys.
 
 use super::data::{Key, KeyAction};
 use super::keys::press_key;

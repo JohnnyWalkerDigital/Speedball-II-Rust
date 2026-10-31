@@ -1,4 +1,4 @@
-//! Speedball 2 match engine, ported from a reverse-engineered C# version.
+//! Speedball 2 match engine.
 //!
 //! Layout:
 //! - `data`: reading the original disk images and their lookup tables

@@ -1,7 +1,6 @@
 //! What players physically do: run, tackle, jump, catch and throw.
 //!
 //! Both the keyboard and the AI (`ai.rs`) drive players through these.
-//! Each function notes the original routine it ports.
 
 use super::entity::{is_in_view, Think};
 use super::events::Sound;
@@ -11,7 +10,7 @@ use super::state::{EntityRef, Match};
 use crate::data::animations::{Animation, Script};
 
 impl Match {
-    /// One frame of a player (`Player.Think`).
+    /// One frame of a player.
     pub(crate) fn player_think(&mut self, p: PlayerId) {
         self.update_control(p);
         let entity = &mut self.players[p.0].entity;
@@ -37,7 +36,7 @@ impl Match {
         self.apply_movement_constraints(p);
     }
 
-    /// Decides who steers this player this frame (`sub_D2DE`).
+    /// Decides who steers this player this frame.
     fn update_control(&mut self, p: PlayerId) {
         if self.clock_paused {
             self.walk_to_formation(p);
@@ -94,7 +93,7 @@ impl Match {
 
     // -- Collisions ---------------------------------------------------------------
 
-    /// Undoes movement into nearby opponents (`sub_D448`).
+    /// Undoes movement into nearby opponents.
     fn push_away_from_opponents(&mut self, p: PlayerId) {
         if self.clock_paused || self.players[p.0].entity.flags.offscreen() {
             return;
@@ -123,7 +122,7 @@ impl Match {
         }
     }
 
-    /// Goalkeepers stay in their box; "freeze team" stops opponents (`sub_FB6C`).
+    /// Goalkeepers stay in their box; "freeze team" stops opponents.
     fn apply_movement_constraints(&mut self, p: PlayerId) {
         if self.clock_paused || self.players[p.0].entity.flags.falling() {
             return;
@@ -146,7 +145,7 @@ impl Match {
 
     // -- Catching -----------------------------------------------------------------
 
-    /// Picks up a loose ball within reach (`sub_D520`).
+    /// Picks up a loose ball within reach.
     fn try_catch_ball(&mut self, p: PlayerId) {
         let player = &self.players[p.0];
         let flags = player.entity.flags;
@@ -214,7 +213,7 @@ impl Match {
         }
     }
 
-    /// `sub_D632`.
+    /// A charged ball knocks over the player it hits.
     fn hit_by_charged_ball(&mut self, p: PlayerId) {
         self.charged_hits_left -= 1;
         self.players[p.0].entity.dir = self.props.ball.dir;
@@ -222,7 +221,7 @@ impl Match {
         self.knock_down(p, 3);
     }
 
-    /// A diving goalkeeper punches the ball away (`sub_D672`).
+    /// A diving goalkeeper punches the ball away.
     fn goalie_deflect(&mut self, p: PlayerId) {
         if self.props.ball.sprite > 2 {
             return;
@@ -252,7 +251,7 @@ impl Match {
         ball.script_index = 0;
     }
 
-    /// Turns to catch a ball flying at a standing player (`sub_F1B4`).
+    /// Turns to catch a ball flying at a standing player.
     fn face_incoming_ball(&mut self, p: PlayerId) {
         let player = &self.players[p.0];
         let bits = player.entity.dir_bits_towards(self.props.ball.pos);
@@ -275,7 +274,7 @@ impl Match {
 
     // -- Keyboard -----------------------------------------------------------------
 
-    /// `sub_D724`.
+    /// Steers a human-controlled player with the joystick, unless busy.
     fn apply_human_input(&mut self, p: PlayerId, input: Input) {
         let entity = &mut self.players[p.0].entity;
         entity.timer = 1;
@@ -285,7 +284,7 @@ impl Match {
         }
     }
 
-    /// Joystick movement plus fire: throw, jump or tackle (`sub_F47E`).
+    /// Joystick movement plus fire: throw, jump or tackle.
     fn steer_with_input(&mut self, p: PlayerId, input: Input) {
         let rom = self.rom.clone();
         let mut dir = rom.dir_from_bits(input.dir_bits());
@@ -335,7 +334,7 @@ impl Match {
 
     // -- Running ------------------------------------------------------------------
 
-    /// Starts running towards `target`, or stands if already there (`sub_EB7A`).
+    /// Starts running towards `target`, or stands if already there.
     pub(crate) fn start_move(&mut self, p: PlayerId) {
         if self.steer_towards_target(p, false) {
             let entity = &mut self.players[p.0].entity;
@@ -346,7 +345,7 @@ impl Match {
         }
     }
 
-    /// `sub_EC0C`.
+    /// Keeps running towards the player's target, re-steering as needed.
     fn keep_moving(&mut self, p: PlayerId) {
         let player = &self.players[p.0];
         let near = player.entity.axis_distance(player.target, 32) <= 32;
@@ -404,7 +403,7 @@ impl Match {
         true
     }
 
-    /// Animation and speed for running (`sub_ECF6`).
+    /// Animation and speed for running.
     fn run_animation(&self, p: PlayerId) -> (Animation, i32) {
         let player = &self.players[p.0];
         let list = match (
@@ -430,7 +429,7 @@ impl Match {
         (list, speed)
     }
 
-    /// Animation for standing; goalkeepers also face up-pitch (`sub_F25C`).
+    /// Animation for standing; goalkeepers also face up-pitch.
     fn stand_animation(&mut self, p: PlayerId) -> (Animation, i32) {
         let player = &mut self.players[p.0];
         if player.is_goalkeeper() && !self.clock_paused {
@@ -446,7 +445,7 @@ impl Match {
     }
 
     /// Stops; while the clock is stopped, turns one step towards the
-    /// default direction (`sub_F212`).
+    /// default direction.
     pub(crate) fn stand(&mut self, p: PlayerId) {
         let paused = self.clock_paused;
         let player = &mut self.players[p.0];
@@ -466,7 +465,7 @@ impl Match {
 
     // -- Tackling and jumping -------------------------------------------------------
 
-    /// Dives (tackle) at a point, or jumps for an overhead ball (`sub_E982`).
+    /// Dives (tackle) at a point, or jumps for an overhead ball.
     pub(crate) fn dive_at(&mut self, p: PlayerId, target: Point) {
         let rom = self.rom.clone();
         let jump_bonus = self.players[p.0].speed_jump_bonus(&rom);
@@ -503,13 +502,13 @@ impl Match {
         self.play_sound(Sound::JUMP);
     }
 
-    /// `sub_EA56`.
+    /// Dives at where `target` is heading.
     pub(crate) fn dive_at_entity(&mut self, p: PlayerId, target: EntityRef) {
         let point = self.players[p.0].predict(&self.rom, self.entity(target));
         self.dive_at(p, point);
     }
 
-    /// Goalkeeper dive or sliding tackle (`sub_EA62`).
+    /// Goalkeeper dive or sliding tackle.
     fn lunge_animation(&mut self, p: PlayerId) -> (Animation, i32) {
         self.play_sound(Sound::SLIDE);
         let ball_flying = !self.props.ball.velocity.is_zero();
@@ -532,7 +531,7 @@ impl Match {
         }
     }
 
-    /// Standing tackle towards an opponent (`sub_EAF4`).
+    /// Standing tackle towards an opponent.
     pub(crate) fn standing_tackle(&mut self, p: PlayerId, opponent: PlayerId) {
         let rom = self.rom.clone();
         let opponent_pos = self.players[opponent.0].entity.pos;
@@ -550,7 +549,7 @@ impl Match {
         entity.think = Think::StandingTackle;
     }
 
-    /// Runs directly away from `threat` (`sub_EB38`).
+    /// Runs directly away from `threat`.
     pub(crate) fn run_away_from(&mut self, p: PlayerId, threat: PlayerId) {
         let threat_pos = self.players[threat.0].entity.pos;
         let player = &mut self.players[p.0];
@@ -568,8 +567,7 @@ impl Match {
         entity.think = Think::Idle;
     }
 
-    /// Knocks over the first opponent in reach, if the tackle succeeds
-    /// (`sub_ED56`).
+    /// Knocks over the first opponent in reach, if the tackle succeeds.
     fn check_tackle_hits(&mut self, p: PlayerId) {
         if self.clock_paused || self.players[p.0].entity.flags.offscreen() {
             return;
@@ -645,8 +643,7 @@ impl Match {
         entity.set_animation(&rom, Animation::KnockedDown, speed);
     }
 
-    /// Chance out of 256 that `attacker`'s tackle on `defender` lands
-    /// (`sub_EE9C`).
+    /// Chance out of 256 that `attacker`'s tackle on `defender` lands.
     fn tackle_success_chance(&self, defender: PlayerId, attacker: PlayerId) -> i32 {
         const TACKLING_PENALTY: i32 = 16;
         const JUMPING_PENALTY: i32 = 32;
@@ -667,14 +664,14 @@ impl Match {
         (attacker.skills().att + 256 - defence) / 2
     }
 
-    /// Damage from a tackle; the victim drops any equipment (`sub_EEFC`).
+    /// Damage from a tackle; the victim drops any equipment.
     pub(crate) fn hit_by_tackle(&mut self, victim: PlayerId, attacker: PlayerId) {
         let power = self.players[attacker.0].skills().pow;
         self.players[victim.0].take_tackle_damage(power);
         self.drop_equipment(victim);
     }
 
-    /// Lands after the jump's airtime (`sub_F290`).
+    /// Lands after the jump's airtime.
     fn land_jump(&mut self, p: PlayerId) {
         let player = &self.players[p.0];
         if player.jump_bonus + 2 > player.entity.script_index {
@@ -692,7 +689,7 @@ impl Match {
         self.play_sound(Sound::LAND);
     }
 
-    /// `sub_F2E2`.
+    /// Gets back up once a tackle's floor time is over.
     fn recover_from_tackle(&mut self, p: PlayerId) {
         let player = &self.players[p.0];
         // Byte arithmetic: a zero bonus wraps to 255.
@@ -710,19 +707,19 @@ impl Match {
 
     // -- Throwing -------------------------------------------------------------------
 
-    /// Throws towards `target` with fire held, which lobs the ball (`sub_EFD8`).
+    /// Throws towards `target` with fire held, which lobs the ball.
     pub(crate) fn throw_high(&mut self, p: PlayerId) {
         self.own_input_mut(p).set_fire(true);
         self.start_throw(p);
     }
 
-    /// Throws towards `target` along the ground (`sub_EFFC`).
+    /// Throws towards `target` along the ground.
     pub(crate) fn throw_low(&mut self, p: PlayerId) {
         self.own_input_mut(p).set_fire(false);
         self.start_throw(p);
     }
 
-    /// `sub_F020`.
+    /// Turns towards the target and starts the throw animation.
     fn start_throw(&mut self, p: PlayerId) {
         let rom = self.rom.clone();
         let player = &mut self.players[p.0];
@@ -746,7 +743,7 @@ impl Match {
         self.play_sound(Sound::THROW);
     }
 
-    /// Lets go of the ball on frame 4 of the throw (`sub_F078`).
+    /// Lets go of the ball on frame 4 of the throw.
     fn release_throw(&mut self, p: PlayerId) {
         if self.players[p.0].entity.script_index < 4 {
             return;
@@ -797,8 +794,7 @@ impl Match {
 
     // -- Goals ----------------------------------------------------------------------
 
-    /// The scorer's team celebrates; the scorer runs back holding the ball
-    /// (`sub_CEEA`).
+    /// The scorer's team celebrates; the scorer runs back holding the ball.
     pub(crate) fn start_goal_celebration(&mut self, scorer: PlayerId) {
         let rom = self.rom.clone();
         for id in self.teammates(scorer) {

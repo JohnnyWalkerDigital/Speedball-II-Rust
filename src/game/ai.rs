@@ -2,7 +2,7 @@
 //!
 //! This is a faithful port of the original AI: the branch structure and
 //! arithmetic are unchanged so matches play out exactly as they did, but
-//! each routine is named for what it does (the original label is noted).
+//! each function is named for what it does.
 
 use super::entity::Think;
 use super::geometry::{DirBits, Point};
@@ -46,7 +46,7 @@ impl Match {
     // Active player (nearest the ball)
     // =========================================================================
 
-    /// `sub_D742`.
+    /// One AI decision for the active player, the one nearest the ball.
     pub(crate) fn ai_active_player(&mut self, p: PlayerId) {
         if self.players[p.0].entity.flags.busy() {
             return;
@@ -169,7 +169,7 @@ impl Match {
         blocked.contains(&chosen)
     }
 
-    /// Directions towards the nearest two opponents (`sub_D902`).
+    /// Directions towards the nearest two opponents.
     fn find_blocking_directions(&mut self, p: PlayerId, opponent: PlayerId) -> [DirBits; 2] {
         let me = &self.players[p.0];
         let them = &self.players[opponent.0];
@@ -197,7 +197,7 @@ impl Match {
         self.blocking_dirs
     }
 
-    /// Targets the first visible pickup not behind an opponent (`sub_D97E`).
+    /// Targets the first visible pickup not behind an opponent.
     fn find_reachable_item(&mut self, p: PlayerId, blocked: [DirBits; 2]) -> Option<EntityRef> {
         let items = [
             EntityRef::Token(0),
@@ -225,8 +225,7 @@ impl Match {
         None
     }
 
-    /// Tries sidesteps in order until one avoids the blocked directions
-    /// (`sub_DA86` / `sub_DB32`).
+    /// Tries sidesteps in order until one avoids the blocked directions.
     fn choose_dodge(&mut self, p: PlayerId, blocked: [DirBits; 2], prefer_left: bool) -> DirBits {
         let (first, second) = if prefer_left {
             (Dodge::ZoneLeft, Dodge::ZoneRight)
@@ -260,8 +259,7 @@ impl Match {
         self.dodge(p, second)
     }
 
-    /// Sets the target x for a sidestep; returns its direction
-    /// (`sub_DA20` / `sub_DA56` / `sub_DA6E`).
+    /// Sets the target x for a sidestep; returns its direction.
     fn dodge(&mut self, p: PlayerId, dodge: Dodge) -> DirBits {
         let me = &mut self.players[p.0];
         let pos = me.entity.pos;
@@ -286,7 +284,7 @@ impl Match {
 
     // -- Bonus plays ----------------------------------------------------------------
 
-    /// Ramps, stars and electrobounces (`sub_DCCC`).
+    /// Ramps, stars and electrobounces.
     fn try_bonus_play(&mut self, p: PlayerId, blocked: [DirBits; 2]) -> bool {
         let charged = self.props.ball.is_charged();
         let clear = |bits: DirBits| charged || !blocked.contains(&bits);
@@ -340,7 +338,7 @@ impl Match {
         false
     }
 
-    /// `sub_DE30`.
+    /// Throws the ball low at a nearby electrobounce pad, if the way is clear.
     fn try_electrobounce_shot(&mut self, p: PlayerId, pad: usize, blocked: [DirBits; 2]) -> bool {
         let pad_pos = self.arena.electrobounces.pads[pad].pos;
         let me = &mut self.players[p.0];
@@ -362,7 +360,7 @@ impl Match {
 
     // -- Passing and shooting ---------------------------------------------------------
 
-    /// Defenders and midfielders look for a pass upfield (`sub_DBE8`).
+    /// Defenders and midfielders look for a pass upfield.
     fn pass_from_defence(&mut self, p: PlayerId, mut blocked: [DirBits; 2]) {
         if self.props.ball.is_charged() {
             blocked = [DirBits::NONE; 2];
@@ -413,7 +411,7 @@ impl Match {
         }
     }
 
-    /// `sub_E05C`.
+    /// Whether a pass from `passer` to `receiver` avoids the blocked directions.
     fn is_pass_lane_clear(
         &self,
         passer: PlayerId,
@@ -425,7 +423,7 @@ impl Match {
         !blocked.contains(&passer.entity.dir_bits_towards(target))
     }
 
-    /// Forwards go for goal, or lay it off to another forward (`sub_DF2E`).
+    /// Forwards go for goal, or lay it off to another forward.
     fn attack_goal(&mut self, p: PlayerId, opponent: PlayerId) {
         if !self.props.ball.is_charged() {
             let goal = self.aim_at_goal(p);
@@ -485,7 +483,7 @@ impl Match {
     }
 
     /// Picks a spot in the goal mouth and maybe curves the shot by holding
-    /// left/right on the team's input (`sub_DEA4`).
+    /// left/right on the team's input.
     fn aim_at_goal(&mut self, p: PlayerId) -> Point {
         let me = &self.players[p.0];
         let (my_x, random, int, attacks_up) =
@@ -511,7 +509,7 @@ impl Match {
         Point::new(x, if attacks_up { 0 } else { 1152 })
     }
 
-    /// `sub_EF50`.
+    /// Throws at the goal: low when in range, otherwise high.
     fn shoot(&mut self, p: PlayerId) {
         let goal = self.aim_at_goal(p);
         let me = &mut self.players[p.0];
@@ -523,7 +521,7 @@ impl Match {
         }
     }
 
-    /// Lobs it upfield, angling for a wall if the goal is blocked (`sub_EF7C`).
+    /// Lobs it upfield, angling for a wall if the goal is blocked.
     fn clear_ball(&mut self, p: PlayerId) {
         let goal = self.aim_at_goal(p);
         let blocked = self.blocking_dirs[0];
@@ -548,7 +546,7 @@ impl Match {
     // Close quarters
     // =========================================================================
 
-    /// Tackle or avoid an opponent within reach (`sub_E854`).
+    /// Tackle or avoid an opponent within reach.
     fn engage_nearby_player(&mut self, p: PlayerId) -> bool {
         if self.players[p.0].entity.flags.offscreen() {
             return false;
@@ -593,7 +591,7 @@ impl Match {
     // Off-ball players
     // =========================================================================
 
-    /// Mark an opponent or take up a supporting position (`sub_E076`).
+    /// Mark an opponent or take up a supporting position.
     pub(crate) fn ai_support_play(&mut self, p: PlayerId) {
         if self.players[p.0].entity.flags.busy() {
             return;
@@ -654,7 +652,7 @@ impl Match {
         target
     }
 
-    /// The opponent in our zone we are closest to (`sub_E188`).
+    /// The opponent in our zone we are closest to.
     fn find_opponent_to_mark(&self, p: PlayerId) -> Option<PlayerId> {
         let me = &self.players[p.0];
         let mut range = me.pass_range();
@@ -677,7 +675,7 @@ impl Match {
         marked
     }
 
-    /// Vertical position between our zone and `mate` (`sub_E246`).
+    /// Vertical position between our zone and `mate`.
     fn position_between(&self, p: PlayerId, mate: PlayerId, target: &mut Point) {
         let me = &self.players[p.0];
         let mate_ahead = self.players[mate.0].attributes.pos.min(3) > me.attributes.pos;
@@ -705,7 +703,7 @@ impl Match {
         me.clamp_y_to_zone(target);
     }
 
-    /// Diagonal support position relative to `mate` (`sub_E2B8`).
+    /// Diagonal support position relative to `mate`.
     fn position_along(&self, p: PlayerId, mate: PlayerId, target: &mut Point) {
         let me = &self.players[p.0];
         let them = &self.players[mate.0];
@@ -732,7 +730,7 @@ impl Match {
         }
     }
 
-    /// Pulls an out-of-zone point back in, trading y overshoot for x (`sub_E344`).
+    /// Pulls an out-of-zone point back in, trading y overshoot for x.
     fn slide_into_zone(&self, p: PlayerId, target: &mut Point) {
         let me = &self.players[p.0];
         let edge = if target.y < me.zone_min.y {
@@ -752,7 +750,7 @@ impl Match {
         me.clamp_x_to_zone(target);
     }
 
-    /// Attacking support from the tactics grid near the goal (`sub_E382`).
+    /// Attacking support from the tactics grid near the goal.
     fn support_position(&self, p: PlayerId, mate: PlayerId, target: &mut Point) {
         let me = &self.players[p.0];
         let them = &self.players[mate.0].entity;
@@ -787,7 +785,7 @@ impl Match {
     // Goalkeepers
     // =========================================================================
 
-    /// Off-ball goalkeeper: shuffle along the goal line (`sub_E456`).
+    /// Off-ball goalkeeper: shuffle along the goal line.
     fn ai_goalkeeper_support(&mut self, p: PlayerId) {
         let threat = self.holder.unwrap_or(EntityRef::Ball);
         let threat_entity = self.entity(threat);
@@ -876,7 +874,7 @@ impl Match {
         self.start_move(p);
     }
 
-    /// Active goalkeeper: dive at a shot or come off the line (`sub_E61A`).
+    /// Active goalkeeper: dive at a shot or come off the line.
     fn ai_goalkeeper_active(&mut self, p: PlayerId) {
         let holder_is_teammate = self.holder_player().is_some_and(|h| {
             self.players[h.0].attributes.initial_dir == self.players[p.0].attributes.initial_dir

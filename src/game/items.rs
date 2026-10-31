@@ -24,8 +24,8 @@ impl Match {
     // -- Placement ---------------------------------------------------------------
 
     /// Hides a coin and schedules it to reappear somewhere in its quarter
-    /// of the pitch (`randomise_coin`). Items sit on the Amiga's 16-pixel
-    /// grid from 72; the ST used a 32-pixel grid from 80.
+    /// of the pitch. Items sit on the Amiga's 16-pixel grid from 72; the ST
+    /// used a 32-pixel grid from 80.
     pub(crate) fn place_coins(&mut self, i: usize) {
         let mut x = ITEM_MARGIN + self.rng.next_word_masked(0xF0);
         // Coins 1 and 3 live on the left half, 2 and 4 on the right.
@@ -44,8 +44,7 @@ impl Match {
         coins.timer = timer;
     }
 
-    /// Hides a token and picks which power-up it will be
-    /// (`randomise_powerup`).
+    /// Hides a token and picks which power-up it will be.
     pub(crate) fn place_token(&mut self, i: usize) {
         let x = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
         let mut y = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
@@ -71,7 +70,7 @@ impl Match {
         token.sprite = sprite;
     }
 
-    /// Hides the equipment item and picks a new piece (`randomise_armour`).
+    /// Hides the equipment item and picks a new piece.
     pub(crate) fn place_equipment(&mut self) {
         let x = ITEM_MARGIN + self.rng.next_word_masked(0x1F0);
         let y = ITEM_MARGIN + self.rng.next_word_masked(0x3F0);
@@ -88,7 +87,8 @@ impl Match {
 
     // -- Per-frame updates ---------------------------------------------------------
 
-    /// `sub_D214` / `spawn_cash`.
+    /// Brings a hidden coin back when its timer runs out, unless both teams
+    /// have earned their limit, and lets the controlled players collect it.
     pub(crate) fn update_coins(&mut self, i: usize) {
         if !self.clock_paused {
             if self.props.coins[i].flags.invisible() {
@@ -126,7 +126,8 @@ impl Match {
         self.play_sound(Sound::COIN);
     }
 
-    /// `sub_D272`.
+    /// Shows a token when its timer runs out and lets the controlled players
+    /// pick it up.
     pub(crate) fn update_token_item(&mut self, i: usize) {
         if self.clock_paused {
             return;
@@ -145,7 +146,8 @@ impl Match {
         }
     }
 
-    /// `sub_D2A4`.
+    /// Shows the equipment item when its timer runs out and lets the
+    /// controlled players pick it up.
     pub(crate) fn update_equipment_item(&mut self) {
         if self.equipment_on_floor == 0 || self.clock_paused {
             return;
@@ -186,8 +188,7 @@ impl Match {
             .find(|&p| self.pickup_distance(item, p) <= 16)
     }
 
-    /// Distance from an item to a player, or 17 if out of reach
-    /// (`CalcDistanceToEntity_Lesser16`).
+    /// Distance from an item to a player, or 17 if out of reach.
     fn pickup_distance(&self, item: EntityRef, p: PlayerId) -> i32 {
         const OUT_OF_REACH: i32 = 17;
         let item = self.entity(item);
@@ -208,7 +209,7 @@ impl Match {
         Skill::from_index(self.rom.equipment_skill(sprite - 80) - 72)
     }
 
-    /// `sub_FEE4`.
+    /// Takes the equipment off the pitch and gives its boost to `p`.
     fn equip_player(&mut self, p: PlayerId) {
         let sprite = self.props.equipment.sprite;
         self.props.equipment.flags.set_invisible(true);
@@ -222,7 +223,7 @@ impl Match {
         self.equipment_pickups_left -= 1;
     }
 
-    /// Drops whatever the player was wearing where they stand (`sub_FF3A`).
+    /// Drops whatever the player was wearing where they stand.
     pub(crate) fn drop_equipment(&mut self, p: PlayerId) {
         let sprite = self.players[p.0].equipment_sprite;
         if sprite == 0 {

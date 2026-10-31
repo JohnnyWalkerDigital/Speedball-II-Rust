@@ -172,10 +172,9 @@ impl TextId {
 /// What the top panel shows while the clock is stopped.
 #[derive(Clone, Debug)]
 pub struct TextPanel {
-    /// `overlay_message`; `None` shows the plain "goal" panel.
+    /// The message shown; `None` shows the plain "goal" panel.
     current: Option<TextId>,
-    /// `text_overlay_counter`: frames (and lines) drawn since the message
-    /// last changed. The C# kept it as `TextPanel._unk01`.
+    /// Frames (and lines) drawn since the message last changed.
     counter: u8,
     texts: HashMap<TextId, Text>,
 }
@@ -203,9 +202,9 @@ impl TextPanel {
         self.counter = 0;
     }
 
-    /// Counts a frame of the panel being built (`build_text_overlay`): the
-    /// message's `lines` are drawn when the counter is 0, each counting
-    /// once, then the frame counts. Returns whether the lines were drawn
+    /// Counts a frame of the panel being built: the message's `lines` are
+    /// drawn when the counter is 0, each counting once, then the frame
+    /// counts. Returns whether the lines were drawn
     /// this frame, and the counter.
     pub fn count_frame(&mut self, lines: u8) -> (bool, u8) {
         let drawn = self.counter == 0;

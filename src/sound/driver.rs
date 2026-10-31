@@ -1,14 +1,13 @@
 //! A port of the Amiga Speedball 2 sound driver.
 //!
-//! The original (`sound_play` at `$13AA8` and friends) is a small tracker:
-//! a *sound* names up to four *sequences*, one per Amiga channel. A sequence
-//! is bytecode that picks instruments (samples) and plays notes at a pitch
-//! for a duration, with envelopes, tremolo and vibrato. The driver steps
-//! every channel once per vertical blank (50 Hz).
+//! The driver is a small tracker: a *sound* names up to four *sequences*,
+//! one per Amiga channel. A sequence is bytecode that picks instruments
+//! (samples) and plays notes at a pitch for a duration, with envelopes,
+//! tremolo and vibrato. The driver steps every channel once per vertical
+//! blank (50 Hz).
 //!
-//! Every routine is ported from the disassembly and named after its label;
-//! every table is read from the RAM dump at its original address. 68000
-//! word arithmetic is kept (wrapping `u16`), as the data relies on it.
+//! Its tables are read from the RAM dump, where the game left them. Word
+//! arithmetic wraps (`u16`), as the data relies on it.
 
 use super::memory::Memory;
 use super::paula::Paula;
@@ -17,21 +16,22 @@ use super::paula::Paula;
 // Addresses in the match RAM dump.
 // ---------------------------------------------------------------------------
 
-/// `sound_table`: 6 bytes per sound (priority, no-play flag, 4 sequences).
+/// The sound table: 6 bytes per sound (priority, no-play flag, 4 sequences).
 pub(super) const SOUND_TABLE: u32 = 0x13958;
-/// `sound_effects`: 15 bytes per effect.
+/// The effect table: 15 bytes per effect.
 pub(super) const SOUND_EFFECTS: u32 = 0x13B5A;
-/// `sound_envelopes`: 8 bytes per envelope.
+/// The envelope table: 8 bytes per envelope.
 const SOUND_ENVELOPES: u32 = 0x13CB4;
-/// `sound_pitch_table_0..2`: note periods per octave, in quarter semitones.
+/// The three pitch tables: note periods per octave, in quarter semitones.
 pub(super) const PITCH_TABLES: [u32; 3] = [0x14A9A, 0x14AFA, 0x14B5A];
-/// `sound_default_instrument`; also played as a tiny looping sample.
+/// The default instrument; also played as a tiny looping sample.
 const DEFAULT_INSTRUMENT: u32 = 0x14E5A;
-/// `sound_zero_sample`: 8 silent words.
+/// The zero sample: 8 silent words.
 const ZERO_SAMPLE: u32 = 0x14E68;
-/// `sound_base`. Its first long is the offset of the sequence table.
+/// The start of the sound bank. Its first long is the offset of the
+/// sequence table.
 pub(super) const SOUND_BASE: u32 = 0x1BC3E;
-/// `instrument_table_index`: offset of the instrument table from `sound_base`.
+/// Holds the offset of the instrument table from `SOUND_BASE`.
 pub(super) const INSTRUMENT_TABLE_INDEX: u32 = 0x1BC42;
 
 pub(super) const INSTRUMENT_SIZE: u32 = 14;
@@ -43,69 +43,52 @@ const TICKS_PER_SECOND: u32 = 50;
 /// original would hang).
 const MAX_COMMANDS_PER_TICK: usize = 10_000;
 
-/// One of the driver's four channel structures (`sound_channel_0..3`).
-/// Field comments give the original struct offset.
+/// One of the driver's four channel structures.
 #[derive(Clone)]
 struct Channel {
     number: usize,
-    /// 0x0e
     ints_remaining: u16,
-    /// 0x10
     pitch_table: u32,
-    /// 0x14: envelope address, 0 for none.
+    /// Envelope address, 0 for none.
     envelope: u32,
-    /// 0x18: sequence stack, growing down (pointer is an index into `stack`).
+    /// Sequence stack, growing down (pointer is an index into `stack`).
     stack: [u8; STACK_SIZE],
     stack_pointer: usize,
-    /// 0x1c
     sample_start: u32,
-    /// 0x24: negative means a looping sample.
+    /// Negative means a looping sample.
     one_shot: i16,
-    /// 0x26: loop start in bytes.
+    /// Loop start in bytes.
     loop_offset: u16,
-    /// 0x28: in words.
+    /// In words.
     sample_len: u16,
-    /// 0x2a
     pitch: u16,
-    /// 0x2c
     hw_vol: u16,
-    /// 0x2e
     needs_start: bool,
-    /// 0x30
     envelope_pause: u8,
-    /// 0x32
     held: bool,
-    /// 0x34: 0 attack, 1 decay, 2 sustain.
+    /// 0 attack, 1 decay, 2 sustain.
     envelope_stage: u16,
-    /// 0x36
     start_pointer: u32,
-    /// 0x3a: 0 when the channel is idle.
+    /// 0 when the channel is idle.
     command_pointer: u32,
-    /// 0x3e
     time_to_update: u16,
-    /// 0x40
     duration: u16,
-    /// 0x44
     vol_base: u16,
-    /// 0x46
     period_base: u16,
-    /// 0x48
     hw_period: u16,
-    /// 0x4a, 0x4e: tremolo stage counters.
+    /// Tremolo stage counters.
     tremolo_pause_count: [u16; 2],
     tremolo_length_count: [u16; 2],
-    /// 0x52, 0x58: vibrato stage counters.
+    /// Vibrato stage counters.
     vibrato_pause_count: [u16; 3],
     vibrato_length_count: [u16; 3],
-    /// 0x5e..0x7b: the current effect, copied from `sound_effects`.
+    /// The current effect, copied from the effect table.
     effect: Effect,
-    /// 0x86
     vol_adj: u16,
-    /// 0x88
     period_adj: u16,
-    /// 0x8a: bit 0 loops the tremolo, bit 1 the vibrato.
+    /// Bit 0 loops the tremolo, bit 1 the vibrato.
     effect_loops: u8,
-    /// 0x8c. Not cleared when a new sound starts (see `play_channel`).
+    /// Not cleared when a new sound starts (see `play_channel`).
     transposition: u16,
 }
 
@@ -159,8 +142,8 @@ impl Channel {
         }
     }
 
-    /// What `sound_play_channel` zeroes: offsets 0x10 to 0x8b. The channel
-    /// number, interrupt count and transposition survive.
+    /// What starting a sequence on the channel zeroes: everything but the
+    /// channel number, interrupt count and transposition.
     fn clear(&mut self) {
         let keep = (self.number, self.ints_remaining, self.transposition);
         *self = Self::new(keep.0);
@@ -236,7 +219,7 @@ impl Channel {
 enum Step {
     /// Keep reading commands.
     Next,
-    /// `sound_op_cont`: save state and wait `duration` ticks.
+    /// Save state and wait `duration` ticks.
     Wait,
 }
 
@@ -244,16 +227,15 @@ pub struct Driver {
     memory: Memory,
     paula: Paula,
     channels: [Channel; 4],
-    /// `sound_priorities.sequences`: priority of what each channel plays.
+    /// Priority of what each channel plays.
     priorities: [u8; 4],
-    /// `sound_tempo`: frames per quarter beat.
+    /// Frames per quarter beat.
     tempo: u16,
     samples_per_tick: u32,
     samples_until_tick: u32,
 }
 
 impl Driver {
-    /// `sound_init`.
     pub fn new(memory: Memory, output_rate: u32) -> Self {
         let mut paula = Paula::new(output_rate);
         for voice in &mut paula.voices {
@@ -307,8 +289,8 @@ impl Driver {
 
     // -- Starting sounds -----------------------------------------------------
 
-    /// `sound_play`: starts `sound`'s sequences unless a channel it needs
-    /// (of the first three) is busy with something more important.
+    /// Starts `sound`'s sequences unless a channel it needs (of the first
+    /// three) is busy with something more important.
     pub fn play(&mut self, sound: u8, priority: u8) {
         let entry = SOUND_TABLE + u32::from(sound) * 6;
         if self.memory.u8(entry + 1) & 0x80 != 0 {
@@ -334,7 +316,7 @@ impl Driver {
         }
     }
 
-    /// `sound_play_channel`.
+    /// Starts `sequence` on `channel`.
     fn play_channel(&mut self, sequence: u8, channel: usize) {
         self.channels[channel].clear();
         let voice = &mut self.paula.voices[channel];
@@ -375,7 +357,7 @@ impl Driver {
 
     // -- Interrupts ------------------------------------------------------------
 
-    /// `sound_service_channel`: called as a sample block starts playing.
+    /// Called as a sample block starts playing.
     fn service_channel(&mut self, channel: usize) {
         let ch = &mut self.channels[channel];
         ch.ints_remaining = ch.ints_remaining.wrapping_sub(1);
@@ -398,7 +380,7 @@ impl Driver {
 
     // -- The 50 Hz update --------------------------------------------------------
 
-    /// `sound_update_channels`.
+    /// The 50 Hz update of all four channels.
     fn update_channels(&mut self) {
         for channel in 0..4 {
             if self.channels[channel].command_pointer == 0 {
@@ -421,8 +403,8 @@ impl Driver {
     }
 
     /// At a note boundary, samples without a loop point are stopped by
-    /// pointing the channel at the default instrument (the original's
-    /// comment suspects this should have been the zero sample).
+    /// pointing the channel at the default instrument (perhaps the zero
+    /// sample was meant).
     fn cut_sample(&mut self, channel: usize) {
         self.paula.set_dma(channel, false);
         let voice = &mut self.paula.voices[channel];
@@ -434,7 +416,7 @@ impl Driver {
         self.paula.set_dma(channel, true);
     }
 
-    /// `sound_next_command` loop.
+    /// Reads commands until one waits.
     fn run_commands(&mut self, channel: usize) {
         let mut pc = self.channels[channel].command_pointer;
         for _ in 0..MAX_COMMANDS_PER_TICK {
@@ -487,39 +469,39 @@ impl Driver {
         ch.period_adj = 0;
     }
 
-    /// Dispatches a command byte `0x80..` (`sound_switch`).
+    /// Dispatches a command byte `0x80..`.
     fn run_op(&mut self, channel: usize, command: u8, pc: &mut u32) -> Step {
         let memory = self.memory.clone();
         let operand = |pc: &mut u32| next_byte(&memory, pc);
         match command {
-            // sound_op_set_vol
+            // Set the volume.
             0x80 => self.channels[channel].vol_base = u16::from(operand(pc)),
-            // sound_op_noop_84, _a0, _a4: unimplemented, one operand.
+            // Unimplemented, one operand.
             0x84 | 0xA0 | 0xA4 => {
                 operand(pc);
             }
-            // sound_op_goto_start
+            // Back to the start of the sequence.
             0x88 => {
                 let ch = &mut self.channels[channel];
                 *pc = ch.start_pointer;
                 ch.command_pointer = *pc;
             }
-            // sound_op_set_note_len: in quarter beats.
+            // Set the note length, in quarter beats.
             0x8C => {
                 let beats = u32::from(operand(pc));
                 self.channels[channel].duration = (beats * u32::from(self.tempo)) as u16;
             }
-            // sound_op_cont: a rest; the current note carries on.
+            // A rest; the current note carries on.
             0x90 => return Step::Wait,
-            // sound_op_set_tempo: beats per minute, stored as frames per beat.
+            // Set the tempo: beats per minute, stored as frames per beat.
             0x94 => {
                 let bpm = u16::from(operand(pc));
-                // (A zero would be a division-by-zero trap on the 68000.)
+                // (A zero would be a division-by-zero trap on the Amiga.)
                 if let Some(tempo) = 750u16.checked_div(bpm) {
                     self.tempo = tempo;
                 }
             }
-            // sound_op_silence: sum the next n bytes into the next duration.
+            // Silence: sum the next n bytes into the next duration.
             0x98 => {
                 let count = match operand(pc) {
                     0 => 0x1_0000,
@@ -529,7 +511,7 @@ impl Driver {
                     (0..count).fold(0u16, |sum, _| sum.wrapping_add(u16::from(operand(pc))));
                 self.channels[channel].duration = (u32::from(total) * u32::from(self.tempo)) as u16;
             }
-            // sound_op_effect
+            // Set the tremolo and vibrato effect.
             0x9C => {
                 let address = SOUND_EFFECTS + u32::from(operand(pc)) * EFFECT_SIZE;
                 let byte = |i: u32| memory.i8(address + i) as i16 as u16;
@@ -549,22 +531,22 @@ impl Driver {
                 ch.vol_adj = 0;
                 ch.period_adj = 0;
             }
-            // sound_op_set_loop_flags
+            // Set the effect loop flags.
             0xA8 => self.channels[channel].effect_loops |= operand(pc),
-            // sound_op_stop
+            // Stop.
             0xAC => {
                 self.op_stop(channel, pc);
                 return Step::Wait;
             }
-            // sound_op_call
+            // Call another sequence.
             0xB0 => {
                 let sequence = operand(pc);
                 self.channels[channel].push_long(*pc);
                 *pc = self.sequence_address(sequence);
             }
-            // sound_op_return
+            // Return from a call.
             0xB4 => *pc = self.channels[channel].pop_long(),
-            // sound_op_add_transposition (one semitone = 4); 0 resets it.
+            // Add to the transposition (one semitone = 4); 0 resets it.
             0xB8 => {
                 let ch = &mut self.channels[channel];
                 match operand(pc) {
@@ -572,9 +554,9 @@ impl Driver {
                     shift => ch.transposition = ch.transposition.wrapping_add(shift as i8 as u16),
                 }
             }
-            // sound_op_set_transposition
+            // Set the transposition.
             0xBC => self.channels[channel].transposition = operand(pc) as i8 as u16,
-            // sound_op_for: push the loop start and count (or zeros).
+            // Start a loop: push the loop start and count (or zeros).
             0xC0 => {
                 let count = operand(pc);
                 let ch = &mut self.channels[channel];
@@ -586,7 +568,7 @@ impl Driver {
                     ch.push_word(0);
                 }
             }
-            // sound_op_next. The body runs count + 1 times: the final
+            // End of a loop. The body runs count + 1 times: the final
             // decrement still jumps back once before the frame is dropped.
             0xC4 => {
                 let ch = &mut self.channels[channel];
@@ -602,14 +584,14 @@ impl Driver {
                     }
                 }
             }
-            // sound_op_set_envelope
+            // Set the envelope.
             0xC8 => {
                 let envelope = SOUND_ENVELOPES + u32::from(operand(pc)) * ENVELOPE_SIZE;
                 self.channels[channel].envelope = envelope;
             }
-            // sound_op_clear_envelope
+            // Clear the envelope.
             0xCC => self.channels[channel].envelope = 0,
-            // sound_op_set_instrument
+            // Set the instrument.
             0xD0 => {
                 let address = SOUND_BASE
                     .wrapping_add(memory.u32(INSTRUMENT_TABLE_INDEX))
@@ -621,7 +603,7 @@ impl Driver {
                 ch.sample_start = SOUND_BASE.wrapping_add(memory.u32(address + 6));
                 ch.pitch_table = pitch_table(memory.u32(address + 10) as u8);
             }
-            // sound_op_jump
+            // Jump to another sequence.
             0xD4 => {
                 let sequence = operand(pc);
                 *pc = self.sequence_address(sequence);
@@ -636,7 +618,7 @@ impl Driver {
         Step::Next
     }
 
-    /// `sound_op_stop`: frees the channel and silences it.
+    /// Frees the channel and silences it.
     fn op_stop(&mut self, channel: usize, pc: &mut u32) {
         let ch = &mut self.channels[channel];
         ch.time_to_update = 0;
@@ -648,7 +630,7 @@ impl Driver {
         self.paula.set_dma(channel, false);
     }
 
-    /// The per-tick part of `sound_update_channels`: count down the note,
+    /// The per-tick part of the channel update: count down the note,
     /// step tremolo and vibrato, and work out the hardware values.
     fn apply_modulation(&mut self, channel: usize) {
         let ch = &mut self.channels[channel];
@@ -705,7 +687,7 @@ impl Driver {
         ch.hw_period = ch.period_base.wrapping_add(ch.period_adj);
     }
 
-    /// `sound_envelope_channel`.
+    /// Steps the channel's envelope, if it has one.
     fn envelope_channel(&mut self, channel: usize) {
         let ch = &mut self.channels[channel];
         if ch.command_pointer == 0 || ch.envelope == 0 {
@@ -721,7 +703,7 @@ impl Driver {
         envelope.step(ch);
     }
 
-    /// `sound_update_hardware_channel`: runs for every channel each tick.
+    /// Writes the channel's hardware values; runs for every channel each tick.
     fn update_hardware_channel(&mut self, channel: usize) {
         let ch = &mut self.channels[channel];
         let voice = &mut self.paula.voices[channel];
@@ -754,12 +736,12 @@ fn next_byte(memory: &Memory, pc: &mut u32) -> u8 {
     value
 }
 
-/// `sound_init_pitch_table`.
+/// The pitch table for a base octave.
 fn pitch_table(base_octave: u8) -> u32 {
     PITCH_TABLES[usize::from(base_octave.min(2))]
 }
 
-/// One entry of `sound_envelopes`.
+/// One entry of the envelope table.
 struct Envelope {
     attack_rate: u8,
     attack_pause: u8,
@@ -786,8 +768,8 @@ impl Envelope {
         }
     }
 
-    /// `sound_envelope_channel_aux`. Arithmetic is on the volume's low byte,
-    /// as in the original.
+    /// One envelope step. Arithmetic is on the volume's low byte, as in the
+    /// original.
     fn step(&self, ch: &mut Channel) {
         let with_low_byte = |word: u16, low: u8| (word & 0xFF00) | u16::from(low);
         if !ch.held {
@@ -956,12 +938,12 @@ mod tests {
         };
         // Sound 1: channel 0 plays sequence 1.
         bytes[(SOUND_TABLE + 6 + 2) as usize] = 1;
-        // Sequence table at sound_base + 0x100; sequence 1 at + 0x200.
+        // Sequence table at SOUND_BASE + 0x100; sequence 1 at + 0x200.
         put_u32(&mut bytes, SOUND_BASE, 0x100);
         put_u32(&mut bytes, SOUND_BASE + 0x100 + 4, 0x200);
         let script_at = (SOUND_BASE + 0x200) as usize;
         bytes[script_at..script_at + script.len()].copy_from_slice(script);
-        // Instrument table at sound_base + 0x400.
+        // Instrument table at SOUND_BASE + 0x400.
         put_u32(&mut bytes, INSTRUMENT_TABLE_INDEX, 0x400);
         let instrument = (SOUND_BASE + 0x400) as usize;
         bytes[instrument..instrument + 6].copy_from_slice(&[0xFF, 0xFF, 0, 0, 0, 2]);

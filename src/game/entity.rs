@@ -5,35 +5,35 @@ use super::geometry::{bit_accessors, DirBits, Point};
 use crate::data::animations::{Animation, ScriptRef};
 use crate::data::{addr, AtariRom};
 
-/// What an entity does each frame. In the original this is a code pointer;
-/// the address of each routine is noted for cross-reference.
+/// What an entity does each frame. The game data stores this as a code
+/// pointer, which [`Think::from_address`] decodes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Think {
-    /// `0xEB7A`: pick an animation towards `target` and start moving.
+    /// Pick an animation towards `target` and start moving.
     StartMove,
-    /// `0xEC0C`: keep steering towards `target`.
+    /// Keep steering towards `target`.
     Move,
-    /// `0xED56`: standing tackle, checking for a hit every frame.
+    /// Standing tackle, checking for a hit every frame.
     StandingTackle,
-    /// `0xF078`: wind-up; releases the ball on frame 4.
+    /// Wind-up; releases the ball on frame 4.
     Throw,
-    /// `0xF212`: stop and face the default direction.
+    /// Stop and face the default direction.
     Stand,
-    /// `0xF290`: in the air; lands after a speed-dependent delay.
+    /// In the air; lands after a speed-dependent delay.
     Jump,
-    /// `0xF2E2`: getting back up after a tackle attempt.
+    /// Getting back up after a tackle attempt.
     TackleRecover,
-    /// `0xF334`: goalkeeper dive (also tackles).
+    /// Goalkeeper dive (also tackles).
     GoalieDive,
-    /// `0xF33C`: sliding tackle.
+    /// Sliding tackle.
     SlideTackle,
-    /// `0xF344`: nothing (the routine is a bare `rts`).
+    /// Nothing.
     Idle,
-    /// `0xFC3C`: coin pickup.
+    /// Coin pickup.
     Coins,
-    /// `0xFC9C`: power-up token pickup.
+    /// Power-up token pickup.
     Token,
-    /// `0xFD92`: equipment pickup.
+    /// Equipment pickup.
     Equipment,
     /// A pointer this port does not know about; behaves like `Idle`.
     Unknown(i32),
@@ -275,7 +275,7 @@ impl Entity {
 
     // -- Animation -------------------------------------------------------------
 
-    /// Advances the animation script by one frame (`ExecuteOpcode`).
+    /// Advances the animation script by one frame.
     pub fn advance_script(&mut self, rom: &AtariRom) -> ScriptEvent {
         if self.flags.invisible() {
             return ScriptEvent::None;
@@ -315,7 +315,7 @@ impl Entity {
     }
 
     /// Selects the script for the current direction from a per-direction
-    /// list and sets the matching velocity (`sub_F5A8`).
+    /// list and sets the matching velocity.
     pub fn set_animation(&mut self, rom: &AtariRom, animation: Animation, speed: i32) {
         self.script = rom.script_for_dir(animation, self.dir);
         debug_assert_ne!(
@@ -373,8 +373,8 @@ impl Entity {
 
     // -- Geometry --------------------------------------------------------------
 
-    /// Approximate distance from this entity's feet to `target`
-    /// (`CalcVector`: an octagonal approximation of the Euclidean norm).
+    /// Approximate distance from this entity's feet to `target` (an
+    /// octagonal approximation of the Euclidean norm).
     pub fn distance_to(&self, target: Point) -> i32 {
         let dx = (self.pos.x - target.x).abs();
         let dy = (self.pos.y + self.origin.y - target.y).abs();
@@ -382,7 +382,7 @@ impl Entity {
     }
 
     /// Cheap rejection test: returns the horizontal distance if it exceeds
-    /// `limit`, otherwise the vertical one (`UnkInRect`).
+    /// `limit`, otherwise the vertical one.
     pub fn axis_distance(&self, target: Point, limit: i32) -> i32 {
         let dx = (target.x - self.pos.x).abs();
         if dx > limit {
@@ -392,7 +392,7 @@ impl Entity {
     }
 
     /// Direction bits towards `target`, ignoring the minor axis when the
-    /// target lies close to a straight line (`GetDirBitsToTargetBetter`).
+    /// target lies close to a straight line.
     pub fn dir_bits_towards(&self, target: Point) -> DirBits {
         let dx = target.x - self.pos.x;
         let dy = target.y - self.pos.y;
@@ -406,8 +406,7 @@ impl Entity {
         bits
     }
 
-    /// Direction bits towards `target` on each axis that differs at all
-    /// (`GetDirBitsToTargetSimple`).
+    /// Direction bits towards `target` on each axis that differs at all.
     pub fn dir_bits_towards_exact(&self, target: Point) -> DirBits {
         let mut bits = DirBits::NONE;
         if target.x != self.pos.x {
@@ -451,7 +450,7 @@ pub fn is_in_view(pos: Point, scroll: Point) -> bool {
     (0..=184).contains(&y) && (0..=320).contains(&x)
 }
 
-/// The 68000 routine's integer approximation of `sqrt(a² + b²)`.
+/// The original game's integer approximation of `sqrt(a² + b²)`.
 fn approximate_length(a: i32, b: i32) -> i32 {
     let (max, min) = if a < b { (b, a) } else { (a, b) };
     let length = max + (min >> 1);

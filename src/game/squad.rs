@@ -1,7 +1,5 @@
 //! The manager's side of the game: a squad of twelve, the transfer market,
-//! and the gym (`buy_for_player`, `keypad_transfer_fn_buy`,
-//! `keypad_manager_fn_substitute`, `update_market`, `get_player_value`,
-//! `get_max_boost`).
+//! and the gym.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +15,7 @@ pub const LAST_SQUAD_FACE: u16 = 0x45;
 /// The eight skills in the order the stats records hold them.
 pub type SkillBytes = [u8; 8];
 
-/// One player record (`player_1_defense_1` and friends, and their stats).
+/// One player record, with their stats.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SquadPlayer {
     pub name: String,
@@ -39,7 +37,7 @@ impl SquadPlayer {
 /// goalkeeper), midfield and attack, then three substitutes.
 pub type Squad = [SquadPlayer; SQUAD_SIZE];
 
-/// A player on the market (`players_market`).
+/// A player on the market.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MarketPlayer {
     #[serde(flatten)]
@@ -62,14 +60,14 @@ pub enum Competition {
 #[derive(Clone, Copy, Debug)]
 pub struct Context {
     pub competition: Competition,
-    /// `misc_flags` bit 0: "TEAM MANAGER".
+    /// The "TEAM MANAGER" option.
     pub manager_mode: bool,
     /// Brutal Deluxe are in division 1 (placing 8 or better).
     pub in_division_1: bool,
 }
 
 /// The eight gym upgrades: which skill each improves and its price per
-/// player (`upgrades_table`).
+/// player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Upgrade {
     pub skill: usize,
@@ -85,7 +83,7 @@ pub enum Refusal {
     MaximumBoost,
 }
 
-/// `get_player_value`: ten credits' worth of each upgrade for every ten
+/// A player's value: ten credits' worth of each upgrade for every ten
 /// points above 100, and a premium for market players.
 pub fn player_value(player: &SquadPlayer, upgrades: &[Upgrade], context: Context) -> u16 {
     let base = upgrades.iter().fold(0u16, |value, upgrade| {
@@ -104,9 +102,8 @@ pub fn player_value(player: &SquadPlayer, upgrades: &[Upgrade], context: Context
     base.wrapping_add(premium)
 }
 
-/// `get_max_boost`: the gym only takes a skill to 30 above the weakest
-/// group's average (rounded down to ten), with a ceiling depending on the
-/// game.
+/// The gym only takes a skill to 30 above the weakest group's average
+/// (rounded down to ten), with a ceiling depending on the game.
 pub fn max_boost(squad: &Squad, context: Context) -> u8 {
     let weakest = group_averages(squad)
         .iter()
@@ -133,8 +130,7 @@ fn ceiling_for(competition: Competition) -> u16 {
     }
 }
 
-/// `generate_team_stats`: per group, each skill averaged over its three
-/// players (rounded down).
+/// Per group, each skill averaged over its three players (rounded down).
 pub fn group_averages(squad: &Squad) -> [SkillBytes; 4] {
     std::array::from_fn(|group| {
         std::array::from_fn(|skill| {
@@ -147,7 +143,7 @@ pub fn group_averages(squad: &Squad) -> [SkillBytes; 4] {
     })
 }
 
-/// `generate_team_total_stats`: each skill averaged over the four groups.
+/// Each skill averaged over the four groups.
 pub fn team_average(squad: &Squad) -> SkillBytes {
     let groups = group_averages(squad);
     std::array::from_fn(|skill| {
@@ -156,7 +152,7 @@ pub fn team_average(squad: &Squad) -> SkillBytes {
     })
 }
 
-/// `average_8`: the mean of eight skills, rounded down.
+/// The mean of eight skills, rounded down.
 pub fn average_8(skills: &SkillBytes) -> u16 {
     skills.iter().map(|&s| u16::from(s)).sum::<u16>() >> 3
 }
@@ -170,7 +166,7 @@ pub struct Manager<'a> {
 }
 
 impl Manager<'_> {
-    /// `buy_for_player`: ten more in one skill, if it is under the limit.
+    /// Ten more in one skill, if it is under the limit.
     /// A player bought from the market can only get back to the skills he
     /// had there.
     pub fn buy_for_player(&mut self, slot: usize, upgrade: Upgrade) -> Result<(), Refusal> {
@@ -192,13 +188,13 @@ impl Manager<'_> {
         Ok(())
     }
 
-    /// `buy_for_group`: the same for the three players of a group, if the
+    /// The same for the three players of a group, if the
     /// cash covers all three. Players at their limit are skipped quietly.
     pub fn buy_for_group(&mut self, group: usize, upgrade: Upgrade) -> Result<(), Refusal> {
         self.buy_for_several(group * 3..group * 3 + 3, upgrade)
     }
 
-    /// `buy_for_team`: the same for all twelve.
+    /// The same for all twelve.
     pub fn buy_for_team(&mut self, upgrade: Upgrade) -> Result<(), Refusal> {
         self.buy_for_several(0..SQUAD_SIZE, upgrade)
     }
@@ -220,15 +216,15 @@ impl Manager<'_> {
     }
 }
 
-/// `find_market_player`: the market record a bought player came from.
+/// The market record a bought player came from.
 pub fn market_player(market: &[MarketPlayer], face: u16) -> Option<&MarketPlayer> {
     market.iter().find(|m| m.player.face == face)
 }
 
-/// `keypad_manager_fn_substitute`: swap two squad places. Players from the
-/// market only play in their own position's row, or on the bench; the
-/// squad's own players go anywhere. Places keep their positions; the
-/// players' names, faces and skills move. Returns whether they swapped.
+/// Swaps two squad places. Players from the market only play in their own
+/// position's row, or on the bench; the squad's own players go anywhere.
+/// Places keep their positions; the players' names, faces and skills move.
+/// Returns whether they swapped.
 pub fn substitute(squad: &mut Squad, market: &[MarketPlayer], a: usize, b: usize) -> bool {
     let both_own = !squad[a].is_from_market() && !squad[b].is_from_market();
     let allowed = if both_own || a / 3 == b / 3 {
@@ -267,9 +263,9 @@ pub fn substitute(squad: &mut Squad, market: &[MarketPlayer], a: usize, b: usize
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Market {
     pub players: Vec<MarketPlayer>,
-    /// `num_management_rounds`: manager screens visited so far.
+    /// Manager screens visited so far.
     pub rounds: u16,
-    /// `num_buyable_players`.
+    /// How many players are for sale.
     pub buyable_count: u16,
 }
 
@@ -282,8 +278,7 @@ impl Market {
         }
     }
 
-    /// `init_market`: nobody for sale, each player due to change in one
-    /// to eight rounds.
+    /// Nobody for sale, each player due to change in one to eight rounds.
     pub fn init(&mut self, rng: &mut Rng) {
         self.rounds = 0;
         self.buyable_count = 0;
@@ -293,9 +288,8 @@ impl Market {
         }
     }
 
-    /// `update_market`: players due this round come on or go off the
-    /// market. At most three are for sale; which ones depends on their
-    /// value and the division.
+    /// Players due this round come on or go off the market. At most three
+    /// are for sale; which ones depends on their value and the division.
     pub fn update(&mut self, rng: &mut Rng, upgrades: &[Upgrade], context: Context) {
         for market in &mut self.players {
             if market.change_time != self.rounds as i16 {
@@ -326,9 +320,9 @@ impl Market {
         }
     }
 
-    /// `keypad_transfer_fn_buy`: buy market player `index` into squad place
-    /// `slot`, paying the difference in value. He must play in that row,
-    /// unless he goes on the bench. Returns whether the deal went through.
+    /// Buys market player `index` into squad place `slot`, paying the
+    /// difference in value. He must play in that row, unless he goes on the
+    /// bench. Returns whether the deal went through.
     pub fn buy(
         &mut self,
         index: usize,

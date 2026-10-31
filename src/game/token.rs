@@ -37,7 +37,7 @@ impl ActiveToken {
 }
 
 impl Match {
-    /// Ends the active token's effect (`Token.Dispose`).
+    /// Ends the active token's effect.
     pub(crate) fn expire_token(&mut self) {
         if self.token.sprite == 0 {
             return;
@@ -65,7 +65,7 @@ impl Match {
         self.token.sprite = 0;
     }
 
-    /// Applies the token in item slot `item` to `picker` (`sub_FC9C`).
+    /// Applies the token in item slot `item` to `picker`.
     pub(crate) fn activate_token(&mut self, item: usize, picker: PlayerId) {
         let sprite = self.props.tokens[item].sprite;
         match sprite {

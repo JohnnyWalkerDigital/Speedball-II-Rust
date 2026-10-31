@@ -29,7 +29,7 @@ enum Operand {
     Effect,
 }
 
-/// Commands by byte, as `sound_switch` dispatches them.
+/// Commands by byte, as the driver dispatches them.
 const COMMANDS: &[(u8, &str, Operand)] = &[
     (0x80, "volume", Operand::Unsigned),
     (0x84, "unused_84", Operand::Unsigned),
@@ -53,8 +53,8 @@ const COMMANDS: &[(u8, &str, Operand)] = &[
     (0xD0, "instrument", Operand::Instrument),
     (0xD4, "jump", Operand::Sequence),
 ];
-/// `sound_op_silence`, whose operands are a count and that many bytes. No
-/// sequence uses it, so it is written as bytes.
+/// Silence, whose operands are a count and that many bytes. No sequence
+/// uses it, so it is written as bytes.
 const SILENCE: u8 = 0x98;
 const RAW: &str = "byte";
 /// Commands after which a line ends.

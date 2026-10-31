@@ -30,7 +30,7 @@ pub struct MatchRenderer {
 impl MatchRenderer {
     const VIEW_ROWS: Option<usize> = Some(VIEW_HEIGHT as usize);
     const STATUS_Y: i32 = VIEW_HEIGHT;
-    /// `sprites_monitor_final_score`: the panel without "GOAL" or "INJURED".
+    /// The panel without "GOAL" or "INJURED".
     const PLAIN_PANEL: usize = 2;
 
     pub fn new(assets: Assets, rom: &AtariRom) -> Self {
@@ -59,7 +59,7 @@ impl MatchRenderer {
         canvas.clip_to_rows(None);
     }
 
-    /// A sped-up match draws nothing on the pitch (`match_tick`): the
+    /// A sped-up match draws nothing on the pitch: the
     /// view stays as it was, with any panel message drawn over it for
     /// good, while the status bar keeps up. `view` holds the frozen view.
     pub fn render_sped_up(&self, m: &Match, view: &mut Canvas, canvas: &mut Canvas) {
@@ -72,9 +72,8 @@ impl MatchRenderer {
         self.draw_status_bar(m, canvas);
     }
 
-    /// A frame of a replay loaded from a goal save disk
-    /// (`load_replay_goal`): the pitch as freshly loaded, the replayed
-    /// sprites and, if any, a panel message. The status bar rows are left
+    /// A frame of a replay loaded from a goal save disk: the pitch as
+    /// freshly loaded, the replayed sprites and, if any, a panel message. The status bar rows are left
     /// as they are.
     pub fn render_saved_replay(
         &self,
@@ -93,7 +92,7 @@ impl MatchRenderer {
         canvas.clip_to_rows(None);
     }
 
-    /// A message on the panel over whatever is shown (`disk_error_message`).
+    /// A message on the panel over whatever is shown.
     pub fn render_message(&self, message: &Text, canvas: &mut Canvas) {
         canvas.clip_to_rows(Self::VIEW_ROWS);
         canvas.draw(&self.assets.panels[Self::PLAIN_PANEL], 16, 8);
@@ -101,13 +100,13 @@ impl MatchRenderer {
         canvas.clip_to_rows(None);
     }
 
-    /// `zero_screen`: the view in the background colour.
+    /// The view in the background colour.
     pub fn render_blank_view(&self, canvas: &mut Canvas) {
         let color = self.assets.palette.color(Assets::BACKGROUND);
         canvas.fill_rect(0, 0, canvas.width(), VIEW_HEIGHT as usize, color);
     }
 
-    /// The blank status bar the Amiga starts with (`init_screen_status_bar`).
+    /// The blank status bar the Amiga starts with.
     pub fn render_blank_status_bar(&self, canvas: &mut Canvas) {
         canvas.draw(&self.assets.status_bar, 0, Self::STATUS_Y);
     }
@@ -207,7 +206,6 @@ impl MatchRenderer {
         )
     }
 
-    /// `Entity.Draw`.
     fn draw_entity(&self, canvas: &mut Canvas, e: &Entity, scroll: Point) {
         if e.flags.invisible() {
             return;
@@ -390,9 +388,7 @@ impl MatchRenderer {
 }
 
 /// The status bar light for the active player's formation line, as
-/// `(sprite, x)` (`green_light_active_player`). Defence and the goalkeeper
-/// share the first light. (The C# tested team 1's player for team 2's
-/// midfield light.)
+/// `(sprite, x)`. Defence and the goalkeeper share the first light.
 fn position_light(side: Side, pos: i32) -> (i32, i32) {
     let line = match pos {
         0 | 1 => 0,

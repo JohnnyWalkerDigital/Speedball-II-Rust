@@ -236,7 +236,7 @@ fn sounds_are_requested_where_the_original_plays_them() {
             let sounds = game.take_sounds();
             if sounds.contains(&Sound::GOAL) {
                 goals += 1;
-                // `handle_score_goal`: silence, goal and the crowd, then the
+                // A goal: silence, goal and the crowd, then the
                 // replay with its panel sound, and the crowd again after it.
                 let start = sounds.iter().position(|&s| s == Sound::GOAL).unwrap() - 1;
                 let crowd = sounds[start + 2];

@@ -38,7 +38,7 @@ impl Default for Injury {
 }
 
 impl Match {
-    /// Stops play and sends the medics on (`sub_F6DC`).
+    /// Stops play and sends the medics on.
     pub(crate) fn start_injury(&mut self, p: PlayerId) {
         if let Some(current) = self.injury.player {
             if self.players[current.0].entity.flags.busy() {
@@ -262,7 +262,7 @@ impl Match {
 
     /// Saves the injured player's worn-down skills, then rotates the squad:
     /// the first substitute comes on and the injured player goes to the
-    /// back of the bench (`SubstitutePlayer`).
+    /// back of the bench.
     fn substitute(&mut self, injured: PlayerId) {
         let player = &self.players[injured.0];
         let skills = player.attributes.skills;

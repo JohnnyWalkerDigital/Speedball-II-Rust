@@ -10,7 +10,7 @@ use super::text::{TextId, TextPanel};
 use crate::config::{Config, GameMode, TEAM_COUNT};
 use crate::data::AtariRom;
 
-/// Everything `Match::new` needs (the original `MatchParam`).
+/// Everything `Match::new` needs.
 pub struct MatchSetup {
     pub mode: GameMode,
     pub players: Vec<Player>,
@@ -31,18 +31,17 @@ pub struct MatchRules {
     pub mode: GameMode,
     pub team1: Lineup,
     pub team2: Lineup,
-    /// `match_half_length_seconds`.
+    /// How long each half lasts, in seconds.
     pub leg_duration: i32,
-    /// `match_cash_start`: what each team has earned at kick-off.
+    /// What each team has earned at kick-off.
     pub min_credits: i32,
     /// `coin_value`: what a coin is worth (doubled in the cup).
     pub coin_value: i32,
-    /// `match_cash_max_p1` / `_p2`: no more coins appear once a team has
-    /// earned this much.
+    /// No more coins appear once a team has earned this much.
     pub max_credits: PerTeam<i32>,
-    /// Which teams the computer plays (`misc_flags` bits 0 and 1).
+    /// Which teams the computer plays.
     pub computer: PerTeam<bool>,
-    /// `initial_playing_direction`: 0 has team 1 attacking up first.
+    /// The initial playing direction: 0 has team 1 attacking up first.
     pub initial_dir_team1: i32,
 }
 
@@ -53,12 +52,11 @@ pub struct Lineup {
 }
 
 pub enum SquadSkills {
-    /// Every skill the same (`init_player_stats`).
+    /// Every skill the same.
     Uniform(i32),
-    /// A human manager's squad: each player's name, face and skills
-    /// (`team_info_table` and `player_1_player_stats_table`).
+    /// A human manager's squad: each player's name, face and skills.
     Players(Box<squad::Squad>),
-    /// The team's skill templates (`populate_opposition_player_stats`).
+    /// The team's skill templates.
     FromTeam,
 }
 
@@ -85,7 +83,7 @@ impl MatchRules {
         }
     }
 
-    /// `game_practice`: Brutal Deluxe alone on the pitch.
+    /// Practice: Brutal Deluxe alone on the pitch.
     pub fn practice(rom: &AtariRom) -> Self {
         Self {
             mode: GameMode::Practice,
@@ -106,7 +104,7 @@ impl MatchRules {
         }
     }
 
-    /// `game_two_player`: "PLAYER 1" against "PLAYER 2", all skills 170.
+    /// Two players: "PLAYER 1" against "PLAYER 2", all skills 170.
     pub fn two_players(rom: &AtariRom, initial_dir_team1: i32) -> Self {
         let texts = TextPanel::new();
         let mut team1 = league_team(rom, BRUTAL_DELUXE);
@@ -241,7 +239,7 @@ fn set_skills(lineup: &Lineup, attributes: &mut [Attributes], persons: &mut [Per
 // -- Command-line modes ---------------------------------------------------------
 
 /// Two random teams, both on the computer until someone touches the
-/// controls (the C# port's work-in-progress setup).
+/// controls.
 fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRules {
     let (team1, team2) = random_distinct_teams(seeds, config);
     MatchRules {
@@ -320,7 +318,7 @@ impl SplitMix64 {
         z ^ (z >> 31)
     }
 
-    /// Like .NET's `Random.Next()`: a non-negative 31-bit value.
+    /// A non-negative 31-bit value.
     fn next_u31(&mut self) -> u32 {
         (self.next_u64() >> 33) as u32
     }

@@ -16,7 +16,7 @@ impl Match {
             let low = self.props.ball.sprite <= 2;
             let margin = if low { 32 } else { 24 };
             let hits = self.props.ball.move_within_walls(&rom, margin);
-            // `constrain_sprite`: the ball sounds different high and low.
+            // The ball sounds different high and low.
             if hits.side {
                 self.play_sound(if low {
                     Sound::SIDE_WALL_LOW
@@ -63,7 +63,7 @@ impl Match {
         holder
     }
 
-    /// Slows a free ball down (`UpdateBallVelocity`).
+    /// Slows a free ball down.
     pub(super) fn decelerate_ball(&mut self) {
         if (!self.clock_paused && self.holder.is_some()) || self.ball_in_multiplier {
             return;
@@ -123,8 +123,7 @@ impl Match {
         } else {
             return;
         }
-        // Moving straight up or down, the ball keeps its sideways drift
-        // (`step_warp`; the C# overwrote it).
+        // Moving straight up or down, the ball keeps its sideways drift.
         let sideways = ball.velocity.x;
         ball.velocity = self.rom.velocity(ball.dir, 8);
         if ball.dir & 3 == 0 {

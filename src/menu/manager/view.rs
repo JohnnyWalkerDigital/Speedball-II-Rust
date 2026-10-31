@@ -7,8 +7,7 @@ pub enum Screen {
     Gym,
 }
 
-/// What the left and right keys go through, and the gym buys for
-/// (`buy_mode_table`).
+/// What the left and right keys go through, and the gym buys for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuyMode {
     Player,
@@ -75,7 +74,7 @@ impl Default for Cursors {
 pub struct View {
     pub screen: Screen,
     pub mode: BuyMode,
-    /// `buy_index`: which player, group or market player is shown.
+    /// Which player, group or market player is shown.
     pub index: usize,
     pub key_highlight: Option<(usize, usize)>,
     pub key_pressed: bool,
@@ -104,12 +103,12 @@ impl View {
         }
     }
 
-    /// `player_grid_idx`.
+    /// The chosen squad place, counting across the rows.
     pub fn grid_slot(&self) -> usize {
         self.grid.1 * 3 + self.grid.0
     }
 
-    /// `player_table_y`: the table moves up to show the substitutes.
+    /// The squad table's position: it moves up to show the substitutes.
     pub fn table_y(&self) -> i32 {
         if self.table_offset == 0 {
             0x24

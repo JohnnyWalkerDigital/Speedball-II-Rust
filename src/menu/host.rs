@@ -1,9 +1,9 @@
 //! What the game needs from the machine it runs on: a screen, a clock, the
 //! controls and the sound chip.
 //!
-//! The menu code is written like the original, as straight-line code that
-//! waits for the next frame; [`Host`] is where it waits. The desktop app
-//! implements it with a window, and the tests with a script.
+//! The menu code is written as straight-line code that waits for the next
+//! frame; [`Host`] is where it waits. The desktop app implements it with a
+//! window, and the tests with a script.
 
 use std::time::Duration;
 
@@ -58,9 +58,9 @@ impl ButtonEvent {
 pub enum SoundBank {
     /// The intro's music and sounds, loaded at boot.
     Intro,
-    /// Overlay 28, loaded by `load_mgmt_data`.
+    /// Overlay 28, loaded for the menus.
     Menu,
-    /// Overlay 27, loaded by `load_arena_data`.
+    /// Overlay 27, loaded for a match.
     Match,
 }
 

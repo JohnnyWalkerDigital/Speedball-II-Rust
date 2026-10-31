@@ -1,4 +1,4 @@
-//! IFF ILBM pictures, as `unpack_iff_image` reads them.
+//! IFF ILBM pictures, as the game reads them.
 
 use super::indexed::{ColorWords, IndexedImage};
 

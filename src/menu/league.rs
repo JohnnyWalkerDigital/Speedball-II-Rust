@@ -1,6 +1,5 @@
-//! The league, from `game_league` down: two half-seasons a year, then
-//! promotion and the play-off for a team in division 2, or the title for a
-//! team in division 1.
+//! The league: two half-seasons a year, then promotion and the play-off
+//! for a team in division 2, or the title for a team in division 1.
 
 use super::flow::{cup_league_match, list_menu, message, wait_fire, win_shared, Game};
 use super::host::{Button, Control};
@@ -14,7 +13,7 @@ use crate::game::league::{
 };
 use crate::game::save::Progress;
 
-/// Where a loaded league picks up (`round_num`, `match_num` and the
+/// Where a loaded league picks up (the round, the match and the
 /// half-season's playing direction).
 struct Resume {
     round: usize,
@@ -22,7 +21,7 @@ struct Resume {
     initial_dir: i32,
 }
 
-/// `game_league`.
+/// Plays a new or loaded league.
 pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(550);
     let (mut league, mut resume) = match list_menu(ui, game, &game.text.menus.league)? {
@@ -106,8 +105,8 @@ fn placing(game: &Game) -> u8 {
     game.career.record(BRUTAL_DELUXE).league_placing
 }
 
-/// `league_season`: seven rounds, each followed by the results and tables.
-/// A loaded game starts part way (`league_season_middle`).
+/// Seven rounds, each followed by the results and tables. A loaded game
+/// starts part way.
 fn season(
     ui: &mut Ui,
     game: &mut Game,
@@ -127,8 +126,8 @@ fn season(
     Ok(())
 }
 
-/// `league_round`: four matches in each division, Brutal Deluxe's
-/// division first each time.
+/// Four matches in each division, Brutal Deluxe's division first each
+/// time.
 fn league_round(
     ui: &mut Ui,
     game: &mut Game,
@@ -156,8 +155,8 @@ fn league_round(
     Ok(())
 }
 
-/// `show_league_placings`: a division's table with Brutal Deluxe's name
-/// blinking. Up and down switch division; fire carries on.
+/// A division's table with Brutal Deluxe's name blinking. Up and down
+/// switch division; fire carries on.
 pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) -> Flow {
     const BLINK_VBLANKS: u32 = 16;
     let mut division = League::division_of(placing(game));
@@ -174,7 +173,7 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
     loop {
         ui.vblank()?;
         frame += 1;
-        // `frame_timer` bit 4 picks the name or the blank.
+        // Every 16 frames, switch between the name and the blank.
         ui.show_page(&shown[usize::from(frame / BLINK_VBLANKS % 2 == 1)]);
         let wanted = |b| {
             b == Button::Escape
@@ -196,9 +195,9 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
     }
 }
 
-/// `league_playoffs`: seventh in division 1 plays second in division 2
-/// until one wins; if the division 2 team wins, they swap divisions. The
-/// ends swap before each match.
+/// Seventh in division 1 plays second in division 2 until one wins; if
+/// the division 2 team wins, they swap divisions. The ends swap before
+/// each match.
 fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: i32) -> Flow {
     let teams = (league.tables[0][6], league.tables[1][1]);
     if teams.0 == BRUTAL_DELUXE || teams.1 == BRUTAL_DELUXE {
@@ -233,8 +232,7 @@ fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: 
     Ok(())
 }
 
-/// `league_promote_relegate_announce`: the top of division 2 and the
-/// bottom of division 1 swap.
+/// The top of division 2 and the bottom of division 1 swap.
 fn promote_relegate_announce(ui: &mut Ui, game: &mut Game, league: &mut League) -> Flow {
     league.promote_relegate(league.tables[0][7], league.tables[1][0], &mut game.career);
     match placing(game) {

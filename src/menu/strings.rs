@@ -20,7 +20,7 @@ pub struct Title {
     pub bottom: Vec<u8>,
 }
 
-/// A list menu (`shared_menu_function`'s menu structure).
+/// A list menu.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MenuSpec {
     pub title: Title,
@@ -144,7 +144,7 @@ pub struct Panels {
     pub next_fixture: Vec<Line<FixtureNumber>>,
     #[serde(with = "readable::panel_list")]
     pub league_table: Vec<Vec<u8>>,
-    /// A team's row, filled in by `construct_league_placing_string`.
+    /// A team's row, with its numbers filled in.
     #[serde(with = "readable::panel")]
     pub league_row: Vec<u8>,
     #[serde(with = "readable::panel_list")]
@@ -165,8 +165,8 @@ pub struct Line<N> {
     pub numbers: Option<N>,
 }
 
-/// The next-fixture lines that hold numbers, in the order
-/// `generate_team_fixture_strings` fills them.
+/// The next-fixture lines that hold numbers, in the order they are filled
+/// in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FixtureNumber {
@@ -246,7 +246,7 @@ impl Statistic {
     }
 }
 
-/// A list of strings (`draw_string_list`), and what each line shows.
+/// A list of strings, and what each line shows.
 fn lines<N>(ram: &MenuRam, list: usize, numbers: impl Fn(usize) -> Option<N>) -> Vec<Line<N>> {
     ram.pointer_list(list)
         .into_iter()

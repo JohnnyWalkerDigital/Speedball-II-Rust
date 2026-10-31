@@ -1,4 +1,4 @@
-//! What each keypad key does (the original's `keypad_fn_*` routines).
+//! What each keypad key does.
 
 use super::data::KeyAction;
 use super::session::Session;
@@ -79,8 +79,8 @@ pub(super) fn press_key(
     }
 }
 
-/// `keypad_manager_fn_save`: only every fourth management round (the key
-/// is blank otherwise).
+/// Saves the game: only every fourth management round (the key is blank
+/// otherwise).
 fn save(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     if game.career.market.rounds & 3 != 0 {
         return Ok(());

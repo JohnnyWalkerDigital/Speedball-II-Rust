@@ -1,5 +1,5 @@
-//! "REPLAY GOALS" (`load_replay_goals`, `load_replay_goal`): the goals on
-//! the goal save disk, slots 1 to 9 in turn. Empty slots are skipped.
+//! "REPLAY GOALS": the goals on the goal save disk, slots 1 to 9 in turn.
+//! Empty slots are skipped.
 
 use super::flow::{wait_fire, Game};
 use super::host::{Button, Control, SoundBank};
@@ -11,7 +11,7 @@ use crate::game::replay::{Replay, ReplayTick, SavedReplay};
 use crate::game::text::Text;
 use crate::graphics::Canvas;
 
-/// The panel message shows while `text_overlay_counter` is up to this.
+/// The panel message shows while its frame counter is up to this.
 const MESSAGE_FRAMES: u8 = 0x14;
 
 /// Shows every saved goal. Escape on the first screen goes straight back
@@ -27,7 +27,7 @@ pub fn replay_goals(ui: &mut Ui, game: &Game) -> Flow {
     shown
 }
 
-/// `load_replay_goal`: one slot, if it holds a replay.
+/// One slot, if it holds a replay.
 fn replay_goal(ui: &mut Ui, game: &Game, slot: u8) -> Flow {
     let read = game.save_disk.read(replay_sector(slot), REPLAY_SECTORS);
     let Some(saved) = read.ok().and_then(|bytes| SavedReplay::decode(&bytes)) else {
@@ -44,9 +44,8 @@ fn replay_goal(ui: &mut Ui, game: &Game, slot: u8) -> Flow {
     run_replay(ui, game, &mut Replay::from_saved(&saved), slot, &mut canvas)
 }
 
-/// `run_replay` with `match_kind` 3: fire on either joystick or Escape ends
-/// it; keys 1 to 9 save it again, where the flags left by the last game
-/// allow.
+/// A replay from disk: fire on either joystick or Escape ends it; keys 1
+/// to 9 save it again, where the flags left by the last game allow.
 fn run_replay(
     ui: &mut Ui,
     game: &Game,
@@ -78,7 +77,7 @@ fn run_replay(
             ReplayTick::Over => return Ok(()),
             ReplayTick::Same => {}
             ReplayTick::Frame(frame) => {
-                // `build_text_overlay` counts a line drawn, then the frame.
+                // The counter goes up for a line drawn, then for the frame.
                 let shown = counter <= MESSAGE_FRAMES;
                 if shown {
                     counter = counter.max(1) + 1;
@@ -91,7 +90,7 @@ fn run_replay(
     }
 }
 
-/// "GOAL 1" to "GOAL 9" (`str_goal` with the slot's digit).
+/// "GOAL 1" to "GOAL 9" (the message with the slot's digit).
 fn goal_message(game: &Game, slot: u8) -> Text {
     let mut text = game.text.messages.replay_goal.clone();
     // Digits follow the letters in the panel font.

@@ -1,5 +1,4 @@
-//! The message panel at the top of the pitch (`overlay_message`,
-//! `build_text_overlay`).
+//! The message panel at the top of the pitch.
 
 use super::Match;
 use crate::game::events::Sound;
@@ -12,14 +11,14 @@ impl Match {
         self.text_panel.show(message);
     }
 
-    /// `match_tick` builds the text panel while the clock is stopped.
+    /// Builds the text panel each frame while the clock is stopped.
     pub(super) fn update_panel_overlay(&mut self) {
         if self.text_panel_shown() {
             self.build_panel_overlay();
         }
     }
 
-    /// Whether `match_tick` builds a message on the panel this frame.
+    /// Whether a message is built on the panel this frame.
     pub fn text_panel_shown(&self) -> bool {
         self.clock_paused
             && if self.player_injured {
@@ -29,11 +28,10 @@ impl Match {
             }
     }
 
-    /// The bookkeeping in `build_text_overlay`: the panel's lines are drawn
-    /// (with a sound) when its counter is 0, and each line drawn and each
-    /// frame advance the counter. Every 64 frames of a "scored" or "own
-    /// goal" panel, which only shows during the goal replay, the crowd may
-    /// shout "ice cream".
+    /// The panel's bookkeeping: its lines are drawn (with a sound) when its
+    /// counter is 0, and each line drawn and each frame advance the counter.
+    /// Every 64 frames of a "scored" or "own goal" panel, which only shows
+    /// during the goal replay, the crowd may shout "ice cream".
     pub(crate) fn build_panel_overlay(&mut self) {
         let message = self.text_panel.message();
         let team_names = if self.is_practice() { 1 } else { 2 };

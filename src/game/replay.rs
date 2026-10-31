@@ -1,7 +1,5 @@
 //! The goal replay: a recording of what was drawn, played back in slow
-//! motion after a goal (`save_replay_origin`, `save_sprite_for_replay`,
-//! `run_replay`, `replay_frame`), and saved to disk (`save_replay`,
-//! `load_replay_goal`).
+//! motion after a goal, and saved to disk.
 //!
 //! The original records into a 3,060-byte ring buffer of 32-bit entries: a
 //! marker with the camera position at the start of each frame, then one entry
@@ -16,9 +14,9 @@ use super::scene;
 use super::sprites::{amiga_sprite, entity_for, AmigaSprite, Bank};
 use super::state::Match;
 
-/// `replay_buf` to `replay_buf_end`, in 32-bit entries.
+/// The ring buffer's size, in 32-bit entries.
 const CAPACITY: usize = (0x528C - 0x4698) / 4;
-/// Set on a frame's first entry, which holds `x_origin` and `y_origin`.
+/// Set on a frame's first entry, which holds the camera position.
 const FRAME_MARKER: u32 = 1 << 31;
 /// In a sprite's x word: a 32x32 sprite (else 16x16).
 const WIDE: u32 = 1 << 9;
@@ -29,9 +27,9 @@ const LAUNCHER_BANK: u32 = 0x80;
 
 pub struct Replay {
     entries: Vec<u32>,
-    /// `replay_buf_tail_ptr`: oldest entry.
+    /// Oldest entry.
     tail: usize,
-    /// `replay_buf_head_ptr`: next entry to write.
+    /// Next entry to write.
     head: usize,
     playback: Option<Playback>,
 }
@@ -53,8 +51,7 @@ pub struct ReplayFrame {
 
 /// What a replay shows on a tick.
 pub enum ReplayTick {
-    /// The same frame again: replays run at half speed (`run_replay`
-    /// doubles `frames_per_tick`).
+    /// The same frame again: replays run at half speed.
     Same,
     Frame(ReplayFrame),
     Over,
@@ -82,8 +79,8 @@ impl Replay {
         }
     }
 
-    /// The buffer as `save_replay` writes it: the whole replay, however
-    /// far it has played.
+    /// The buffer as it is saved to disk: the whole replay, however far it
+    /// has played.
     pub fn saved(&self, serial: u32) -> SavedReplay {
         SavedReplay {
             entries: self.entries.clone(),
@@ -118,8 +115,7 @@ impl Replay {
         }
     }
 
-    /// Advances playback by a tick (`run_replay`'s loop and
-    /// `replay_frame`).
+    /// Advances playback by a tick.
     pub fn tick(&mut self) -> ReplayTick {
         let Some(playback) = self.playback.as_mut() else {
             return ReplayTick::Over;
@@ -159,7 +155,7 @@ impl Replay {
         ReplayTick::Frame(ReplayFrame { scroll, sprites })
     }
 
-    /// `write_replay_buf`: when the buffer is full, the oldest entry goes.
+    /// Adds an entry: when the buffer is full, the oldest entry goes.
     fn write(&mut self, entry: u32) {
         self.entries[self.head] = entry;
         self.head = (self.head + 1) % CAPACITY;
@@ -168,12 +164,12 @@ impl Replay {
         }
     }
 
-    /// `save_replay_origin`.
+    /// Marks the start of a frame, with the camera position.
     fn record_frame(&mut self, scroll: Point) {
         self.write(FRAME_MARKER | (scroll.x as u32 & 0xFFFF) << 16 | scroll.y as u32 & 0xFFFF);
     }
 
-    /// `save_sprite_for_replay`, for a sprite `draw_sprite` draws.
+    /// Records a sprite that is drawn this frame.
     fn record_sprite(&mut self, sprite: &Entity, scroll: Point) {
         if let Some(entry) = encode_sprite(sprite, scroll) {
             self.write(entry);
@@ -181,7 +177,7 @@ impl Replay {
     }
 }
 
-/// `save_sprite_for_replay`: the sprite's screen position plus its size
+/// A sprite's entry: its screen position plus its size
 /// (so that it is positive), its index and which bank and colours.
 fn encode_sprite(e: &Entity, scroll: Point) -> Option<u32> {
     let AmigaSprite { bank, index } = amiga_sprite(e)?;
@@ -203,7 +199,7 @@ fn encode_sprite(e: &Entity, scroll: Point) -> Option<u32> {
     Some(x_word << 16 | index << 8 | y as u32 & 0xFF)
 }
 
-/// `replay_frame`'s decoding. A 32x32 sprite from the players' bank has
+/// Decodes a sprite entry. A 32x32 sprite from the players' bank has
 /// no record of whether it was a player: the original drew them all with
 /// the first player of one team or the other, so anything else from that
 /// bank (the big ball) comes back as a player frame.
@@ -229,8 +225,8 @@ fn decode_sprite(entry: u32, scroll: Point) -> Entity {
     )
 }
 
-/// A replay as written to a goal save disk: the whole buffer, then
-/// `maybe_serial`, the tail and head as byte offsets, and "goal".
+/// A replay as written to a goal save disk: the whole buffer, then a serial
+/// number, the tail and head as byte offsets, and "goal".
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedReplay {
     entries: Vec<u32>,
@@ -253,8 +249,8 @@ impl SavedReplay {
         bytes
     }
 
-    /// `None` unless the bytes end with "goal" (`load_replay_goal` skips
-    /// the slot). Offsets that are not a whole entry inside the buffer
+    /// `None` unless the bytes end with "goal" (the original skips the
+    /// slot). Offsets that are not a whole entry inside the buffer
     /// never come from the original; they are refused too.
     pub fn decode(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < Self::SIZE || &bytes[Self::SIZE - 4..Self::SIZE] != Self::MAGIC {
@@ -277,8 +273,8 @@ impl SavedReplay {
 }
 
 impl Match {
-    /// Records one frame while the clock runs (`save_replay_origin` and
-    /// `save_sprite_for_replay`): only sprites `draw_sprite` would draw.
+    /// Records one frame while the clock runs: only sprites that would be
+    /// drawn.
     /// Nothing is drawn, so nothing recorded, while the match is sped up.
     pub(crate) fn record_replay_frame(&mut self) {
         if self.clock_paused || self.accelerated {
@@ -293,7 +289,7 @@ impl Match {
         }
     }
 
-    /// Starts `run_replay`. Returns `false` if there is nothing to show, or
+    /// Starts the replay. Returns `false` if there is nothing to show, or
     /// the match is sped up.
     pub(crate) fn start_replay(&mut self) -> bool {
         if self.accelerated {
@@ -338,7 +334,7 @@ impl Match {
         self.replay.end();
     }
 
-    /// The replay as `save_replay` writes it.
+    /// The replay as it is saved to disk.
     pub fn saved_replay(&self, serial: u32) -> SavedReplay {
         self.replay.saved(serial)
     }

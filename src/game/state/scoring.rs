@@ -1,4 +1,4 @@
-//! Points and goals (`handle_score_goal` and the score multipliers).
+//! Points and goals, and the score multipliers.
 
 use super::{Match, PITCH_CENTER};
 use crate::game::events::Sound;
@@ -58,8 +58,9 @@ impl Scoreboard {
 }
 
 impl Match {
-    /// `handle_score_goal`. Returns `true` if the goal replay started; the
-    /// rest of the goal is handled by [`Match::finish_goal`] once it ends.
+    /// Checks whether the ball has gone into a goal and scores it. Returns
+    /// `true` if the goal replay started; the rest of the goal is handled by
+    /// [`Match::finish_goal`] once it ends.
     pub(super) fn check_goal(&mut self) -> bool {
         if self.holder.is_some() || self.clock_paused || self.props.ball.sprite > 2 {
             return false;
@@ -114,7 +115,7 @@ impl Match {
         false
     }
 
-    /// The end of `handle_score_goal`, after the replay.
+    /// The end of a goal, after the replay.
     pub(super) fn finish_goal(&mut self) {
         let crowd = self.goal_crowd_sound();
         self.play_sound(crowd);
@@ -125,8 +126,8 @@ impl Match {
         self.score.release_display();
     }
 
-    /// `goal_sound_function`: the crowd sound depends on whether the scorer's
-    /// team started the match attacking up.
+    /// The crowd sound after a goal depends on whether the scorer's team
+    /// started the match attacking up.
     fn goal_crowd_sound(&self) -> Sound {
         if self.started_attacking_up(self.thrower) {
             Sound::GOAL_CROWD_UP
@@ -135,15 +136,15 @@ impl Match {
         }
     }
 
-    /// Whether `p`'s team attacked up at kick-off (`initial_playing_direction`
-    /// is team 1's). Several crowd sounds depend on it.
+    /// Whether `p`'s team attacked up at kick-off (the initial playing
+    /// direction is team 1's). Several crowd sounds depend on it.
     pub(crate) fn started_attacking_up(&self, p: PlayerId) -> bool {
         self.players[p.0].entity.is_team1() == (self.initial_dir_team1 == 0)
     }
 
-    /// `play_sound_downwards`: despite the name, the crowd cheers when the
-    /// last thrower's team started attacking up. (It checks the thrower even
-    /// for a star row completed by the other team.)
+    /// The crowd cheers when the last thrower's team started attacking up.
+    /// (It checks the thrower even for a star row completed by the other
+    /// team.)
     pub(crate) fn cheer_if_thrower_attacked_up(&mut self) {
         if self.started_attacking_up(self.thrower) {
             self.play_sound(Sound::CROWD_CHEER);

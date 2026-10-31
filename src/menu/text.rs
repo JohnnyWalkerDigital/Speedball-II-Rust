@@ -15,8 +15,8 @@ pub struct Glyph {
     pub y: i32,
 }
 
-/// `display_string`: 16x16 letters, two columns apart, wrapping to the next
-/// line of letters after column 37.
+/// 16x16 letters, two columns apart, wrapping to the next line of letters
+/// after column 37.
 pub fn big_glyphs(text: &[u8]) -> Vec<Glyph> {
     layout(text, |x, y| {
         let (mut x, mut y) = (x + 2, y);
@@ -28,7 +28,7 @@ pub fn big_glyphs(text: &[u8]) -> Vec<Glyph> {
     })
 }
 
-/// `draw_string`: 8x8 letters, one column apart, wrapping after column 39.
+/// 8x8 letters, one column apart, wrapping after column 39.
 pub fn small_glyphs(text: &[u8]) -> Vec<Glyph> {
     layout(text, |x, y| {
         if x + 1 == 0x28 {
@@ -66,10 +66,10 @@ fn layout(text: &[u8], advance: impl Fn(u8, u8) -> (u8, u8)) -> Vec<Glyph> {
     glyphs
 }
 
-/// `format_N_decimal_digits`: writes `count` digits of `value` into `text`,
-/// right to left, ending at `last`. Like the 68000 code, a value that does
-/// not fit in 16 bits after dividing (any negative value) leaves the
-/// division undone, which shows as `'Z'`s.
+/// Writes `count` digits of `value` into `text`, right to left, ending at
+/// `last`. As in the original, a value that does not fit in 16 bits after
+/// dividing (any negative value) leaves the division undone, which shows
+/// as `'Z'`s.
 pub fn write_digits(text: &mut [u8], last: usize, value: i16, count: usize) {
     let mut d1 = value;
     for i in 0..count {

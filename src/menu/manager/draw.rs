@@ -13,7 +13,7 @@ use crate::menu::assets::ManagerGraphics;
 use crate::menu::text::write_digits;
 use crate::menu::ui::{Page, SCREEN_HEIGHT, SCREEN_WIDTH};
 
-/// The colours `draw_box_colour` uses here.
+/// The colours the boxes and bars are filled with.
 const BLACK: u8 = 0;
 const BAR: u8 = 10;
 const BAR_BOOST: u8 = 12;
@@ -49,7 +49,6 @@ pub fn draw(scene: &Scene, view: &View) -> Page {
     Page::from_screen(canvas.screen, scene.graphics.palette)
 }
 
-/// `draw_manager_screen`.
 fn draw_manager(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.background(&scene.tables.manager_map);
     attribute_labels(canvas, scene);
@@ -61,7 +60,6 @@ fn draw_manager(canvas: &mut Canvas, scene: &Scene, view: &View) {
     table_cursor(canvas, scene, view);
 }
 
-/// `draw_transfer_screen`.
 fn draw_transfer(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.background(&scene.tables.manager_map);
     if scene.buyable_count > 0 {
@@ -75,7 +73,7 @@ fn draw_transfer(canvas: &mut Canvas, scene: &Scene, view: &View) {
     table_cursor(canvas, scene, view);
 }
 
-/// `draw_gym_screen`, with the upgrade lights and armour model.
+/// The gym screen, with the upgrade lights and armour model.
 fn draw_gym(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.background(&scene.tables.gym_map);
     attribute_labels(canvas, scene);
@@ -92,14 +90,14 @@ fn draw_gym(canvas: &mut Canvas, scene: &Scene, view: &View) {
     cash(canvas, scene);
 }
 
-/// `draw_attribute_strings`: AGR, ATT, DEF... beside the stat bars.
+/// AGR, ATT, DEF... beside the stat bars.
 fn attribute_labels(canvas: &mut Canvas, scene: &Scene) {
     for label in &scene.tables.attributes {
         canvas.pixel_text(&label.text);
     }
 }
 
-/// `draw_keypad`, then the chosen key lit or pressed.
+/// The keypad, with the chosen key lit or pressed.
 fn keypad(canvas: &mut Canvas, scene: &Scene, keypad: &Keypad, view: &View) {
     let save_hidden = scene.rounds & 3 != 0;
     for key in keypad.iter().flatten().flatten() {
@@ -127,8 +125,8 @@ fn keypad(canvas: &mut Canvas, scene: &Scene, keypad: &Keypad, view: &View) {
     canvas.sprite32(&scene.graphics.buttons, sprite, key.x, key.y, 0);
 }
 
-/// `draw_current_buyable`: the stats, picture and details of whatever the
-/// keypad's left and right keys go through.
+/// The stats, picture and details of whatever the keypad's left and right
+/// keys go through.
 fn current_buyable(canvas: &mut Canvas, scene: &Scene, view: &View) {
     if view.mode == BuyMode::Market && scene.buyable_count == 0 {
         canvas.pixel_text(&scene.tables.no_players_on_the_market);
@@ -189,7 +187,7 @@ fn player_limit(scene: &Scene, player: &SquadPlayer) -> Limit {
     }
 }
 
-/// `draw_stats`: a bar per skill, a fifth of its value long, then the
+/// A bar per skill, a fifth of its value long, then the
 /// part the gym could add, then the empty rest; and the number.
 fn stat_bars(canvas: &mut Canvas, scene: &Scene, skills: &SkillBytes, limit: Limit) {
     const LEFT: usize = 0x1B;
@@ -218,8 +216,7 @@ fn stat_bars(canvas: &mut Canvas, scene: &Scene, skills: &SkillBytes, limit: Lim
     }
 }
 
-/// `draw_buying_player` and `draw_player_to_buy`: the face, position,
-/// value and name.
+/// A player's face, position, value and name.
 fn buying_player(canvas: &mut Canvas, scene: &Scene, player: &SquadPlayer, slot: Option<usize>) {
     canvas.face(scene.graphics, usize::from(player.face), 0x13, 0xF);
     clear_buying_text(canvas);
@@ -257,8 +254,8 @@ fn four_digits(value: u16) -> Vec<u8> {
     text
 }
 
-/// `draw_player_table`: nine faces of the squad (the table scrolls to
-/// show the substitutes), each with its position's first letters.
+/// Nine faces of the squad (the table scrolls to show the substitutes),
+/// each with its position's first letters.
 fn player_table(canvas: &mut Canvas, scene: &Scene, view: &View) {
     let table_y = view.table_y();
     for slot in view.table_offset..view.table_offset + 9 {
@@ -275,8 +272,8 @@ fn player_table(canvas: &mut Canvas, scene: &Scene, view: &View) {
     }
 }
 
-/// `draw_player_table_cursor`: a box round the chosen squad place, and
-/// that player's value underneath.
+/// A box round the chosen squad place, and that player's value
+/// underneath.
 fn table_cursor(canvas: &mut Canvas, scene: &Scene, view: &View) {
     let slot = view.grid_slot();
     let (x, y) = scene.tables.table_places[slot];
@@ -290,7 +287,6 @@ fn table_cursor(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.green_text_at(&four_digits(value), 201, 189);
 }
 
-/// `redraw_cash`.
 fn cash(canvas: &mut Canvas, scene: &Scene) {
     canvas.fill(36, 40, 169, 8, BLACK);
     let mut text = scene.tables.cash_template.clone();
@@ -298,8 +294,8 @@ fn cash(canvas: &mut Canvas, scene: &Scene) {
     canvas.cell_text(&scene.graphics.cash_font, &text, -5, -3);
 }
 
-/// `display_selected_upgrade_description`: the upgrade's name and price
-/// for the current way of buying, or why a purchase failed.
+/// The selected upgrade's name and price for the current way of buying, or
+/// why a purchase failed.
 fn upgrade_description(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.fill(120, 42, 16, 30, BLACK);
     let button = &scene.tables.upgrades[view.selected_upgrade];
@@ -323,7 +319,7 @@ fn upgrade_description(canvas: &mut Canvas, scene: &Scene, view: &View) {
     canvas.green_text_at(&text, last.x, last.y);
 }
 
-/// `highlight_armour`: the model, with the chosen upgrade's pieces lit.
+/// The armour model, with the chosen upgrade's pieces lit.
 fn armour(canvas: &mut Canvas, scene: &Scene, view: &View) {
     let draw = |canvas: &mut Canvas, piece: &Armour, lit: bool| {
         let sprite = piece.sprite + usize::from(lit);
@@ -351,7 +347,7 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    /// `draw_management_background`: 16x16 tiles from a 20x13 map.
+    /// The background: 16x16 tiles from a 20x13 map.
     fn background(&mut self, map: &[u8]) {
         for (i, &tile) in map.iter().enumerate() {
             let (x, y) = ((i % 20) as i32 * 16, (i / 20) as i32 * 16);
@@ -375,13 +371,13 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    /// `draw_face`: a 48x48 face from 3x3 pieces; (`x`, `y`) is the centre
-    /// of the top-left piece.
+    /// A 48x48 face from 3x3 pieces; (`x`, `y`) is the centre of the
+    /// top-left piece.
     fn face(&mut self, graphics: &ManagerGraphics, first: usize, x: i32, y: i32) {
         self.pieces(&graphics.faces, first, 18, x, y);
     }
 
-    /// `draw_group_logo`: the same for a logo.
+    /// The same for a group's logo.
     fn logo(&mut self, graphics: &ManagerGraphics, first: usize, x: i32, y: i32) {
         self.pieces(&graphics.logos, first, 15, x, y);
     }
@@ -399,12 +395,12 @@ impl<'a> Canvas<'a> {
         self.screen.fill(x, y, width, height, colour);
     }
 
-    /// `draw_string_pixel` at a starting point, six pixels a letter.
+    /// Green pixel-font text from a starting point, six pixels a letter.
     fn green_text_at(&mut self, text: &[u8], x: i32, y: i32) {
         self.pixel_text_from(text, x, y);
     }
 
-    /// `draw_string_pixel` for text that starts with its own position.
+    /// Green pixel-font text that starts with its own position.
     fn pixel_text(&mut self, text: &[u8]) {
         self.pixel_text_from(text, 0, 0);
     }
@@ -430,13 +426,14 @@ impl<'a> Canvas<'a> {
         }
     }
 
-    /// A screen title in the big title letters (`draw_string`, one row up).
+    /// A screen title in the big title letters, one row up.
     fn title(&mut self, text: &[u8], x_offset: i32) {
         let font = &self.graphics.title_font;
         self.cell_text(font, text, x_offset, -1);
     }
 
-    /// `draw_string` with an offset: 8-pixel columns, 4-pixel rows.
+    /// Text in `font` on a grid of 8-pixel columns and 4-pixel rows, moved
+    /// by an offset.
     fn cell_text(&mut self, font: &[IndexedImage], text: &[u8], x_offset: i32, y_offset: i32) {
         for glyph in crate::menu::text::small_glyphs(text) {
             if let Some(image) = font.get(glyph.index) {

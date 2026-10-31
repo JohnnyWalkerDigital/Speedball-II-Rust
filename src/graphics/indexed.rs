@@ -104,7 +104,7 @@ impl IndexedScreen {
         }
     }
 
-    /// A copy of part of the screen (`copy_16x16_from_screen`). Parts off
+    /// A copy of part of the screen. Parts off
     /// the screen come back as colour 0.
     pub fn region(&self, x: i32, y: i32, width: usize, height: usize) -> IndexedImage {
         let mut pixels = Vec::with_capacity(width * height);

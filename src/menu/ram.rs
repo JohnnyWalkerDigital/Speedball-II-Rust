@@ -6,7 +6,7 @@ use crate::data::bytes::BigEndian;
 use crate::game::career::{TeamId, TeamRecord, LEAGUE_TEAMS};
 use crate::game::squad::{MarketPlayer, Squad, SquadPlayer, Upgrade, MARKET_SIZE, SQUAD_SIZE};
 
-/// Amiga RAM addresses the menu code uses, named as in the disassembly.
+/// Amiga RAM addresses the menu code uses.
 pub mod addr {
     // Titles: a pair of string pointers, drawn at the top and bottom.
     pub const TITLE_SPEEDBALL_2_PUSH_START: usize = 0x2844;
@@ -55,11 +55,11 @@ pub mod addr {
     /// "ROUND ONE" to "GRAND FINAL", one pointer per cup round.
     pub const STRINGS_CUP_ROUNDS: usize = 0x3700;
 
-    // Panel screens: a count, then string pointers (`draw_string_list`).
+    // Panel screens: a count, then string pointers.
     pub const STRINGS_LEAGUE_PLACINGS: usize = 0x3356;
     pub const STRINGS_RESULTS: usize = 0x33A8;
     pub const STRINGS_NEXT_FIXTURE: usize = 0x32BE;
-    /// A table row, filled in by `construct_league_placing_string`.
+    /// A table row, with each team's numbers filled in.
     pub const STR_LEAGUE_TEAM_DETAILS: usize = 0x2E2D;
     pub const STR_LEAGUE_MATCH_RESULT: usize = 0x3205;
     pub const STR_PLAY: usize = 0x2976;
@@ -116,7 +116,7 @@ pub mod addr {
     pub const TEAM_SIZE: usize = 0x40;
 
     // Fonts, all in overlay 1.
-    /// 16x16 letters for menus and messages (`sprites_menu_font`).
+    /// 16x16 letters for menus and messages.
     pub const SPRITES_MENU_FONT: usize = 0x44B5C;
     pub const MENU_FONT_LENGTH: usize = 0x26 * 160;
     /// 8x8 letters for the title at the top and bottom of the backdrop.
@@ -140,7 +140,7 @@ pub mod addr {
     /// Eight glyphs of its own; its digits are the title letters' last ten.
     pub const SPRITES_FONTS_CASH: usize = 0x46A9C;
 
-    /// 8x8 letters, digits and table borders (`sprites_font_orange`).
+    /// 8x8 letters, digits and table borders.
     pub const SPRITES_FONT_ORANGE: usize = 0x44364;
     pub const ORANGE_LENGTH: usize = 2040;
 }
@@ -267,13 +267,12 @@ impl MenuRam {
         String::from_utf8_lossy(&self.bytes[address..end]).into_owned()
     }
 
-    /// A squad (`team_info_table` or `team_info_table_other`).
+    /// A squad (player 1's or player 2's).
     pub fn squad(&self, table: usize) -> Squad {
         std::array::from_fn(|i| self.person(self.pointer(table + i * 4)))
     }
 
-    /// The squad names and faces `init_team_players_names_and_sprites`
-    /// restores.
+    /// The names and faces both squads get back at the main menu.
     pub fn base_identities(&self) -> [(String, u16); SQUAD_SIZE] {
         std::array::from_fn(|i| {
             let name = self.c_string(self.pointer(addr::BASE_TEAM_NAMES + i * 4));

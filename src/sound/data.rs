@@ -4,7 +4,7 @@
 //! The driver's own tables ([`SoundTables`]: which sequences each sound
 //! starts, the tremolo and vibrato effects, the note pitches) are the same
 //! in every image. Each image also holds a bank of sound data
-//! ([`SoundData`]) from `sound_base`: a header, the sequences, the table of
+//! ([`SoundData`]) from `SOUND_BASE`: a header, the sequences, the table of
 //! sequences, the samples and the table of instruments, one after the
 //! other. The match and the menus share their sequences and instruments
 //! but load different samples; the intro has its own bank.
@@ -25,7 +25,7 @@ use super::export::SOUND_COUNT;
 use super::sequences::Sequence;
 use crate::data::bytes::BigEndian;
 
-/// Entries in `sound_effects`.
+/// Entries in the effect table.
 pub const EFFECTS: usize = 23;
 /// Words in each of the three pitch tables (an octave in quarter semitones).
 pub const PITCHES: usize = 48;

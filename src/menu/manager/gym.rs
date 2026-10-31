@@ -1,4 +1,4 @@
-//! `do_gym_screen`: the keypad, then the upgrade buttons to its right.
+//! The gym screen: the keypad, then the upgrade buttons to its right.
 //! Fire on an upgrade shows it; fire again on the same one buys it.
 
 use super::keypad::{keypad, KeypadExit};
@@ -28,7 +28,7 @@ pub(super) fn gym(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     }
 }
 
-/// The upgrade buttons' part of `do_gym_screen`, two columns of four.
+/// The upgrade buttons' part of the gym screen, two columns of four.
 /// Returns when the joystick goes back to the keypad.
 fn upgrade_buttons(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     loop {
@@ -71,7 +71,7 @@ fn upgrade_buttons(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow 
     }
 }
 
-/// `select_current_upgrade`, then buy on a second press of the same one.
+/// Selects an upgrade, then buys it on a second press of the same one.
 fn choose(ui: &mut Ui, game: &mut Game, session: &mut Session, chosen: usize) -> Flow {
     ui.play_sound(SELECT);
     session.view.selected_upgrade = chosen;
@@ -92,8 +92,7 @@ fn leave(game: &mut Game, session: &mut Session, keypad_x: usize) {
     game.cursors.keypad.0 = keypad_x;
 }
 
-/// `keypad_fn_buy`: the selected upgrade for the current player, group or
-/// team.
+/// Buys the selected upgrade for the current player, group or team.
 pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     let upgrade = game.tables.upgrades[session.view.selected_upgrade];
     let career = &mut game.career;
@@ -127,8 +126,7 @@ pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     flash_message(ui, game, session)
 }
 
-/// `keypad_fn_gym_buy_all`: every upgrade in turn, stopping when the
-/// money runs out.
+/// Buys every upgrade in turn, stopping when the money runs out.
 pub(super) fn buy_all(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     for index in game.manager_tables.buy_all_order.clone() {
         session.view.selected_upgrade = index;

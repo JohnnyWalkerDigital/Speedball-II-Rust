@@ -76,7 +76,7 @@ impl<'a> Session<'a> {
         ui.show_page(&self.page(game));
     }
 
-    /// `draw_manager_screen` and friends end with `display_fade_transition`.
+    /// Fades over to the screen as it is now drawn.
     pub fn transition(&self, ui: &mut Ui, game: &Game) -> Flow {
         ui.transition(&self.page(game))
     }

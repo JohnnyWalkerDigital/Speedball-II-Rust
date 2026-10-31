@@ -1,6 +1,5 @@
-//! The cup (`game_cup`): four rounds of two-legged ties, with coins worth
-//! double and Brutal Deluxe's money doubling after each round from the
-//! second.
+//! The cup: four rounds of two-legged ties, with coins worth double and
+//! Brutal Deluxe's money doubling after each round from the second.
 
 use super::flow::{
     cup_league_match, display_total_match_result, list_menu, message, win_shared, Game,
@@ -14,7 +13,7 @@ use crate::game::geometry::PerTeam;
 use crate::game::league::{team2_won, BRUTAL_DELUXE};
 use crate::game::save::Progress;
 
-/// `game_cup`.
+/// Plays a new or loaded cup, with coins worth double while it lasts.
 pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
     game.coin_value *= 2;
     let result = play_cup(ui, game);
@@ -25,7 +24,7 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
 fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(2000);
     let (mut cup, mut resume) = if list_menu(ui, game, &game.text.menus.cup)? == 0 {
-        // `init_cup`.
+        // A new cup.
         game.career.market.init(&mut game.rng);
         let cup = Cup::new(&mut game.rng);
         game.career.clear_records();
@@ -74,10 +73,10 @@ fn play_cup(ui: &mut Ui, game: &mut Game) -> Flow {
     }
 }
 
-/// `cup_match`: a two-legged tie, with more legs while the aggregate is
-/// level. The winner moves into the tie's first slot. Returns whether
-/// Brutal Deluxe were knocked out. A tie loaded part way (`cup_score_1`
-/// set) skips its first leg.
+/// A two-legged tie, with more legs while the aggregate is level. The
+/// winner moves into the tie's first slot. Returns whether Brutal Deluxe
+/// were knocked out. A tie loaded part way (with a first-leg score) skips
+/// its first leg.
 fn tie_lost_by_brutal_deluxe(
     ui: &mut Ui,
     game: &mut Game,

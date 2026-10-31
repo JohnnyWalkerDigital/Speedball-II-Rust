@@ -13,7 +13,7 @@ const PITCH_HEIGHT: i32 = 1152;
 /// Where the followed entity sits in the view.
 const FOCUS: Point = Point::new(160, 92);
 
-/// The top-left corner of the view on the pitch (`x_origin`, `y_origin`).
+/// The top-left corner of the view on the pitch.
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
     position: Point,
@@ -71,7 +71,8 @@ fn scroll_towards(current: i32, goal: i32, max: i32) -> i32 {
 }
 
 impl Match {
-    /// `update_camera`, and the goal indicators on the view's edge.
+    /// Moves the view to follow `target`, and updates the goal indicators on
+    /// the view's edge.
     pub(super) fn follow_with_camera(&mut self, target: EntityRef) {
         let target = self.entity(target).pos;
         self.camera.follow(target, self.clock.leg() >= 2);

@@ -42,11 +42,11 @@ mod addr {
     pub const TILE_MAP_LENGTH: usize = 260;
 }
 
-/// What a key does (its function pointer in the original).
+/// What a key does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyAction {
-    /// `keypad_fn_noop`: a blank key.
+    /// A blank key.
     Noop,
     Exit,
     Previous,

@@ -1,6 +1,6 @@
-//! The intro (`intro_presents`, `intro` and their helpers): the publisher
-//! and developer, then the title, the story and the credits typed out
-//! letter by letter, round and round until fire (or space) is pressed.
+//! The intro: the publisher and developer, then the title, the story and
+//! the credits typed out letter by letter, round and round until fire (or
+//! space) is pressed.
 //!
 //! Its pictures, font, text and music come from a RAM dump taken during the
 //! intro, where they sit after the intro code.
@@ -31,7 +31,7 @@ mod addr {
 }
 
 /// The dump comes from a cracked copy, which says "DUAL CREW PRESENT"
-/// where the original (as disassembled) says this, in as many bytes.
+/// where the original says this, in as many bytes.
 const ORIGINAL_PRESENTS: &[u8] = b"\x0a\x14IMAGEWORKS\x0c\x19PRESENTS";
 
 /// The title font's letters; then the cursor and a blank.
@@ -39,7 +39,7 @@ const FONT_GLYPHS: usize = 43;
 const CURSOR: usize = 41;
 const GLYPH_SIZE: usize = 16;
 
-/// `sound_play` 0x2C: the intro music.
+/// Sound 0x2C: the intro music.
 const MUSIC: Sound = Sound {
     id: 0x2C,
     priority: 0,
@@ -61,7 +61,7 @@ const BLINK: Sound = Sound {
     priority: 0x1E,
 };
 
-/// `wait_100ms`: five vertical blanks.
+/// One step of the text: five vertical blanks.
 const STEP_VBLANKS: u32 = 5;
 /// The title stays up until the 8-bit frame timer wraps from 1.
 const TITLE_VBLANKS: u32 = 255;
@@ -136,8 +136,8 @@ pub struct IntroAssets {
     pub text: IntroText,
 }
 
-/// `intro_presents`, then `intro` until it is skipped; then `start`
-/// silences the music.
+/// The "presents" screens, then the intro until it is skipped; then the
+/// music is silenced.
 pub fn run(ui: &mut Ui, assets: &IntroAssets) -> Flow {
     ui.use_sound_bank(SoundBank::Intro);
     let mut intro = Intro {
@@ -163,18 +163,17 @@ struct Intro<'u, 'h, 'a> {
     ui: &'u mut Ui<'h>,
     assets: &'a IntroAssets,
     page: Page,
-    /// `skip_flags` bit 6: the "presents" screens, which cannot be skipped
-    /// and type with sounds.
+    /// Showing the "presents" screens, which cannot be skipped and type
+    /// with sounds.
     presenting: bool,
-    /// `skip_flags` bit 1: fire may cut the text short ("LOADING GAME"
-    /// cannot be).
+    /// Fire may cut the text short ("LOADING GAME" cannot be).
     skippable: bool,
     /// Player 1's fire (or space) is down.
     fire_held: bool,
 }
 
 impl Intro<'_, '_, '_> {
-    /// `display_text_presents`: two screens of text on black.
+    /// Two screens of text on black.
     fn presents(&mut self) -> Flow {
         let assets = self.assets;
         for (text, blinks) in assets.text.presents.iter().zip([13, 13]) {
@@ -186,7 +185,7 @@ impl Intro<'_, '_, '_> {
         Ok(())
     }
 
-    /// `intro` up to its loop: the title (starting the music), the story,
+    /// The intro up to its loop: the title (starting the music), the story,
     /// the title again, the credits. Returns whether fire was down at the
     /// end.
     fn intro(&mut self) -> Flow<bool> {
@@ -201,8 +200,8 @@ impl Intro<'_, '_, '_> {
         Ok(self.fire_held())
     }
 
-    /// `display_text_intro` and `display_text_credits`: each text on the
-    /// arena, with the cursor blinking after it. Fire skips the rest.
+    /// The story or the credits: each text on the arena, with the cursor
+    /// blinking after it. Fire skips the rest.
     fn screens(&mut self, texts: &[Vec<u8>], blinks: u32) -> Flow {
         for text in texts {
             if self.fire_held() {
@@ -227,13 +226,13 @@ impl Intro<'_, '_, '_> {
         Ok(())
     }
 
-    /// `draw_arena_backdrop`.
+    /// Brings up the arena picture behind the text.
     fn backdrop(&mut self) -> Flow {
         self.page = Page::picture(&self.assets.graphics.backdrop);
         self.ui.transition(&self.page)
     }
 
-    /// `display_string`: each letter after the cursor has shown there.
+    /// Types `text`: each letter after the cursor has shown there.
     /// Returns where the next letter would go.
     fn type_text(&mut self, text: &[u8]) -> Flow<(u8, u8)> {
         let (mut x, mut y) = (0, 0);
@@ -285,13 +284,13 @@ impl Intro<'_, '_, '_> {
         Ok(())
     }
 
-    /// `copy_16x16_from_screen`.
+    /// The 16x16 block at `x`, `y`, to put back later.
     fn save_under(&self, x: u8, y: u8) -> IndexedImage {
         let (px, py) = position(x, y);
         self.page.region(px, py, GLYPH_SIZE, GLYPH_SIZE)
     }
 
-    /// `display_title_font_char` with `mask_char_to_screen`.
+    /// Draws a title font letter at `x`, `y`, over what is there.
     fn glyph(&mut self, index: usize, x: u8, y: u8) {
         if let Some(image) = self.assets.graphics.font.get(index) {
             let (px, py) = position(x, y);
@@ -300,7 +299,8 @@ impl Intro<'_, '_, '_> {
         }
     }
 
-    /// `wait_100ms` (or longer): cut short by fire where that is allowed.
+    /// A wait of one step (or longer): cut short by fire where that is
+    /// allowed.
     fn wait(&mut self, vblanks: u32) -> Flow {
         for _ in 0..vblanks {
             if self.may_skip() && self.fire_held() {

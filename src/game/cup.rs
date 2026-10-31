@@ -1,5 +1,4 @@
-//! The cup: sixteen teams, knocked out over four rounds of two-legged ties
-//! (`game_cup` and its helpers).
+//! The cup: sixteen teams, knocked out over four rounds of two-legged ties.
 
 use super::career::{TeamId, LEAGUE_TEAMS};
 use super::league::{put_first, shuffle, BRUTAL_DELUXE};
@@ -9,15 +8,15 @@ pub const ROUNDS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cup {
-    /// `cup_teams`: the draw. Each tie's winner takes the first team's slot.
+    /// The draw. Each tie's winner takes the first team's slot.
     pub teams: [TeamId; LEAGUE_TEAMS],
-    /// `round_number`: 0 for round one up to 3 for the final.
+    /// 0 for round one up to 3 for the final.
     pub round: usize,
 }
 
 impl Cup {
-    /// `init_cup`: the league teams in order, each half shuffled, with
-    /// Brutal Deluxe drawn first.
+    /// The league teams in order, each half shuffled, with Brutal Deluxe
+    /// drawn first.
     pub fn new(rng: &mut Rng) -> Self {
         let mut teams = std::array::from_fn(TeamId::League);
         let (first, second) = teams.split_at_mut(LEAGUE_TEAMS / 2);
@@ -27,8 +26,7 @@ impl Cup {
         Self { teams, round: 0 }
     }
 
-    /// The redraw before rounds two and three, among the winners so far
-    /// (`shuffle_half_league`, `shuffle_final_four`).
+    /// The redraw before rounds two and three, among the winners so far.
     pub fn redraw(&mut self, rng: &mut Rng) {
         match self.round {
             1 => {
@@ -45,7 +43,7 @@ impl Cup {
         }
     }
 
-    /// The draw slots of each tie this round (`cup_team_1`, `cup_team_2`).
+    /// The draw slots of each tie this round.
     pub fn ties(&self) -> impl Iterator<Item = (usize, usize)> {
         let gap = 1 << self.round;
         (0..LEAGUE_TEAMS / (2 * gap)).map(move |tie| (tie * 2 * gap, tie * 2 * gap + gap))

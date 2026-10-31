@@ -1,20 +1,17 @@
-//! Atari ST RAM addresses used by the original 68000 code.
+//! Atari ST RAM addresses of the game's data.
 //!
 //! The engine reads its initial state and lookup tables straight out of the
 //! ST disk image, so these addresses are part of the data format. Names
-//! describe how the code uses each table; the hex value is the original
-//! label, which keeps the port traceable to the disassembly.
+//! describe how the code uses each table.
 
 // ---------------------------------------------------------------------------
 // Entity records (40 bytes each, 42 apart for the pitch furniture).
 // ---------------------------------------------------------------------------
 
 pub const BALL: i32 = 0x4812;
-/// `sprite_ball_launcher`: the launcher in the centre of the pitch (the C#
-/// called it the "deck").
+/// The launcher in the centre of the pitch.
 pub const LAUNCHER: i32 = 0x483A;
-/// `sprite_big_ball`: the ball flying up out of the launcher (the C# called
-/// it the "ball high launcher").
+/// The ball flying up out of the launcher.
 pub const BIG_BALL: i32 = 0x4862;
 pub const COINS: [i32; 4] = [0x488A, 0x48B2, 0x48DA, 0x4902];
 pub const TOKENS: [i32; 2] = [0x492A, 0x4952];

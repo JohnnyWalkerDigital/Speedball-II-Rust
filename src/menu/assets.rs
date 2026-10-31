@@ -9,7 +9,7 @@ use crate::graphics::planar::{decode_indexed_sprites, Layout, SpriteFormat};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MenuAssets {
-    /// The steel "SB II" backdrop behind every menu (`splash_backdrop`).
+    /// The steel "SB II" backdrop behind every menu.
     pub backdrop: Picture,
     pub victory: Picture,
     pub defeat: Picture,
@@ -29,7 +29,7 @@ pub struct MenuAssets {
 /// The manager, transfer and gym screens' graphics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ManagerGraphics {
-    /// `palette_management_a`.
+    /// The screens' colours.
     pub palette: ColorWords,
     /// 16x16 tiles for the screens' backgrounds.
     pub tiles: Vec<IndexedImage>,
@@ -43,7 +43,7 @@ pub struct ManagerGraphics {
     pub buttons: Vec<IndexedImage>,
     /// 32x32 pieces of the armour model.
     pub armour: Vec<IndexedImage>,
-    /// Small green letters and digits (`draw_string_pixel`).
+    /// Small green letters and digits.
     pub green_font: Vec<IndexedImage>,
     /// The screen titles' big letters.
     pub title_font: Vec<IndexedImage>,
@@ -51,7 +51,7 @@ pub struct ManagerGraphics {
     pub cash_font: Vec<IndexedImage>,
 }
 
-/// A font for `draw_string`.
+/// A font for small text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmallFont {
     TitleTop,

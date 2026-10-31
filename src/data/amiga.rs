@@ -1,22 +1,22 @@
 //! The Amiga disk's overlays and what the Amiga's memory holds in the menus.
 //!
 //! The Amiga game loads most of its data as numbered "overlays": runs of
-//! sectors listed in a directory that starts with the magic `CA1990`
-//! (`read_overlay`). The menus and the match need different overlays, so
-//! memory looks different in each. `Amiga.dmp` was taken during a match;
-//! [`menu_ram`] rebuilds the menus' memory from it the way `load_mgmt_data`
-//! does, so menu code can read its strings, fonts and sounds at their
-//! original addresses.
+//! sectors listed in a directory that starts with the magic `CA1990`. The
+//! menus and the match need different overlays, so memory looks different
+//! in each. `Amiga.dmp` was taken during a match; [`menu_ram`] rebuilds the
+//! menus' memory from it the way the game does on entering the menus, so
+//! menu code can read its strings, fonts and sounds at their original
+//! addresses.
 
 use std::ops::Range;
 
 /// Where each overlay the menus need is loaded.
 pub mod overlay {
-    /// Title backdrop, menu fonts and other menu graphics (`splash_backdrop`).
+    /// Title backdrop, menu fonts and other menu graphics.
     pub const MENU: usize = 1;
     pub const MENU_ADDRESS: usize = 0x361D6;
     /// Instrument samples for the menu sounds. The match loads its own
-    /// samples (overlay 27) to the same place (`overlay28_index_0`).
+    /// samples (overlay 27) to the same place.
     pub const MENU_SAMPLES: usize = 28;
     pub const SAMPLES_ADDRESS: usize = 0x30D56;
     /// Full-screen pictures, loaded into the spare screen buffer.
@@ -64,7 +64,7 @@ impl<'a> Overlays<'a> {
 }
 
 /// Memory as the menus see it: the match dump with the menu graphics and
-/// the menu sound samples loaded over the match's data (`load_mgmt_data`).
+/// the menu sound samples loaded over the match's data.
 pub fn menu_ram(match_dump: &[u8], overlays: &Overlays) -> Vec<u8> {
     let mut ram = match_dump.to_vec();
     load(&mut ram, overlay::MENU_ADDRESS, overlays.get(overlay::MENU));

@@ -1,5 +1,5 @@
 //! The league: two divisions of eight, each playing every other team in
-//! the division twice a season (`game_league` and its helpers).
+//! the division twice a season.
 //!
 //! Division 1 is index 0 and division 2 index 1, as the original stores
 //! them. League placings (1 to 16) live in the teams' records.
@@ -11,8 +11,8 @@ pub const DIVISION_SIZE: usize = 8;
 pub const ROUNDS: usize = 7;
 pub const MATCHES_PER_ROUND: usize = 4;
 
-/// `match_permutations`: who plays whom each round, by position in the
-/// division's fixture order (1-based, as stored).
+/// Who plays whom each round, by position in the division's fixture order
+/// (1-based, as stored).
 const MATCH_PERMUTATIONS: [[u8; 8]; ROUNDS] = [
     [1, 2, 3, 4, 5, 6, 7, 8],
     [1, 4, 2, 3, 5, 8, 6, 7],
@@ -27,17 +27,17 @@ pub const BRUTAL_DELUXE: TeamId = TeamId::League(0);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct League {
-    /// `division_1_b`, `division_2_b`: each division in fixture order.
+    /// Each division in fixture order.
     pub fixtures: [[TeamId; DIVISION_SIZE]; 2],
-    /// `division_1`, `division_2`: each division in table order.
+    /// Each division in table order.
     pub tables: [[TeamId; DIVISION_SIZE]; 2],
-    /// `results_div_1`, `results_div_2`: this round's scores.
+    /// This round's scores.
     pub results: [[(i32, i32); MATCHES_PER_ROUND]; 2],
 }
 
 impl League {
-    /// `league_new_game`: the league teams in their stored order, Brutal
-    /// Deluxe bottom of division 2 and Super Nashwan top of division 1.
+    /// The league teams in their stored order, Brutal Deluxe bottom of
+    /// division 2 and Super Nashwan top of division 1.
     pub fn new_game(career: &mut Career) -> Self {
         for i in 0..LEAGUE_TEAMS {
             career.record_mut(TeamId::League(i)).league_placing = (LEAGUE_TEAMS - i) as u8;
@@ -52,7 +52,7 @@ impl League {
     }
 
     /// A league from a save: the teams in fixture order, division 2 then
-    /// division 1 (`read_teams` into `division_2_b`).
+    /// division 1.
     pub fn from_saved(teams: &[TeamId]) -> Self {
         let division = |first: usize| std::array::from_fn(|i| teams[first + i]);
         let fixtures = [division(DIVISION_SIZE), division(0)];
@@ -77,8 +77,8 @@ impl League {
         usize::from(placing > DIVISION_SIZE as u8)
     }
 
-    /// `shuffle_league` then `put_bd_first`, for both divisions: a new
-    /// fixture order each half-season.
+    /// A new fixture order each half-season for both divisions: shuffled,
+    /// then Brutal Deluxe moved first.
     pub fn shuffle_fixtures(&mut self, rng: &mut Rng) {
         for division in &mut self.fixtures {
             shuffle(division, rng, 1);
@@ -86,15 +86,15 @@ impl League {
         }
     }
 
-    /// `set_league_teams`: the teams in a division's match this round.
+    /// The teams in a division's match this round.
     pub fn fixture(&self, division: usize, round: usize, game: usize) -> (TeamId, TeamId) {
         let pair = &MATCH_PERMUTATIONS[round][game * 2..game * 2 + 2];
         let team = |n: u8| self.fixtures[division][usize::from(n) - 1];
         (team(pair[0]), team(pair[1]))
     }
 
-    /// `update_league_placings`: sort each division by league points, then
-    /// goal difference, and number the placings 1 to 16 down the tables.
+    /// Sorts each division by league points, then goal difference, and
+    /// numbers the placings 1 to 16 down the tables.
     pub fn update_placings(&mut self, career: &mut Career) {
         self.tables = self.fixtures;
         for table in &mut self.tables {
@@ -105,8 +105,8 @@ impl League {
         }
     }
 
-    /// `league_promote_relegate`: `up` (from division 2) and `down` (from
-    /// division 1) swap places and divisions.
+    /// `up` (from division 2) and `down` (from division 1) swap places and
+    /// divisions.
     pub fn promote_relegate(&mut self, down: TeamId, up: TeamId, career: &mut Career) {
         let (down_placing, up_placing) = (
             career.record(down).league_placing,
@@ -122,8 +122,8 @@ impl League {
     }
 }
 
-/// One pass of `team_bubble_pass`: higher league points first, and on
-/// equal points the better goal difference. Returns whether it swapped.
+/// One bubble-sort pass over the teams: higher league points first, and
+/// on equal points the better goal difference. Returns whether it swapped.
 fn bubble_pass(table: &mut [TeamId; DIVISION_SIZE], career: &Career) -> bool {
     let mut swapped = false;
     for i in 0..DIVISION_SIZE - 1 {
@@ -143,8 +143,8 @@ fn bubble_pass(table: &mut [TeamId; DIVISION_SIZE], career: &Career) -> bool {
     swapped
 }
 
-/// `shuffle_league` and friends: 32 swaps of random entries. `stride` is
-/// the spacing of the entries swapped, for the cup's later rounds.
+/// 32 swaps of random entries. `stride` is the spacing of the entries
+/// swapped, for the cup's later rounds.
 pub fn shuffle(teams: &mut [TeamId], rng: &mut Rng, stride: usize) {
     let mask = teams.len() / stride - 1;
     for _ in 0..32 {
@@ -155,8 +155,7 @@ pub fn shuffle(teams: &mut [TeamId], rng: &mut Rng, stride: usize) {
     }
 }
 
-/// `put_bd_first`: if `team` is in the list, it swaps places with the
-/// first entry.
+/// If `team` is in the list, it swaps places with the first entry.
 pub fn put_first(teams: &mut [TeamId], team: TeamId) {
     if let Some(at) = teams.iter().position(|&t| t == team) {
         teams.swap(0, at);
@@ -172,9 +171,9 @@ fn replace(teams: &mut [TeamId], from: TeamId, to: TeamId) {
 /// One of [`ScoresTable`]'s tables: `[team1][team2]` = `[score1, score2]`.
 pub type ResultsTable = [[[u8; 2]; 16]; 16];
 
-/// `cup_league_match_not_bd`: matches without Brutal Deluxe are not
-/// played but looked up in `scores_table`, four tables of results between
-/// every pair of league teams, one picked at random.
+/// Matches without Brutal Deluxe are not played but looked up in
+/// `scores_table`, four tables of results between every pair of league
+/// teams, one picked at random.
 pub struct ScoresTable {
     /// `[table][team1][team2]` = (score1, score2).
     scores: Vec<(u8, u8)>,

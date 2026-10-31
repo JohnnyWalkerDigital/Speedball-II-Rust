@@ -2,8 +2,8 @@
 //! equipment, the AI's support positions and where sprites hold the ball.
 //!
 //! Read from the ST disk ([`Lookups::read`]) or an asset pack. A lookup
-//! outside a table reads the original memory around it, as the 68000 code
-//! did, so out-of-range indices behave exactly as before.
+//! outside a table reads the original memory around it, as the original
+//! game did, so out-of-range indices behave exactly as before.
 
 use serde::{Deserialize, Serialize};
 

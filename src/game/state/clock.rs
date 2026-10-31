@@ -136,7 +136,7 @@ impl Match {
         if self.token.sprite != 0 {
             self.token.seconds_left -= 1;
         }
-        // `display_time` ticks while a power-up is active.
+        // The clock ticks audibly while a power-up is active.
         if self.token.sprite != 0 {
             self.play_sound(Sound::POWERUP_TICK);
         }

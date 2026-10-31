@@ -1,5 +1,5 @@
 //! Access to the original game data: disk images, RAM dumps and the
-//! lookup tables the 68000 code relies on.
+//! lookup tables the game relies on.
 
 pub mod addr;
 pub mod amiga;

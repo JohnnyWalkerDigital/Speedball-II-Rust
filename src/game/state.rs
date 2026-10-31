@@ -82,7 +82,7 @@ pub struct Match {
     pub(crate) camera: Camera,
     pub(crate) clock: Clock,
 
-    /// Deceleration threshold for the ball (`_ballSpeedUnk`).
+    /// Deceleration threshold for the ball.
     ball_speed: i32,
     pub(crate) injury: Injury,
     pub(crate) equipment_on_floor: i32,
@@ -91,8 +91,8 @@ pub struct Match {
     pub(crate) charged_hits_left: i32,
     /// Starting positions, also used for the end-of-match line-up.
     presentation: [Point; 18],
-    /// The team 1 attacking direction the match started with
-    /// (`initial_playing_direction`); picks the goal crowd sound.
+    /// The team 1 attacking direction the match started with; picks the goal
+    /// crowd sound.
     initial_dir_team1: i32,
     /// Sounds since the last call to [`Match::take_sounds`].
     sounds: Vec<Sound>,
@@ -103,8 +103,7 @@ pub struct Match {
     /// The sprites on screen this frame, in drawing order.
     pub(crate) scene: Vec<Entity>,
     pub(crate) replay: Replay,
-    /// `misc_flags` bit 4: sped up, drawing nothing (F in a managed league
-    /// or cup match).
+    /// Sped up, drawing nothing (F in a managed league or cup match).
     pub(crate) accelerated: bool,
 }
 
@@ -139,7 +138,6 @@ impl Match {
             score: Scoreboard::default(),
             time_in_opponents_half: PerTeam::default(),
             credits_earned: PerTeam::new(setup.min_credits, setup.min_credits),
-            // (The C# gave team 2 team 1's limit too.)
             max_credits: setup.max_credits,
             coins_credits: setup.coins_credits,
             clock_paused: true,
@@ -198,7 +196,7 @@ impl Match {
             && !self.launcher_started
             && self.teams_in_final_line_up();
         if over && !self.finished {
-            // `play_match` leaves its loop here.
+            // The match loop ends here.
             self.finished = true;
             self.play_sound(Sound::SILENCE);
             self.play_sound(Sound::END_OF_MATCH);
@@ -207,7 +205,7 @@ impl Match {
     }
 
     /// Escape: the match stops where it is, with the same closing sounds
-    /// as a finished match (`play_match`).
+    /// as a finished match.
     pub fn abandon(&mut self) {
         self.play_sound(Sound::SILENCE);
         self.play_sound(Sound::END_OF_MATCH);
@@ -237,7 +235,7 @@ impl Match {
         std::mem::take(&mut self.sounds)
     }
 
-    /// Where the original calls `sound_play`.
+    /// Records a sound for the sound driver to play.
     pub(crate) fn play_sound(&mut self, sound: Sound) {
         self.sounds.push(sound);
     }
@@ -323,7 +321,7 @@ impl Match {
         self.update_distances_between_players();
         self.think_all();
         if self.check_goal() {
-            // `handle_score_goal` runs the replay before the frame goes on.
+            // A goal runs the replay before the frame goes on.
             return;
         }
         self.update_after_goal_check();
@@ -335,8 +333,8 @@ impl Match {
         let camera_target = self.carry_ball();
         self.follow_with_camera(camera_target);
         self.tick_clock();
-        // `match_tick` draws the frame, recording it for replays, unless
-        // the match is sped up.
+        // Draws the frame, recording it for replays, unless the match is
+        // sped up.
         if !self.accelerated {
             self.scene = self.compose_scene();
             self.record_replay_frame();

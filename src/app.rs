@@ -449,7 +449,7 @@ impl WindowHost {
         )?;
         // We pace frames ourselves.
         window.set_target_fps(0);
-        // Roughly the Windows defaults the C# port's key handling relied on.
+        // Roughly the usual Windows key repeat.
         window.set_key_repeat_delay(0.5);
         window.set_key_repeat_rate(0.033);
         Ok(Self {
@@ -462,7 +462,7 @@ impl WindowHost {
     }
 
     /// Key presses and releases since the last frame. Held keys repeat, as
-    /// the C# port's match controls relied on.
+    /// the match controls rely on.
     fn button_events(&self) -> Vec<ButtonEvent> {
         let fresh = self.window.get_keys_pressed(KeyRepeat::No);
         let mut events = Vec::new();

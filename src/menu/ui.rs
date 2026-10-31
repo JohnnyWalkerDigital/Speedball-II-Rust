@@ -1,9 +1,9 @@
 //! The menus' screen: pages drawn off screen, then faded in.
 //!
-//! As on the Amiga, menu code draws into a back buffer (a [`Page`]) and
-//! `display_fade_transition` brings it to the front: straight away if it
-//! uses the colours already showing, otherwise by fading the old screen to
-//! black and the new one up from black, one palette step every 40 ms.
+//! As on the Amiga, menu code draws into a back buffer (a [`Page`]) and a
+//! fade transition brings it to the front: straight away if it uses the
+//! colours already showing, otherwise by fading the old screen to black
+//! and the new one up from black, one palette step every 40 ms.
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -23,7 +23,7 @@ pub const SCREEN_HEIGHT: usize = 200;
 /// Why the menu code stopped early.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Stop {
-    /// Escape: back to the main menu (`misc_flags` bit 6).
+    /// Escape: back to the main menu.
     Abort,
     /// The window closed, or Escape on the main menu.
     Quit,
@@ -50,7 +50,7 @@ impl Page {
         Self { screen, palette }
     }
 
-    /// `fill_screen_zero`: a blank screen, to be shown in `palette`.
+    /// A blank screen, to be shown in `palette`.
     pub fn blank(palette: ColorWords) -> Self {
         Self {
             screen: IndexedScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT),
@@ -72,7 +72,7 @@ impl Page {
         self.screen.region(x, y, width, height)
     }
 
-    /// `display_splash`: a full-screen picture and its colours.
+    /// A full-screen picture and its colours.
     pub fn picture(picture: &Picture) -> Self {
         let mut screen = IndexedScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT);
         screen.fill_from(&picture.image);
@@ -82,16 +82,16 @@ impl Page {
         }
     }
 
-    /// `show_title`: the backdrop with a title at the top and bottom.
+    /// The backdrop with a title at the top and bottom.
     pub fn titled(assets: &MenuAssets, title: &Title) -> Self {
         let mut page = Self::picture(&assets.backdrop);
-        // The top title sits a pixel higher (`sprite_char_1x1.y_offset`).
+        // The top title sits a pixel higher.
         page.small_text(assets, &title.top, SmallFont::TitleTop, -1);
         page.small_text(assets, &title.bottom, SmallFont::TitleBottom, 0);
         page
     }
 
-    /// `display_string`: text in the big menu font.
+    /// Text in the big menu font.
     pub fn big_text(&mut self, assets: &MenuAssets, text: &[u8]) {
         for glyph in big_glyphs(text) {
             draw_glyph(
@@ -104,7 +104,7 @@ impl Page {
         }
     }
 
-    /// `draw_string`: text in one of the small fonts.
+    /// Text in one of the small fonts.
     pub fn small_text(&mut self, assets: &MenuAssets, text: &[u8], font: SmallFont, y_offset: i32) {
         let images = assets.small_font(font);
         for glyph in small_glyphs(text) {
@@ -118,19 +118,18 @@ impl Page {
         }
     }
 
-    /// `display_screen_block`: the plain panel behind the table screens.
+    /// The plain panel behind the table screens.
     pub fn panel(&mut self) {
         self.fill_box(17, 286, 17, 166, PANEL_COLOUR);
     }
 
-    /// `draw_box_colour`: a filled rectangle in one palette colour.
+    /// A filled rectangle in one palette colour.
     pub fn fill_box(&mut self, x: usize, width: usize, y: usize, height: usize, colour: u8) {
         self.screen.fill(x, y, width, height, colour);
     }
 
-    /// `draw_string_alt`: small text without cursor codes, starting at the
-    /// pixel column in its first byte and the row in its second, six
-    /// pixels a letter.
+    /// Small text without cursor codes, starting at the pixel column in its
+    /// first byte and the row in its second, six pixels a letter.
     pub fn alt_text(&mut self, assets: &MenuAssets, text: &[u8], font: SmallFont) {
         let images = assets.small_font(font);
         let (mut x, y) = (i32::from(text[0]), i32::from(text[1]) * 4);
@@ -148,8 +147,7 @@ impl Page {
         }
     }
 
-    /// `draw_string_list`: lines of orange text, two rows apart, ending at
-    /// row 44.
+    /// Lines of orange text, two rows apart, ending at row 44.
     pub fn string_list(&mut self, assets: &MenuAssets, lines: &[Vec<u8>]) {
         for (i, line) in lines.iter().enumerate() {
             let mut line = line.clone();
@@ -158,7 +156,7 @@ impl Page {
         }
     }
 
-    /// `draw_menu_arrows`: the arrows either side of the chosen item.
+    /// The arrows either side of the chosen item.
     pub fn arrows(&mut self, assets: &MenuAssets, arrows: Arrows) {
         const RIGHT_ARROW: usize = 0x24;
         const LEFT_ARROW: usize = 0x25;
@@ -180,7 +178,7 @@ fn draw_glyph(screen: &mut IndexedScreen, font: &[IndexedImage], index: usize, x
 
 /// The steps of a fade: how far each colour channel is dimmed.
 const FADE_STEPS: u8 = 15;
-/// `wait_40ms` between steps.
+/// 40 ms between steps.
 const FADE_STEP_VBLANKS: u32 = 2;
 
 /// Dims an ARGB colour made of 4-bit Amiga channels by `steps`, as the fade
@@ -243,16 +241,15 @@ impl<'h> Ui<'h> {
         Ok(())
     }
 
-    /// `display_fade_transition`: brings `page` to the front.
+    /// Brings `page` to the front.
     pub fn transition(&mut self, page: &Page) -> Flow {
         let mut canvas = Canvas::new(SCREEN_WIDTH, SCREEN_HEIGHT);
         page.screen.render(&page.palette, &mut canvas);
         self.transition_to(canvas, Some(page.palette))
     }
 
-    /// `display_fade_transition_sound`: as [`Ui::transition`], starting
-    /// `sound` once the old screen has faded out. Nothing plays if no fade
-    /// is needed.
+    /// As [`Ui::transition`], starting `sound` once the old screen has
+    /// faded out. Nothing plays if no fade is needed.
     pub fn transition_playing(&mut self, page: &Page, sound: Sound) -> Flow {
         if self.front_palette == Some(page.palette) && self.darkness == 0 {
             return self.transition(page);
@@ -280,7 +277,7 @@ impl<'h> Ui<'h> {
         self.fade_in()
     }
 
-    /// `display_fade_out`: fifteen steps down from the current colours.
+    /// Fifteen steps down from the current colours.
     pub fn fade_out(&mut self) -> Flow {
         while self.darkness < FADE_STEPS {
             self.darkness += 1;
@@ -289,7 +286,7 @@ impl<'h> Ui<'h> {
         Ok(())
     }
 
-    /// `display_fade_in`: fifteen steps up to the new colours.
+    /// Fifteen steps up to the new colours.
     fn fade_in(&mut self) -> Flow {
         for darkness in (0..FADE_STEPS).rev() {
             self.darkness = darkness;
@@ -316,7 +313,7 @@ impl<'h> Ui<'h> {
         &self.front
     }
 
-    /// Forgets anything pressed so far (`clr.b controller_1_cooked`).
+    /// Forgets anything pressed so far.
     pub fn clear_input(&mut self) {
         self.events.clear();
     }

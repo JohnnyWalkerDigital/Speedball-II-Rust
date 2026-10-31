@@ -1,9 +1,8 @@
-//! The front end: the main menu and the game modes, ported from
-//! `main_menu`, `shared_menu_function`, `game_two_player`, `game_knockout`
-//! and the result screens. The league and cup are in their own modules.
+//! The front end: the main menu, the list menus, the game modes and the
+//! result screens. The league and cup are in their own modules.
 //!
-//! Each function follows its original, waiting on [`Ui`] where the 68000
-//! code waited for the next frame.
+//! Each function runs as straight-line code, waiting on [`Ui`] where the
+//! game waits for the next frame.
 
 use std::rc::Rc;
 
@@ -34,10 +33,10 @@ use crate::render::MatchRenderer;
 
 /// After this many frames on the main menu the demo starts (30 seconds).
 const DEMO_TIMEOUT_VBLANKS: u32 = 1500;
-/// `wait_any_fire_pressed_timeout` gives up after the 8-bit frame timer
-/// wraps (about 5 seconds).
+/// Waiting for fire gives up after the 8-bit frame timer wraps (about 5
+/// seconds).
 const FIRE_TIMEOUT_VBLANKS: u32 = 255;
-/// `game_knockout` plays the other 15 teams in turn.
+/// A knockout plays the other 15 teams in turn.
 const KNOCKOUT_ROUNDS: usize = 15;
 
 const MENU_MOVE: Sound = Sound {
@@ -72,20 +71,20 @@ pub struct Game {
     pub renderer: MatchRenderer,
     /// Money and results, kept across games like the original's globals.
     pub career: Career,
-    /// The menus' random numbers (`rand`), for draws and other results.
+    /// The menus' random numbers, for draws and other results.
     pub rng: Rng,
     pub scores_table: ScoresTable,
-    /// `coin_value`: doubled while the cup is on.
+    /// Doubled while the cup is on.
     pub coin_value: i32,
-    /// `misc_flags` bit 0: the computer plays Brutal Deluxe's matches
-    /// ("TEAM MANAGER" in the league).
+    /// The computer plays Brutal Deluxe's matches ("TEAM MANAGER" in the
+    /// league).
     pub manager_mode: bool,
-    /// `misc_flags` bit 1: a one-player game (set for the demo too).
+    /// A one-player game (set for the demo too).
     /// Goal replays can only be saved in one-player games outside manager
     /// mode; the flags outlast the game, so the same goes for the replay
     /// viewer.
     pub one_player: bool,
-    /// `misc_flags` bit 4: matches are sped up, until the next main menu.
+    /// Matches are sped up, until the next main menu.
     pub sped_up: bool,
     /// The status bar as the last match left it. The Amiga draws it once
     /// at boot and matches draw over it, so the replay viewer shows it.
@@ -161,7 +160,7 @@ impl Game {
         self.one_player && !self.manager_mode
     }
 
-    /// Saving goal replays, if `misc_flags` allow it (`save_replay`).
+    /// Saving goal replays, in one-player games outside manager mode.
     pub(super) fn replay_saves(&self) -> Option<ReplaySaves<'_>> {
         self.may_save_replays()
             .then(|| ReplaySaves::new(&self.save_disk, &self.text))
@@ -187,7 +186,7 @@ impl MainChoice {
     }
 }
 
-/// `start`'s loop: the main menu, for ever. Returns when the player quits.
+/// The main menu, for ever. Returns when the player quits.
 pub fn run(ui: &mut Ui, game: &mut Game) {
     loop {
         match main_menu(ui, game) {
@@ -197,7 +196,7 @@ pub fn run(ui: &mut Ui, game: &mut Game) {
     }
 }
 
-/// `main_menu`: pick a game, play it, then "GAME OVER".
+/// Pick a game, play it, then "GAME OVER".
 fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.start_main_menu();
     game.career.restore_identities(&game.tables.identities());
@@ -259,7 +258,7 @@ fn select_game(ui: &mut Ui, game: &Game) -> Flow<MainChoice> {
     }
 }
 
-/// `shared_menu_function`: a list menu. Returns the chosen item.
+/// A list menu. Returns the chosen item.
 pub(super) fn list_menu(ui: &mut Ui, game: &Game, menu: &MenuSpec) -> Flow<usize> {
     let mut base = Page::titled(&game.assets, &menu.title);
     base.big_text(&game.assets, &menu.items);
@@ -299,8 +298,7 @@ fn is_player_1(button: Button) -> bool {
     matches!(button, Button::Joystick(Side::Team1, _))
 }
 
-/// `wait_any_fire_pressed_timeout`: either fire button, Escape, or about
-/// five seconds.
+/// Either fire button, Escape, or about five seconds.
 pub(super) fn wait_any_fire(ui: &mut Ui) -> Flow {
     ui.clear_input();
     for _ in 0..FIRE_TIMEOUT_VBLANKS {
@@ -315,8 +313,8 @@ pub(super) fn wait_any_fire(ui: &mut Ui) -> Flow {
     Ok(())
 }
 
-/// `wait_fire_pressed`: player 1's fire button or Escape, with no time
-/// limit (the table screens).
+/// Player 1's fire button or Escape, with no time limit (the table
+/// screens).
 pub(super) fn wait_fire(ui: &mut Ui) -> Flow {
     ui.clear_input();
     loop {
@@ -332,7 +330,7 @@ pub(super) fn wait_fire(ui: &mut Ui) -> Flow {
 
 // -- One player ------------------------------------------------------------------
 
-/// `game_single_player`: knockout, league, cup or practice.
+/// Knockout, league, cup or practice.
 fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.init_squad(Side::Team1, 100);
     game.manager_mode = false;
@@ -345,9 +343,8 @@ fn one_player(ui: &mut Ui, game: &mut Game) -> Flow {
     }
 }
 
-/// `game_knockout`: beat the other fifteen teams one after another, with
-/// the gym before each match. A draw replays the round; a defeat ends the
-/// run.
+/// Beat the other fifteen teams one after another, with the gym before
+/// each match. A draw replays the round; a defeat ends the run.
 fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
     game.career.set_cash_cap(1100);
@@ -367,7 +364,7 @@ fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     win_shared(ui, &game.assets.knockout_win)
 }
 
-/// `win_shared`: a trophy picture (knockout, league, cup or promotion).
+/// A trophy picture (knockout, league, cup or promotion).
 pub(super) fn win_shared(ui: &mut Ui, picture: &Picture) -> Flow {
     ui.transition(&Page::picture(picture))?;
     ui.play_sound(VICTORY_CHEER);
@@ -377,7 +374,7 @@ pub(super) fn win_shared(ui: &mut Ui, picture: &Picture) -> Flow {
     wait_any_fire(ui)
 }
 
-/// `game_practice`: Brutal Deluxe on their own, with no result screen.
+/// Brutal Deluxe on their own, with no result screen.
 fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.set_cash_cap(10_000);
     game.one_player = false;
@@ -389,9 +386,9 @@ fn practice(ui: &mut Ui, game: &mut Game) -> Flow {
 
 // -- Two players -----------------------------------------------------------------
 
-/// `game_two_player`: one match, or the best of three or five. Each match
-/// is two legs with ends swapped, and level aggregates go to another leg;
-/// both players get the gym before every leg.
+/// One match, or the best of three or five. Each match is two legs with
+/// ends swapped, and level aggregates go to another leg; both players get
+/// the gym before every leg.
 fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.clear_records();
     game.career.set_cash_cap(2000);
@@ -440,8 +437,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
     message(ui, game, &game.text.titles.two_player, &text)
 }
 
-/// `gym_two_player`: each player in turn gets the gym, with their own
-/// joystick and money.
+/// Each player in turn gets the gym, with their own joystick and money.
 fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
     let teams = (TeamId::League(BRUTAL_DELUXE), TeamId::PlayerTwo);
     for (side, digit) in [(Side::Team1, 0x5C), (Side::Team2, 0x5D)] {
@@ -482,9 +478,9 @@ fn demo(ui: &mut Ui, game: &mut Game) -> Flow {
 
 // -- Matches and results ---------------------------------------------------------
 
-/// `cup_league_match`: a league or cup match. Brutal Deluxe's are played
-/// (with them as team 1, the scores swapped back afterwards); the rest
-/// come from the results table.
+/// A league or cup match. Brutal Deluxe's are played (with them as team 1,
+/// the scores swapped back afterwards); the rest come from the results
+/// table.
 pub(super) fn cup_league_match(
     ui: &mut Ui,
     game: &mut Game,
@@ -522,7 +518,7 @@ pub(super) fn cup_league_match(
     }
 }
 
-/// `cup_league_match_bd`: the next-fixture screen, the manager screens
+/// Brutal Deluxe's match: the next-fixture screen, the manager screens
 /// (only the gym in a knockout), then the match.
 fn brutal_deluxe_match(
     ui: &mut Ui,
@@ -546,14 +542,13 @@ fn brutal_deluxe_match(
     rules.initial_dir_team1 = initial_dir;
     rules.coin_value = game.coin_value;
     let teams = PerTeam::new(teams.0, teams.1);
-    // `match_kind` 1 or 2.
     let may_speed_up =
         game.manager_mode && matches!(competition, Competition::League | Competition::Cup);
     let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures, may_speed_up)?;
     Ok((scores.team1, scores.team2))
 }
 
-/// Which result screen follows a match (`display_match_result`).
+/// Which result screen follows a match.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ResultScreen {
     /// Practice has none.
@@ -565,7 +560,7 @@ enum ResultScreen {
     Pictures,
 }
 
-/// `play_match`: the match, its result screen, then the prize money.
+/// The match, its result screen, then the prize money.
 fn play_match(
     ui: &mut Ui,
     game: &mut Game,
@@ -623,8 +618,8 @@ fn play_match(
     Ok(scores)
 }
 
-/// `display_total_match_result` for Brutal Deluxe's cup ties: the victory
-/// or defeat picture with the aggregate, or the plain total for a draw.
+/// The result of Brutal Deluxe's cup ties: the victory or defeat picture
+/// with the aggregate, or the plain total for a draw.
 pub(super) fn display_total_match_result(
     ui: &mut Ui,
     game: &Game,
@@ -642,7 +637,6 @@ pub(super) fn display_total_match_result(
     let page = total_win_picture(game, picture, scores, winner);
     ui.transition(&page)?;
     if winner == teams.0 {
-        // `total_victory`.
         ui.play_sound(VICTORY_CHEER);
         wait_any_fire(ui)?;
         ui.play_sound(VICTORY_AFTER);
@@ -664,7 +658,7 @@ fn result_screen(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, score_text: &[u
     wait_any_fire(ui)
 }
 
-/// `format_score_string`: the two scores into "SCORE 000 TO 000".
+/// The two scores into "SCORE 000 TO 000".
 fn score_string(template: &[u8], scores: PerTeam<i32>) -> Vec<u8> {
     let mut text = template.to_vec();
     write_digits(&mut text, 10, scores.team1 as i16, 3);
@@ -672,7 +666,7 @@ fn score_string(template: &[u8], scores: PerTeam<i32>) -> Vec<u8> {
     text
 }
 
-/// `victory`: Brutal Deluxe won.
+/// Brutal Deluxe won.
 fn victory(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flow {
     let page = win_picture(game, &game.assets.victory, scores, winner);
     ui.transition(&page)?;
@@ -682,7 +676,7 @@ fn victory(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Fl
     wait_any_fire(ui)
 }
 
-/// `defeat`: the other team won; the picture names them.
+/// The other team won; the picture names them.
 fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flow {
     let page = win_picture(game, &game.assets.defeat, scores, winner);
     ui.transition(&page)?;
@@ -690,13 +684,13 @@ fn defeat(ui: &mut Ui, game: &Game, scores: PerTeam<i32>, winner: TeamId) -> Flo
 }
 
 /// The victory and defeat pictures: "SCORE 000 TO 000" and "A WIN FOR"
-/// the winners, centred, in the white font (`format_score_win`).
+/// the winners, centred, in the white font.
 fn win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: TeamId) -> Page {
     let text = score_string(&game.text.messages.score_win, scores);
     picture_with_winner(game, picture, text, 0x12, winner)
 }
 
-/// The same for a two-legged tie, with "TOTAL SCORE" (`format_total_score`).
+/// The same for a two-legged tie, with "TOTAL SCORE".
 fn total_win_picture(game: &Game, picture: &Picture, scores: PerTeam<i32>, winner: TeamId) -> Page {
     let mut text = game.text.messages.total_score_win.clone();
     write_digits(&mut text, 16, scores.team1 as i16, 3);

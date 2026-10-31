@@ -1,4 +1,4 @@
-//! `do_player_grid`: the cursor in the squad table. Fire picks the place
+//! The cursor in the squad table. Fire picks the place
 //! (for substitutions and transfers); moving off the sides goes back to
 //! the keypad.
 

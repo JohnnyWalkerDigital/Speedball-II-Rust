@@ -29,8 +29,8 @@ impl PlayerId {
 
 /// Statistics shown after the match.
 #[derive(Clone, Copy, Debug, Default)]
-/// One player's statistics for the match, as bytes in the sprite record
-/// (`0x3E`-`0x42`), so each wraps at 256.
+/// One player's statistics for the match. The original kept each in a byte,
+/// so each wraps at 256.
 pub struct MatchStats {
     pub time_in_possession: u8,
     pub goals_scored: u8,
@@ -39,7 +39,7 @@ pub struct MatchStats {
     pub substitutions: u8,
 }
 
-/// Adds one to a statistic (`addq.b #1`).
+/// Adds one to a statistic, wrapping at 256.
 pub fn count(stat: &mut u8) {
     *stat = stat.wrapping_add(1);
 }
@@ -61,7 +61,7 @@ pub struct Player {
     pub stats: MatchStats,
     /// A random byte rolled at each AI decision.
     pub random: i32,
-    /// Extra airtime/reach from speed (`_unkBonusFromSpd`).
+    /// Extra airtime/reach from speed.
     pub jump_bonus: i32,
     pub attributes: Attributes,
     /// Skills saved while a power-up token overrides them.
@@ -137,12 +137,12 @@ impl Player {
 
     // -- Skill-derived values ----------------------------------------------
 
-    /// How far this player looks for a pass (`sub_DE7E`).
+    /// How far this player looks for a pass.
     pub fn pass_range(&self) -> i32 {
         self.skills().int * 2
     }
 
-    /// Sets the delay before the next AI decision (`sub_F346`).
+    /// Sets the delay before the next AI decision.
     pub fn reset_think_delay(&mut self, rom: &AtariRom) {
         self.entity.timer = rom.think_delay(self.skills().int);
     }
@@ -160,7 +160,7 @@ impl Player {
     // -- Targeting ------------------------------------------------------------
 
     /// Where `other` will be in a few frames; smarter players look further
-    /// ahead. Results are reflected back off the walls (`sub_F364`).
+    /// ahead. Results are reflected back off the walls.
     pub fn predict(&self, rom: &AtariRom, other: &Entity) -> Point {
         let shift = rom.prediction_shift(self.skills().int);
         let mut target = Point::new(
@@ -172,8 +172,7 @@ impl Player {
     }
 
     /// Leads `other` like [`predict`](Self::predict) but shortens the
-    /// look-ahead until the vertical estimate stays inside this player's zone
-    /// (`sub_E7F6`).
+    /// look-ahead until the vertical estimate stays inside this player's zone.
     pub fn lead_within_zone(&self, rom: &AtariRom, other: &Entity) -> Point {
         let mut target = other.pos;
         let mut shift = rom.prediction_shift(self.skills().int);
@@ -215,7 +214,7 @@ impl Player {
             && (self.zone_min.y..=self.zone_max.y).contains(&point.y)
     }
 
-    /// Direction bits on each axis where `target` differs (`sub_F44A`).
+    /// Direction bits on each axis where `target` differs.
     pub fn dir_bits_towards_exact(&self, target: Point) -> DirBits {
         self.entity.dir_bits_towards_exact(target)
     }
@@ -223,7 +222,7 @@ impl Player {
     // -- Damage and power-ups -------------------------------------------------
 
     /// Applies tackle damage from `attacker_pow` and wears every skill down
-    /// (first half of `sub_EEFC`; dropping equipment is done by the match).
+    /// (dropping equipment is done by the match).
     pub fn take_tackle_damage(&mut self, attacker_pow: i32) {
         let mut damage = (attacker_pow + 150 - self.skills().sta) / 16;
         if damage == 0 {
@@ -261,7 +260,7 @@ impl Player {
         self.saved_skills.spd = 0;
     }
 
-    /// Picks up equipment boosting `skill` to 250 (`EquipEquipment_Helper`).
+    /// Picks up equipment boosting `skill` to 250.
     pub fn equip(&mut self, skill: Skill) {
         let current = *self.attributes.skills.get_mut(skill);
         let saved = self.saved_skills.get_mut(skill);
@@ -276,7 +275,7 @@ impl Player {
         *self.attributes.skills.get_mut(skill) = 250;
     }
 
-    /// Reverts [`equip`](Self::equip) (`UnequipEquipment_Helper`).
+    /// Reverts [`equip`](Self::equip).
     pub fn unequip(&mut self, skill: Skill) {
         let saved = self.saved_skills.get_mut(skill);
         if *saved != 0 {
@@ -288,7 +287,7 @@ impl Player {
     }
 }
 
-/// Mirrors a point that overshoots the pitch back inside (`sub_F3A2`).
+/// Mirrors a point that overshoots the pitch back inside.
 fn reflect_off_walls(p: &mut Point) {
     if p.x <= 32 {
         p.x = 64 - p.x;

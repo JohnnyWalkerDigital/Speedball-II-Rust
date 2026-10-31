@@ -13,7 +13,7 @@ use crate::game::league::{League, DIVISION_SIZE, MATCHES_PER_ROUND};
 use crate::game::setup::league_team;
 use crate::game::squad;
 
-/// The kind of game, for what the fixture screen shows (`match_kind`).
+/// The kind of game, for what the fixture screen shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Competition {
     Knockout,
@@ -22,7 +22,7 @@ pub enum Competition {
     TwoPlayers,
 }
 
-/// `display_next_fixture`: the two teams' records and skills side by side.
+/// The two teams' records and skills side by side.
 pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamId)) -> Page {
     let text = &game.text;
     let fixture_lines = &text.panels.next_fixture;
@@ -47,7 +47,7 @@ pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamI
 
     let mut page = game_page(game, &text.titles.next_fixture);
     page.string_list(&game.assets, &lines);
-    // `draw_plays`: "BRUTAL DELUXE  PLAY  OPPONENT" along row 6.
+    // "BRUTAL DELUXE  PLAY  OPPONENT" along row 6.
     for (text, x) in [
         (text.team_name(teams.0), 0x10),
         (text.panels.play.clone(), 0x94),
@@ -58,7 +58,7 @@ pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamI
     page
 }
 
-/// `generate_team_fixture_strings` for one team's column.
+/// Fills in one team's column of the fixture screen.
 fn fill_fixture_column(
     game: &Game,
     competition: Competition,
@@ -115,8 +115,7 @@ fn fill_fixture_column(
 }
 
 /// The four groups' skill bytes: a human squad's averaged per skill over
-/// each group's three players (`generate_team_stats`), otherwise the
-/// team's templates.
+/// each group's three players, otherwise the team's templates.
 fn skill_groups(game: &Game, team: TeamId) -> [[i32; 8]; 4] {
     let human = match team {
         TeamId::League(0) => Some(Side::Team1),
@@ -132,13 +131,13 @@ fn skill_groups(game: &Game, team: TeamId) -> [[i32; 8]; 4] {
     }
 }
 
-/// `average_8`: the mean of eight bytes, rounded down.
+/// The mean of eight bytes, rounded down.
 fn average_8(values: [i32; 8]) -> i16 {
     (values.iter().map(|v| v & 0xFF).sum::<i32>() >> 3) as i16
 }
 
-/// One division's table (`display_league_placings_div_1`/`_2`), with
-/// Brutal Deluxe's name shown or blanked (it blinks).
+/// One division's table, with Brutal Deluxe's name shown or blanked (it
+/// blinks).
 pub fn league_table(game: &Game, league: &League, division: usize, show_player: bool) -> Page {
     let text = &game.text;
     let title = [&text.titles.division_1, &text.titles.division_2][division];
@@ -153,8 +152,8 @@ pub fn league_table(game: &Game, league: &League, division: usize, show_player: 
         let details = placing_string(&text.panels.league_row, record, first_placing);
         page.alt_text(&game.assets, &at(details, 0x10, row), SmallFont::Orange);
     }
-    // Brutal Deluxe's name blinks: `display_team_on_team_slot` draws it,
-    // `display_box_on_team_slot` covers it in the panel colour.
+    // Brutal Deluxe's name blinks: while it is hidden, a box in the panel
+    // colour covers it.
     let player = game.career.record(TeamId::League(0)).league_placing;
     if !show_player && League::division_of(player) == division {
         let y = usize::from(player - first_placing) * 16 + 0x20;
@@ -163,8 +162,8 @@ pub fn league_table(game: &Game, league: &League, division: usize, show_player: 
     page
 }
 
-/// `construct_league_placing_string`: placing, movement arrow, played,
-/// won, drawn, lost, points for and against, and league points.
+/// A table row: placing, movement arrow, played, won, drawn, lost, points
+/// for and against, and league points.
 fn placing_string(template: &[u8], record: &TeamRecord, first_placing: u8) -> Vec<u8> {
     let mut text = template.to_vec();
     write_digits(&mut text, 0x2E, record.league_points as i16, 3);
@@ -191,7 +190,7 @@ fn placing_string(template: &[u8], record: &TeamRecord, first_placing: u8) -> Ve
     text
 }
 
-/// `display_league_results`: both divisions' four matches this round.
+/// Both divisions' four matches this round.
 pub fn results(game: &Game, league: &League, round: usize) -> Page {
     let strings = &game.text;
     let mut page = game_page(game, &strings.titles.results);
@@ -218,7 +217,7 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
     page
 }
 
-/// `display_statistics`: the last match's numbers for both teams.
+/// The last match's numbers for both teams.
 /// `None` before any match has been played.
 pub fn statistics(game: &Game) -> Option<Page> {
     let last = game.career.last_match?;
@@ -257,7 +256,7 @@ pub fn statistics(game: &Game) -> Option<Page> {
     Some(page)
 }
 
-/// `display_fixture_list`: this cup round's ties.
+/// This cup round's ties.
 pub fn fixture_list(game: &Game, cup: &Cup) -> Page {
     let text = &game.text;
     let mut page = game_page(game, &text.titles.fixture_list);

@@ -10,7 +10,7 @@ use crate::game::text::TextId;
 
 impl Match {
     /// While the clock is stopped, waits for everyone to reach their
-    /// kick-off spot, then starts the ball launcher (`HandleAnimGoalToInitLaunch`).
+    /// kick-off spot, then starts the ball launcher.
     pub(super) fn prepare_kick_off(&mut self) {
         if self.launcher_started {
             return;
@@ -50,7 +50,7 @@ impl Match {
         self.play_sound(Sound::LAUNCHER_START);
     }
 
-    /// Steps the launcher animation and fires the ball (`HandleDeck`).
+    /// Steps the launcher animation and fires the ball.
     pub(super) fn run_ball_launcher(&mut self) {
         if !self.launcher_started || self.props.launcher.script_index < 19 {
             return;
@@ -71,8 +71,7 @@ impl Match {
                 }
                 self.launcher_started = false;
                 self.inputs = PerTeam::default();
-                // The ball is in play; the launcher drops out of sight. (The
-                // C# never showed or hid it.)
+                // The ball is in play; the launcher drops out of sight.
                 self.props.launcher.flags.set_invisible(true);
             }
             _ => {}

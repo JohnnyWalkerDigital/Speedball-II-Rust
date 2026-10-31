@@ -1,5 +1,5 @@
-//! The statistics shown after a match, gathered as `write_team_statistics`
-//! adds up the players' counters.
+//! The statistics shown after a match, gathered by adding up the players'
+//! counters.
 
 use super::geometry::{PerTeam, Side};
 use super::player::{MatchStats, PlayerId};
@@ -52,7 +52,7 @@ impl Match {
         })
     }
 
-    /// What each team picked up from coins this match (`match_cash_p1`/`_p2`).
+    /// What each team picked up from coins this match.
     pub fn credits_earned(&self) -> PerTeam<i32> {
         self.credits_earned
     }

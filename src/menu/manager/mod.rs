@@ -1,5 +1,5 @@
-//! The manager screens: the squad and keypad (`do_manager_screen`), the
-//! transfer market (`do_transfer_screen`) and the gym (`do_gym_screen`).
+//! The manager screens: the squad and keypad, the transfer market and the
+//! gym.
 //!
 //! Everything is driven from a keypad of 32x32 buttons. Moving off its left
 //! or right edge takes the joystick into the squad table (or, in the gym,
@@ -51,7 +51,7 @@ const BOUGHT: Sound = Sound {
 };
 const FLASH: Sound = Sound { id: 8, priority: 2 };
 
-/// `do_manager_screen`: before a league or cup match.
+/// The manager screen, before a league or cup match.
 pub fn manager_screen(
     ui: &mut Ui,
     game: &mut Game,
@@ -105,7 +105,7 @@ fn flash_transfer_key(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Fl
     Ok(())
 }
 
-/// `do_gym_screen` on its own: before a knockout match, and for each
+/// The gym screen on its own: before a knockout match, and for each
 /// player before a two-player leg.
 pub fn gym_screen(
     ui: &mut Ui,
@@ -127,7 +127,7 @@ pub fn gym_screen(
 }
 
 /// The demo's closing look at the manager and gym screens, with nothing
-/// to press (`main_menu` after the demo).
+/// to press.
 pub fn show_off(ui: &mut Ui, game: &mut Game) -> Flow {
     for screen in [Screen::Manager, Screen::Gym] {
         let session = Session::new(

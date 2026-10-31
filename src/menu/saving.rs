@@ -1,5 +1,4 @@
-//! Saving and loading leagues and cups (`keypad_manager_fn_save`,
-//! `do_load`, `menu_disk_error`).
+//! Saving and loading leagues and cups.
 
 use super::flow::{list_menu, wait_fire, Game};
 use super::ram::addr;
@@ -11,12 +10,12 @@ use crate::game::events::Sound;
 use crate::game::save::{Progress, SaveGame, SavedMarketPlayer, SavedPlayer, SavedTeam};
 use crate::game::squad::{SquadPlayer, MARKET_SIZE, SQUAD_SIZE};
 
-/// `misc_flags` bit 1: one player (the computer has team 2).
+/// Bit 1 of the saved flags: one player (the computer has team 2).
 const ONE_PLAYER: u16 = 1 << 1;
 pub(super) const DISK_ERROR: Sound = Sound { id: 8, priority: 2 };
 
-/// `keypad_manager_fn_save`: the save screen, then the game onto the save
-/// disk. Escape there cancels the save, not the game.
+/// The save screen, then the game onto the save disk. Escape there cancels
+/// the save, not the game.
 pub fn save(ui: &mut Ui, game: &mut Game, save: SaveGame) -> Flow {
     if !insert_disk(ui, game, &game.text.titles.save_game)? {
         return Ok(());
@@ -34,8 +33,8 @@ pub fn save(ui: &mut Ui, game: &mut Game, save: SaveGame) -> Flow {
     Ok(())
 }
 
-/// `do_load`: the load screen, then the saved game, retrying on a disk
-/// error. Cancelling (or Escape) abandons the game.
+/// The load screen, then the saved game, retrying on a disk error.
+/// Cancelling (or Escape) abandons the game.
 pub fn load(ui: &mut Ui, game: &mut Game, cup: bool) -> Flow<SaveGame> {
     if !insert_disk(ui, game, &game.text.titles.load_game)? {
         return Err(Stop::Abort);
@@ -65,7 +64,7 @@ fn insert_disk(ui: &mut Ui, game: &Game, title: &Title) -> Flow<bool> {
     }
 }
 
-/// `menu_disk_error`: "RETRY" or "CANCEL". `true` to retry.
+/// After a disk error: "RETRY" or "CANCEL". `true` to retry.
 fn retry(ui: &mut Ui, game: &Game) -> Flow<bool> {
     ui.play_sound(DISK_ERROR);
     match list_menu(ui, game, &game.text.menus.disk_error) {
@@ -133,7 +132,7 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
     }
 }
 
-/// Puts a loaded game back into the career (`read_*`). Returns the teams
+/// Puts a loaded game back into the career. Returns the teams
 /// in the save's order and the playing direction.
 pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
     let people = SavedNames::new(game);
@@ -189,7 +188,7 @@ pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
     (teams, save.initial_dir as u8 as i32)
 }
 
-/// Saves name players by their name's offset from `str_jams` in the
+/// Saves name players by their name's offset from `addr::STR_JAMS` in the
 /// original's memory. Names are only ever the squad's own or the market
 /// players', the same people, in the same order, as the tables'.
 struct SavedNames {

@@ -26,8 +26,7 @@ pub enum Standings<'a> {
 }
 
 impl Standings<'_> {
-    /// What a save records of the competition (`write_league_config`,
-    /// `write_cup_config`, `write_teams`).
+    /// What a save records of the competition.
     pub(super) fn snapshot(&self) -> Option<Snapshot> {
         match self {
             Standings::None => None,
@@ -57,7 +56,7 @@ impl Standings<'_> {
                     round: cup.round as u16,
                     tie: *tie_index as u16,
                     ties: cup.ties().count() as u16,
-                    // `cup_team_1` and `_2` are byte offsets into the draw.
+                    // The tie's slots are saved as byte offsets into the draw.
                     slots: (tie.0 as u16 * 4, tie.1 as u16 * 4),
                     aggregate: (aggregate.0 as i16, aggregate.1 as i16),
                 },

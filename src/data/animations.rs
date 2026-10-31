@@ -7,7 +7,7 @@
 //! order, so an entity's place in a script is still a position in that
 //! block: unedited, every position is the original address. A read past
 //! the block (an entity carries its place over when its script changes)
-//! reads the original memory there, as the 68000 code did.
+//! reads the original memory there, as the original game did.
 
 use std::collections::{BTreeMap, HashMap};
 

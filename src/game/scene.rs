@@ -1,4 +1,4 @@
-//! What is on screen each frame: the sprites `draw_game` draws, in its
+//! What is on screen each frame: the sprites the game draws, in its
 //! order. The renderer turns this into pixels; the replay recorder stores it.
 
 use super::entity::Entity;
@@ -22,7 +22,7 @@ impl Default for DrawOrder {
 }
 
 impl Match {
-    /// `draw_game`: the visible sprites, back to front. Background parts of
+    /// The visible sprites, back to front. Background parts of
     /// the pitch (wall stars) are not sprites and are not included.
     pub(crate) fn compose_scene(&mut self) -> Vec<Entity> {
         self.sort_players_vertically();
@@ -68,7 +68,7 @@ impl Match {
             if !self.is_practice() {
                 add(&self.props.player_indicators[1]);
             }
-            // The Amiga original has no goal markers; the C# drew the ST's.
+            // The Amiga original has no goal markers; these are the ST's.
             for indicator in &self.props.goal_indicators {
                 add(indicator);
             }
@@ -121,7 +121,7 @@ impl Match {
     }
 }
 
-/// `draw_sprite`'s clipping test: whether any of `entity` is on screen.
+/// The clipping test: whether any of `entity` is on screen.
 /// Horizontal positions use the scroll rounded down to 16 pixels, as the
 /// Amiga scrolls the last 15 pixels in hardware.
 pub fn on_screen(entity: &Entity, scroll: Point) -> bool {

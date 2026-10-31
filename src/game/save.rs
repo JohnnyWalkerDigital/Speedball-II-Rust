@@ -1,25 +1,23 @@
-//! Saved games, byte for byte as the Amiga wrote them to a save disk
-//! (`keypad_manager_fn_save`, `do_load` and their `write_*`/`read_*`
-//! helpers).
+//! Saved games, byte for byte as the Amiga wrote them to a save disk.
 //!
 //! The structure is the same for both games apart from the magic and the
 //! last few fields: 0x362 bytes for a league, 0x36C for a cup. Names and
-//! teams are stored as offsets from fixed addresses (`str_jams` and
-//! `team_brutal_deluxe`); turning them back into names is the caller's job.
+//! teams are stored as offsets from fixed addresses in the original's
+//! memory; turning them back into names is the caller's job.
 
-/// A player as saved (`write_player_stat`).
+/// A player as saved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedPlayer {
-    /// Offset of the name from `str_jams`.
+    /// Offset of the name from the first of the original's name strings.
     pub name_offset: u32,
     pub face: u16,
     pub skills: [u8; 8],
 }
 
-/// A team's place and record (`write_teams`).
+/// A team's place and record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedTeam {
-    /// Offset of the team from `team_brutal_deluxe` (0x40 per team).
+    /// Offset of the team from Brutal Deluxe's record (0x40 per team).
     pub team_offset: u32,
     pub played: u16,
     pub won: u16,
@@ -42,11 +40,10 @@ pub struct SavedMarketPlayer {
 /// Where the game had got to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Progress {
-    /// `round_num`, `match_num`.
+    /// The round, and the match within it.
     League { round: u16, game: u16 },
-    /// `round_number`, `match_num`, `num_matches`, `cup_team_1`/`_2` (byte
-    /// offsets into `cup_teams`) and `cup_score_1`/`_2` (a tie's aggregate
-    /// so far).
+    /// The round, the tie, the number of ties, the tie's two slots (byte
+    /// offsets into the draw) and the tie's aggregate so far.
     Cup {
         round: u16,
         tie: u16,
@@ -61,7 +58,7 @@ pub struct SaveGame {
     pub cash: u16,
     pub caps: (u16, u16),
     pub initial_dir: u16,
-    /// `misc_flags`: bit 0 is "team manager".
+    /// Bit 0 is "team manager".
     pub flags: u16,
     pub squad: Vec<SavedPlayer>,
     /// In the save's team order: division 2 then division 1 for a league,
@@ -177,7 +174,7 @@ impl SaveGame {
     }
 
     /// Reads a save. `None` unless it starts with the right magic
-    /// (`load_league` and `load_cup` treat a mismatch as a disk error).
+    /// (the original treats a mismatch as a disk error).
     pub fn decode(bytes: &[u8], cup: bool) -> Option<Self> {
         let (magic, size) = if cup {
             (CUP_MAGIC, CUP_SIZE)

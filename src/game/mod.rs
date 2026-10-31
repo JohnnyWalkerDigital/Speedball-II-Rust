@@ -1,4 +1,4 @@
-//! The match simulation: a port of the original 68000 match code.
+//! The match simulation.
 //!
 //! Nothing in here draws or touches the window; [`state::Match`] is driven by
 //! [`state::Match::step`] and read by `render`.

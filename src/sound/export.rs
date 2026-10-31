@@ -11,7 +11,7 @@ use super::memory::Memory;
 const RATE: u32 = 48_000;
 /// Sounds that loop forever (crowd noise) are cut off here.
 const MAX_SECONDS: u32 = 15;
-/// Entries in the original `sound_table`.
+/// Entries in the original sound table.
 pub const SOUND_COUNT: u8 = 56;
 
 /// Writes `sound_NN.wav` for every sound ID. Returns how many were written.

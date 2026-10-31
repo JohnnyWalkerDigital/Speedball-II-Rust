@@ -280,8 +280,7 @@ impl Team {
     }
 
     /// Copies the group templates into a 12-player attribute table: three
-    /// defenders, three midfielders, three attackers, three substitutes
-    /// (`sub_903E`).
+    /// defenders, three midfielders, three attackers, three substitutes.
     pub fn apply_skills_to(&self, attributes: &mut [Attributes]) {
         let groups = [self.defence, self.midfield, self.attack, self.substitutes];
         for (chunk, group) in attributes.chunks_mut(3).zip(groups) {
@@ -365,7 +364,7 @@ impl Roster {
     }
 
     /// Copies identity and skills from one squad slot to another; each slot
-    /// keeps pointing at its own attribute record (`CopySubstituteTo`).
+    /// keeps pointing at its own attribute record.
     pub fn copy_person(&mut self, from: PersonRef, to: PersonRef) {
         let source = self.person(from).clone();
         let skills = self.attributes(source.attributes).skills;

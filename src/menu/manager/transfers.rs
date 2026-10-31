@@ -1,4 +1,4 @@
-//! `do_transfer_screen`: the players for sale.
+//! The transfer screen: the players for sale.
 
 use super::keypad::{keypad, KeypadExit};
 use super::session::Session;
@@ -40,7 +40,7 @@ pub(super) fn step_buyable(game: &Game, session: &mut Session, step: isize) {
     }
 }
 
-/// `keypad_fn_transfer_buy`: the market player shown into the chosen place.
+/// Buys the market player shown into the chosen place.
 pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     let (index, slot) = (session.view.index, session.view.grid_slot());
     let upgrades = game.tables.upgrades;
@@ -58,7 +58,8 @@ pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     session.transition(ui, game)
 }
 
-/// `next_buyable_player` / `previous_buyable_player`.
+/// The next player for sale after `from`, going forwards or backwards by
+/// `step` (`from` itself if there is none).
 fn next_buyable(game: &Game, from: usize, step: isize) -> usize {
     let players = &game.career.market.players;
     let count = players.len() as isize;

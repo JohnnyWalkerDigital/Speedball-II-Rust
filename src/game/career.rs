@@ -1,6 +1,5 @@
 //! What carries over from match to match: money, the teams' records and the
-//! last match's statistics (`cash_p1`, `match_cash_*`, the `team` records'
-//! league fields, `our_team_for_stats`).
+//! last match's statistics.
 
 use std::cmp::Ordering;
 
@@ -16,11 +15,11 @@ pub const LEAGUE_TEAMS: usize = 16;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TeamId {
     League(usize),
-    /// The second human in two-player games (`team_player_2`).
+    /// The second human in two-player games.
     PlayerTwo,
 }
 
-/// A team's results so far (`num_played` to `old_league_placing`).
+/// A team's results so far.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TeamRecord {
     pub played: u16,
@@ -39,13 +38,13 @@ pub struct TeamRecord {
 /// is added to the next match's.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Money {
-    /// `cash_p1`, `cash_p2`: money to spend in the gym.
+    /// Money to spend in the gym.
     pub cash: PerTeam<u16>,
-    /// `match_cash_max_p1`, `_p2`: the most each team can earn next match.
+    /// The most each team can earn next match.
     pub cap: PerTeam<u16>,
-    /// `match_cash_max_base`: the game mode's cap per match.
+    /// The game mode's cap per match.
     pub cap_base: u16,
-    /// `match_cash_start`: what a team earns even with no coins.
+    /// What a team earns even with no coins.
     pub start: u16,
 }
 
@@ -61,8 +60,7 @@ pub struct Career {
     pub money: Money,
     records: [TeamRecord; LEAGUE_TEAMS + 1],
     pub last_match: Option<LastMatch>,
-    /// `team_info_table` and `team_info_table_other`: each human manager's
-    /// squad, kept between matches.
+    /// Each human manager's squad, kept between matches.
     pub squads: PerTeam<Squad>,
     pub market: Market,
 }
@@ -117,8 +115,7 @@ impl Career {
         self.last_match = None;
     }
 
-    /// `init_team_players_names_and_sprites`: both squads get their usual
-    /// names and faces back, at the main menu.
+    /// Both squads get their usual names and faces back, at the main menu.
     pub fn restore_identities(&mut self, identities: &[(String, u16)]) {
         for squad in [&mut self.squads.team1, &mut self.squads.team2] {
             for (player, (name, face)) in squad.iter_mut().zip(identities) {
@@ -128,7 +125,7 @@ impl Career {
         }
     }
 
-    /// `init_player_stats`: every skill in a human squad set to `value`.
+    /// Every skill in a human squad set to `value`.
     pub fn init_squad(&mut self, side: super::geometry::Side, value: u8) {
         for player in self.squads.get_mut(side).iter_mut() {
             player.skills = [value; 8];
@@ -141,7 +138,7 @@ impl Career {
         self.money.cap = PerTeam::new(base, base);
     }
 
-    /// `clear_match_stats`: every team back to no games played.
+    /// Every team back to no games played.
     pub fn clear_records(&mut self) {
         for record in &mut self.records {
             *record = TeamRecord {
@@ -160,15 +157,15 @@ impl Career {
             (earned.team1, &mut money.cash.team1, &mut money.cap.team1),
             (earned.team2, &mut money.cash.team2, &mut money.cap.team2),
         ] {
-            // Unsigned word comparisons, as `bhi` and `bls`.
+            // Unsigned word comparisons, as in the original.
             let prize = (earned as u16).max(money.start).min(*cap);
             *cash = cash.wrapping_add(prize);
             *cap = money.cap_base.wrapping_add(cap.wrapping_sub(prize));
         }
     }
 
-    /// `update_match_stats`: a win is worth 10 league points and a draw 5,
-    /// plus a point for every 10 scored.
+    /// A win is worth 10 league points and a draw 5, plus a point for every
+    /// 10 scored.
     pub fn record_result(&mut self, teams: PerTeam<TeamId>, scores: PerTeam<i32>) {
         for team in [teams.team1, teams.team2] {
             let record = self.record_mut(team);

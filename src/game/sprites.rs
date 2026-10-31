@@ -11,13 +11,13 @@ use crate::data::animations::ScriptRef;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bank {
-    /// `sprites_ball`'s bank: the ball, items, indicators (16x16).
+    /// The ball, items, indicators (16x16).
     Entities,
-    /// `sprites_players`: players and medics (32x32).
+    /// Players and medics (32x32).
     Players,
-    /// `sprites_big_ball` (32x32).
+    /// The big ball (32x32).
     BigBall,
-    /// `sprites_launcher`: the launcher, the domes and the electrobounces
+    /// The launcher, the domes and the electrobounces
     /// (32x32, five bitplanes).
     Launcher,
 }
