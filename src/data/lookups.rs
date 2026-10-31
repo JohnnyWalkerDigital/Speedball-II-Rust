@@ -24,6 +24,34 @@ const EQUIPMENT: usize = 8;
 /// The sprites a carrier can show, up to the next table in memory.
 const BALL_OFFSETS: usize = 117;
 const SPRITE_ORIGINS: usize = 120;
+/// Steps in each multiplier path, up to the next one in memory.
+pub const PATH_STEPS: usize = 50;
+
+/// The ball's ways through the score-multiplier ramps, one after another
+/// in memory in this order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MultiplierPath {
+    LeftUp,
+    LeftDown,
+    RightDown,
+    RightUp,
+}
+
+impl MultiplierPath {
+    fn address(self) -> i32 {
+        match self {
+            MultiplierPath::LeftUp => addr::MULTIPLIER_PATH_LEFT_UP,
+            MultiplierPath::LeftDown => addr::MULTIPLIER_PATH_LEFT_DOWN,
+            MultiplierPath::RightDown => addr::MULTIPLIER_PATH_RIGHT_DOWN,
+            MultiplierPath::RightUp => addr::MULTIPLIER_PATH_RIGHT_UP,
+        }
+    }
+
+    /// Where `step` is in memory, for reads past the table.
+    pub(super) fn step_address(self, step: i32) -> i32 {
+        self.address() + step * 2
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lookups {
@@ -65,6 +93,10 @@ pub struct Lookups {
     /// The offset from a player's position to its sprite's centre, by
     /// sprite: `[x, y]`.
     pub sprite_origin: Vec<[i32; 2]>,
+    /// The ball's way through the score-multiplier ramps, a step a frame:
+    /// left going up, left going down, right going down, right going up.
+    /// `[0, 0]` ends it, and the ball shoots back out.
+    pub multiplier_paths: Vec<Vec<[i32; 2]>>,
 }
 
 impl Lookups {
@@ -119,6 +151,14 @@ impl Lookups {
                 .collect(),
             ball_offset: pairs(addr::BALL_OFFSET_BY_SPRITE, BALL_OFFSETS),
             sprite_origin: pairs(addr::SPRITE_ORIGIN, SPRITE_ORIGINS),
+            multiplier_paths: [
+                MultiplierPath::LeftUp,
+                MultiplierPath::LeftDown,
+                MultiplierPath::RightDown,
+                MultiplierPath::RightUp,
+            ]
+            .map(|path| pairs(path.address(), PATH_STEPS))
+            .to_vec(),
         }
     }
 
@@ -163,6 +203,10 @@ impl Lookups {
         expect("status_leds", self.status_leds.len(), STATUS_LEDS);
         expect("ball_offset", self.ball_offset.len(), BALL_OFFSETS);
         expect("sprite_origin", self.sprite_origin.len(), SPRITE_ORIGINS);
+        expect("multiplier_paths", self.multiplier_paths.len(), 4);
+        for path in &self.multiplier_paths {
+            expect("each of multiplier_paths", path.len(), PATH_STEPS);
+        }
         if problems.is_empty() {
             Ok(())
         } else {

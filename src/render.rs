@@ -6,8 +6,8 @@
 //! free of drawing code.
 
 use crate::config::Platform;
-use crate::data::{addr, AtariRom};
-use crate::game::entity::Entity;
+use crate::data::AtariRom;
+use crate::game::entity::{Entity, EntityId, Gfx};
 use crate::game::geometry::{Point, Side};
 use crate::game::replay::ReplayFrame;
 use crate::game::sprites::{amiga_sprite, AmigaSprite, Bank, BIG_BALL_FIRST, LAUNCHER_FIRST};
@@ -36,8 +36,8 @@ impl MatchRenderer {
     pub fn new(assets: Assets, rom: &AtariRom) -> Self {
         Self {
             assets,
-            status_led: Entity::read(rom, addr::STATUS_LED),
-            idle_domes: addr::BOUNCE_DOMES.map(|a| Entity::read(rom, a)),
+            status_led: rom.start().entity(EntityId::StatusLed),
+            idle_domes: [0, 1].map(|i| rom.start().entity(EntityId::BounceDome(i))),
         }
     }
 
@@ -189,7 +189,7 @@ impl MatchRenderer {
 
     /// The ST's electrobounces are pitch tiles.
     fn draw_atari_electrobounce(&self, canvas: &mut Canvas, pad: &Entity, scroll: Point) {
-        let base = if pad.address == addr::ELECTROBOUNCES[0] {
+        let base = if pad.id == EntityId::Electrobounce(0) {
             ATARI_WALL_LEFT
         } else {
             ATARI_WALL_RIGHT
@@ -232,17 +232,15 @@ impl MatchRenderer {
             sprite += 11;
         }
         let sheet = match e.gfx {
-            addr::GFX_ENTITIES => Sheet::Entities,
-            addr::GFX_PLAYERS if e.is_player_or_medic() && e.uses_blue_palette() => {
-                Sheet::PlayersBlue
-            }
-            addr::GFX_PLAYERS => Sheet::Players,
-            addr::GFX_BIG_BALL => {
+            Gfx::Entities => Sheet::Entities,
+            Gfx::Players if e.is_player_or_medic() && e.uses_blue_palette() => Sheet::PlayersBlue,
+            Gfx::Players => Sheet::Players,
+            Gfx::BigBall => {
                 sprite += BIG_BALL_FIRST;
                 Sheet::Players
             }
-            addr::GFX_PITCH => Sheet::Pitch,
-            _ => return None,
+            Gfx::Pitch => Sheet::Pitch,
+            Gfx::Unknown(_) => return None,
         };
         Some((sheet, sprite))
     }

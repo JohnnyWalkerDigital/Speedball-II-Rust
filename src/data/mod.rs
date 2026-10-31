@@ -3,6 +3,7 @@
 
 pub mod addr;
 pub mod amiga;
+pub mod animations;
 pub mod bytes;
 pub mod files;
 pub mod lookups;

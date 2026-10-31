@@ -2,9 +2,8 @@
 //! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
 //! files extracted from them, which can be edited.
 //!
-//! The game asks a [`ContentSource`], so it does not matter which. Sound,
-//! animation, the match's entity records and its panel messages still come
-//! from the originals.
+//! The game asks a [`ContentSource`], so it does not matter which. Sound
+//! and the match's panel messages still come from the originals.
 
 mod graphics;
 mod json;
@@ -19,8 +18,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::config::Platform;
+use crate::data::animations::AnimationTable;
 use crate::data::lookups::Lookups;
 use crate::game::roster::Teams;
+use crate::game::start::StartTable;
 use crate::graphics::ilbm::IlbmError;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
@@ -46,6 +47,10 @@ pub trait ContentSource {
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError>;
     /// The match's lookup tables.
     fn lookups(&self) -> Result<Lookups, ContentError>;
+    /// The match's animation scripts.
+    fn animations(&self) -> Result<AnimationTable, ContentError>;
+    /// What every match starts from, naming scripts in [`Self::animations`].
+    fn match_start(&self) -> Result<StartTable, ContentError>;
     /// The league teams' names and skills, and player two's.
     fn teams(&self) -> Result<Teams, ContentError>;
     /// The squads, market, prices and results behind the menus' games.
@@ -136,6 +141,8 @@ pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, Cont
     let mut extracted = Extracted::default();
     tables::write_lookups(&mut writer, &source.lookups()?)?;
     tables::write_teams(&mut writer, &source.teams()?)?;
+    tables::write_animations(&mut writer, &source.animations()?)?;
+    tables::write_start(&mut writer, &source.match_start()?)?;
     for platform in [Platform::Amiga, Platform::Atari] {
         match source.match_graphics(platform) {
             Ok(assets) => {
@@ -200,6 +207,14 @@ impl ContentSource for Pack {
         tables::read_teams(self)
     }
 
+    fn animations(&self) -> Result<AnimationTable, ContentError> {
+        tables::read_animations(self)
+    }
+
+    fn match_start(&self) -> Result<StartTable, ContentError> {
+        tables::read_start(self)
+    }
+
     fn menu_tables(&self) -> Result<MenuTables, ContentError> {
         tables::read_menus(self)
     }
@@ -258,6 +273,11 @@ mod tests {
         assert_eq!(pack.intro_text().unwrap(), originals.intro_text().unwrap());
         assert_eq!(pack.lookups().unwrap(), originals.lookups().unwrap());
         assert_eq!(pack.teams().unwrap(), originals.teams().unwrap());
+        assert_eq!(pack.animations().unwrap(), originals.animations().unwrap());
+        assert_eq!(
+            pack.match_start().unwrap(),
+            originals.match_start().unwrap()
+        );
         assert_eq!(
             pack.menu_tables().unwrap(),
             originals.menu_tables().unwrap()

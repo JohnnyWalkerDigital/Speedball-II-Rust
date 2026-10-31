@@ -2,7 +2,7 @@
 //! line-up.
 
 use super::{EntityRef, Match, KICK_OFF_SCROLL_Y, PITCH_CENTER};
-use crate::data::addr;
+use crate::data::animations::Script;
 use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Point, Side};
 use crate::game::player::PlayerId;
@@ -58,7 +58,7 @@ impl Match {
         if self.props.launcher.script_index == 19 {
             let ball = &mut self.props.ball;
             ball.flags.set_invisible(false);
-            ball.script = addr::SCRIPT_BALL_LAUNCH;
+            ball.script = self.rom.script(Script::BallLaunch);
             ball.script_index = 0;
             self.play_sound(Sound::BALL_LAUNCH);
             return;

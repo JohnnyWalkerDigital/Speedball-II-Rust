@@ -8,7 +8,7 @@ use super::roster::{Attributes, Person, Roster, Skills, Team};
 use super::squad;
 use super::text::{TextId, TextPanel};
 use crate::config::{Config, GameMode, TEAM_COUNT};
-use crate::data::{addr, AtariRom};
+use crate::data::AtariRom;
 
 /// Everything `Match::new` needs (the original `MatchParam`).
 pub struct MatchSetup {
@@ -184,8 +184,8 @@ impl MatchSetup {
     }
 
     fn assemble(rom: &AtariRom, rules: MatchRules, rng: Rng) -> Self {
-        let mut players = read_players(rom);
-        let mut roster = Roster::read(rom);
+        let mut players = rom.start().players();
+        let mut roster = rom.start().roster();
         set_skills(
             &rules.team1,
             &mut roster.attributes_team1,
@@ -236,15 +236,6 @@ fn set_skills(lineup: &Lineup, attributes: &mut [Attributes], persons: &mut [Per
         }
         SquadSkills::FromTeam => lineup.team.apply_skills_to(attributes),
     }
-}
-
-fn read_players(rom: &AtariRom) -> Vec<Player> {
-    let team = |base: i32| {
-        (0..PlayerId::TEAM_SIZE).map(move |i| Player::read(rom, base + i as i32 * Player::SIZE, i))
-    };
-    team(addr::PLAYERS_TEAM1)
-        .chain(team(addr::PLAYERS_TEAM2))
-        .collect()
 }
 
 // -- Command-line modes ---------------------------------------------------------

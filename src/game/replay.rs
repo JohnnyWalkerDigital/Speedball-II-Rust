@@ -347,7 +347,7 @@ impl Match {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::addr;
+    use crate::game::entity::EntityId;
     use crate::game::sprites::entity_for;
 
     fn sprite(bank: Bank, index: i32, team1: bool, at: Point, size: i32) -> Entity {
@@ -414,7 +414,7 @@ mod tests {
                 index: 3
             })
         );
-        assert_eq!(back.address, addr::PLAYERS_TEAM2);
+        assert_eq!(back.id, EntityId::Player(9));
     }
 
     #[test]

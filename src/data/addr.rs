@@ -28,7 +28,6 @@ pub const ELECTROBOUNCES: [i32; 2] = [0x4B5E, 0x4B88];
 pub const PLAYERS_TEAM1: i32 = 0x4BB2;
 pub const PLAYERS_TEAM2: i32 = 0x4FB4;
 pub const MEDICS: [i32; 2] = [0x53B6, 0x53DE];
-pub const MEDICS_END: i32 = 0x5406;
 pub const TERRAIN_CENTER: i32 = 0x5406;
 
 // ---------------------------------------------------------------------------
@@ -77,28 +76,12 @@ pub const MULTIPLIER_PATH_RIGHT_DOWN: i32 = 0x2D44;
 pub const MULTIPLIER_PATH_RIGHT_UP: i32 = 0x2DA8;
 
 // ---------------------------------------------------------------------------
-// Animation scripts. A "list" holds one script pointer per direction (8 longs).
+// Animation scripts (see `animations.rs`).
 // ---------------------------------------------------------------------------
 
-pub const ANIM_STAND: i32 = 0x5E26;
-pub const ANIM_SLIDE_TACKLE: i32 = 0x5E46;
-pub const ANIM_STANDING_TACKLE: i32 = 0x5E66;
-pub const ANIM_RUN: i32 = 0x5E86;
-pub const ANIM_THROW: i32 = 0x5EA6;
-pub const ANIM_JUMP: i32 = 0x5EC6;
-pub const ANIM_KNOCKED_DOWN: i32 = 0x5EE6;
-pub const ANIM_CATCH: i32 = 0x5F06;
-pub const ANIM_GOALIE_CATCH_TOP: i32 = 0x5F26;
-pub const ANIM_GOALIE_CATCH_BOTTOM: i32 = 0x5F46;
-pub const ANIM_GOALIE_STAND_TOP: i32 = 0x5F66;
-pub const ANIM_GOALIE_RUN_TOP: i32 = 0x5F86;
-pub const ANIM_GOALIE_STAND_BOTTOM: i32 = 0x5FA6;
-pub const ANIM_GOALIE_RUN_BOTTOM: i32 = 0x5FC6;
-pub const ANIM_GOALIE_DIVE_TOP: i32 = 0x5FE6;
-pub const ANIM_GOALIE_DIVE_BOTTOM: i32 = 0x6006;
-pub const ANIM_CELEBRATE: i32 = 0x6026;
-pub const ANIM_CELEBRATE_SCORER: i32 = 0x6046;
-pub const ANIM_MEDIC_WALK: i32 = 0x6066;
+/// The per-direction animations: 19 lists of 8 script pointers, one after
+/// another.
+pub const ANIMATIONS: i32 = 0x5E26;
 
 /// Single scripts (not per-direction lists).
 pub const SCRIPT_BALL_THROWN_HIGH: i32 = 0x54C6;

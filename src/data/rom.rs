@@ -2,10 +2,14 @@
 //! for every lookup table the match engine uses.
 
 use super::addr;
+use super::animations::{self, Animation, Animations, Script, ScriptRef};
 use super::bytes::BigEndian;
-use super::lookups::{entry, in_run, Lookups, DIRECTIONS, SUPPORT_COLUMNS};
+use super::lookups::{
+    entry, in_run, Lookups, MultiplierPath, DIRECTIONS, PATH_STEPS, SUPPORT_COLUMNS,
+};
 use crate::game::geometry::{DirBits, Point};
 use crate::game::roster::Teams;
+use crate::game::start::MatchStart;
 
 /// The ST disk image, addressed by original RAM address, and the lookup
 /// tables the match uses (read from it, or replaced by an asset pack's).
@@ -16,6 +20,8 @@ pub struct AtariRom {
     disk: Vec<u8>,
     lookups: Lookups,
     teams: Teams,
+    animations: Animations,
+    start: MatchStart,
 }
 
 impl AtariRom {
@@ -27,10 +33,31 @@ impl AtariRom {
             disk,
             lookups: Lookups::default(),
             teams: Teams::default(),
+            animations: Animations::default(),
+            start: MatchStart::default(),
         };
         rom.lookups = Lookups::read(&rom);
         rom.teams = Teams::read(&rom);
+        rom.animations = Animations::read(&rom);
+        rom.start = MatchStart::read(&rom);
         rom
+    }
+
+    /// The animations in use.
+    pub fn animations(&self) -> &Animations {
+        &self.animations
+    }
+
+    /// What every match starts from.
+    pub fn start(&self) -> &MatchStart {
+        &self.start
+    }
+
+    /// Uses other animations and starting records (an asset pack's), the
+    /// records naming scripts in the animations.
+    pub fn set_animations(&mut self, animations: Animations, start: MatchStart) {
+        self.animations = animations;
+        self.start = start;
     }
 
     /// The league teams and player two's, in use.
@@ -127,13 +154,21 @@ impl AtariRom {
     // -- Animation -----------------------------------------------------------
 
     /// One word of an animation script: a sprite index or a control code.
-    pub fn script_word(&self, script: i32, index: i32) -> i32 {
-        self.u16(script + index * 2)
+    pub fn script_word(&self, script: ScriptRef, index: i32) -> i32 {
+        let at = script.0 + index * 2;
+        self.animations.word(at).unwrap_or_else(|| self.u16(at))
     }
 
-    /// The script for `dir` from a per-direction animation list.
-    pub fn script_for_dir(&self, list: i32, dir: i32) -> i32 {
-        self.u32(list + dir * 4)
+    /// The script for `dir` from a per-direction animation.
+    pub fn script_for_dir(&self, animation: Animation, dir: i32) -> ScriptRef {
+        self.animations
+            .for_dir(animation, dir)
+            .unwrap_or_else(|| ScriptRef(self.u32(animations::list_address(animation, dir))))
+    }
+
+    /// A script the code starts by name.
+    pub fn script(&self, script: Script) -> ScriptRef {
+        self.animations.script(script)
     }
 
     /// Offset from a player's position to its sprite's visual centre.
@@ -150,8 +185,18 @@ impl AtariRom {
         )
     }
 
-    pub fn multiplier_path_step(&self, path: i32, step: i32) -> Point {
-        self.signed_pair(path + step * 2)
+    /// One step of the ball's way through a score multiplier. The paths lie
+    /// end to end, so a step past one's end is in the next.
+    pub fn multiplier_path_step(&self, path: MultiplierPath, step: i32) -> Point {
+        match in_run(
+            &self.lookups.multiplier_paths,
+            PATH_STEPS,
+            path as i32,
+            step,
+        ) {
+            Some(step) => pair(step),
+            None => self.signed_pair(path.step_address(step)),
+        }
     }
 
     // -- Skill curves (indexed by `(skill - 100) / 10`) ----------------------
@@ -301,6 +346,38 @@ mod tests {
                 rom.sprite_origin(sprite),
                 raw_pair(addr::SPRITE_ORIGIN + sprite * 2)
             );
+        }
+        for (i, path) in [
+            MultiplierPath::LeftUp,
+            MultiplierPath::LeftDown,
+            MultiplierPath::RightDown,
+            MultiplierPath::RightUp,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let base = addr::MULTIPLIER_PATH_LEFT_UP + i as i32 * 100;
+            for step in -60..120 {
+                assert_eq!(
+                    rom.multiplier_path_step(path, step),
+                    raw_pair(base + step * 2)
+                );
+            }
+        }
+        // Scripts read as memory, wherever an entity's place in one is.
+        for at in (0x5400..0x5F00).step_by(2) {
+            for index in [-3, 0, 1, 7] {
+                assert_eq!(
+                    rom.script_word(ScriptRef(at), index),
+                    rom.u16(at + index * 2)
+                );
+            }
+        }
+        for (i, animation) in Animation::ALL.into_iter().enumerate() {
+            for dir in -10..20 {
+                let pointer = rom.u32(addr::ANIMATIONS + i as i32 * 32 + dir * 4);
+                assert_eq!(rom.script_for_dir(animation, dir), ScriptRef(pointer));
+            }
         }
         for forward in [false, true] {
             let base = if forward {

@@ -21,7 +21,18 @@ fn load(platform: Platform) -> Option<Harness> {
     let config = Config::default();
     match GameFiles::load(&config.data_dir, platform) {
         Ok(mut files) => {
-            let rom = Rc::new(AtariRom::new(std::mem::take(&mut files.atari_disk)));
+            let mut rom = AtariRom::new(std::mem::take(&mut files.atari_disk));
+            // `SPEEDBALL_PACK` plays from an asset pack's tables instead.
+            if let Ok(dir) = std::env::var("SPEEDBALL_PACK") {
+                use crate::content::{ContentSource, Pack};
+                let pack = Pack::open(std::path::Path::new(&dir)).expect("the pack opens");
+                rom.set_lookups(pack.lookups().unwrap());
+                rom.set_teams(pack.teams().unwrap());
+                let animations = pack.animations().unwrap().lay_out().unwrap();
+                let start = pack.match_start().unwrap().resolve(&animations).unwrap();
+                rom.set_animations(animations, start);
+            }
+            let rom = Rc::new(rom);
             Some(Harness { rom, files })
         }
         Err(error) => {
@@ -471,4 +482,45 @@ fn substitutions_change_the_squad_for_good() {
         return;
     }
     panic!("no substitution in 40 matches");
+}
+
+/// Prints a fingerprint of every frame drawn and sound requested over many
+/// whole matches, to compare a refactor's output with the code before it.
+#[test]
+#[ignore = "slow; run manually and compare the output"]
+fn fingerprint_matches() {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    for platform in [Platform::Atari, Platform::Amiga] {
+        let Some(h) = load(platform) else { continue };
+        let assets = Assets::load(&h.rom, h.files.amiga.as_ref(), platform);
+        let renderer = MatchRenderer::new(assets, &h.rom);
+        let scenarios = (1..=8).map(|seed| (GameMode::Knockout, seed)).chain([
+            (GameMode::Demo, 1),
+            (GameMode::Practice, 3),
+            (GameMode::TwoPlayers, 4),
+        ]);
+        for (mode, seed) in scenarios {
+            let config = config(platform, mode, seed);
+            let mut game = Match::new(MatchSetup::from_config(&h.rom, &config), Rc::clone(&h.rom));
+            let mut canvas = Canvas::new(320, 200);
+            let mut hasher = DefaultHasher::new();
+            let mut frames = 0;
+            for _ in 0..20_000 {
+                let over = game.step();
+                renderer.render(&game, &mut canvas);
+                canvas.pixels().hash(&mut hasher);
+                format!("{:?}", game.take_sounds()).hash(&mut hasher);
+                frames += 1;
+                if over {
+                    break;
+                }
+            }
+            println!(
+                "{platform:?} {mode:?} {seed}: {frames} frames, {:?}, {:016x}",
+                game.scores(),
+                hasher.finish()
+            );
+        }
+    }
 }

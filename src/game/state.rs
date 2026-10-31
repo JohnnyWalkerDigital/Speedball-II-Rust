@@ -15,6 +15,7 @@ mod panel;
 mod props;
 mod scoring;
 
+use crate::data::animations::Script;
 use std::rc::Rc;
 
 use super::arena::Arena;
@@ -31,7 +32,7 @@ use super::setup::MatchSetup;
 use super::text::TextPanel;
 use super::token::ActiveToken;
 use crate::config::GameMode;
-use crate::data::{addr, AtariRom};
+use crate::data::AtariRom;
 
 pub use camera::{Camera, KICK_OFF_SCROLL_Y, VIEW_HEIGHT};
 pub use clock::Clock;
@@ -382,7 +383,7 @@ impl Match {
     fn on_knocked_down_ended(&mut self, p: PlayerId) {
         if self.players[p.0].attributes.health != 0 {
             let entity = &mut self.players[p.0].entity;
-            entity.script = addr::SCRIPT_PLAYER_ON_GROUND;
+            entity.script = self.rom.script(Script::PlayerOnGround);
             entity.script_index = 0;
             entity.flags.set_busy(false);
         } else {

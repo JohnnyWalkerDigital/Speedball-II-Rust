@@ -83,14 +83,28 @@ editing.
   name offsets, mapped through these tables.
 - `manager_screens.json`: the keypads and what each key does, the gym's
   buttons and armour, labels and the squad grid (`menu/manager/data.rs`).
+- `animations.json`: the animation scripts as named frame lists, and the
+  per-direction animations (`data/animations.rs`). In the original they are
+  one block of memory that entities point into, and an entity carries its
+  place over when its script changes, so it can read past a script's end.
+  The scripts are laid out in the same order, so a position in a script is
+  still a position in that block (unedited, the original address); a read
+  past the block reads the original memory.
+- `start.json`: every entity's and player's starting record and the match
+  roster (`game/start.rs`), with scripts, behaviours and sprite banks by
+  name. Entities are known by `EntityId` rather than their addresses.
 
 Each is checked when it loads. A test extracts a pack and checks every
 image, sheet, palette, string and table loads back identical to the
 originals.
 
-The match's own panel messages, its initial entity and roster records, the
-animation scripts and sound still come from the originals, so they are
-still needed. `/assets`
+`fingerprint_matches` (an ignored test) plays 22 whole matches and prints
+a hash of every frame drawn and sound requested; refactors are checked
+against its output from before, and `SPEEDBALL_PACK=<dir>` plays the same
+matches from a pack's tables.
+
+The match's own panel messages and sound still come from the originals, so
+they are still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should
 not be shared.
 

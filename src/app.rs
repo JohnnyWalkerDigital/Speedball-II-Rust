@@ -12,6 +12,7 @@ use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 use crate::config::{Config, Platform};
 use crate::content::{self, AmigaOriginals, ContentSource, Originals, Pack};
 use crate::data::amiga::{menu_ram, Overlays};
+use crate::data::animations::Animations;
 use crate::data::files::{
     read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
 };
@@ -21,6 +22,7 @@ use crate::data::{sounds, AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::game::roster::Teams;
+use crate::game::start::MatchStart;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::{Assets, Canvas};
 use crate::menu::flow::{self, Game, MenuContent};
@@ -129,6 +131,8 @@ fn amiga_menu_ram(amiga: &AmigaFiles) -> Result<(Overlays<'_>, MenuRam), Box<dyn
 struct Content {
     lookups: Lookups,
     teams: Teams,
+    animations: Animations,
+    start: MatchStart,
     matches: Assets,
     menus: Option<MenuContent>,
     intro: Option<IntroAssets>,
@@ -147,11 +151,15 @@ impl Content {
         };
         let lookups = source.lookups()?;
         let teams = source.teams()?;
+        let animations = source.animations()?.lay_out()?;
+        let start = source.match_start()?.resolve(&animations)?;
         let matches = source.match_graphics(config.platform)?;
         if !with_menus {
             return Ok(Self {
                 lookups,
                 teams,
+                animations,
+                start,
                 matches,
                 menus: None,
                 intro: None,
@@ -161,6 +169,8 @@ impl Content {
         Ok(Self {
             lookups,
             teams,
+            animations,
+            start,
             matches,
             menus: Some(MenuContent {
                 assets: source.menu_graphics()?,
@@ -195,6 +205,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut rom = loaded.rom;
     rom.set_lookups(content.lookups);
     rom.set_teams(content.teams);
+    rom.set_animations(content.animations, content.start);
     let renderer = MatchRenderer::new(content.matches, &rom);
     let rom = Rc::new(rom);
     match (menu_memory, loaded.amiga.as_ref(), content.menus) {

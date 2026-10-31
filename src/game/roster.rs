@@ -39,7 +39,8 @@ impl Skill {
 }
 
 /// The eight skills, each nominally 100..=250.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "[i32; 8]", into = "[i32; 8]")]
 pub struct Skills {
     pub agr: i32,
     pub att: i32,
@@ -49,6 +50,18 @@ pub struct Skills {
     pub pow: i32,
     pub sta: i32,
     pub int: i32,
+}
+
+impl From<[i32; 8]> for Skills {
+    fn from(values: [i32; 8]) -> Self {
+        Skills::from_array(values)
+    }
+}
+
+impl From<Skills> for [i32; 8] {
+    fn from(skills: Skills) -> Self {
+        skills.to_array()
+    }
 }
 
 impl Skills {
@@ -96,7 +109,7 @@ impl Skills {
 }
 
 /// An 11-byte attribute record.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attributes {
     pub health: i32,
     /// Direction the team attacks in: 0 (up) or 4 (down).
@@ -126,7 +139,8 @@ impl Attributes {
 }
 
 /// The attribute tables a person record can point into.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AttributesTable {
     Team1,
     Team2,
@@ -135,7 +149,7 @@ pub enum AttributesTable {
 }
 
 /// A pointer into one of the attribute tables.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttributesRef {
     pub table: AttributesTable,
     pub index: usize,
@@ -166,7 +180,7 @@ impl AttributesRef {
 }
 
 /// A squad member.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Person {
     pub attributes: AttributesRef,
     pub name: String,
@@ -279,7 +293,7 @@ impl Team {
 }
 
 /// Every attribute table and person record a match can touch.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Roster {
     pub attributes_team1: Vec<Attributes>,
     pub attributes_team2: Vec<Attributes>,

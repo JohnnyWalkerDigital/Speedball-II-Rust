@@ -4,7 +4,7 @@ use super::events::Sound;
 use super::geometry::{Point, Side};
 use super::player::PlayerId;
 use super::state::{EntityRef, Match};
-use crate::data::addr;
+use crate::data::animations::Script;
 
 /// The token currently in effect, if any.
 #[derive(Clone, Copy, Debug, Default)]
@@ -137,7 +137,7 @@ impl Match {
 
     fn give_ball_to(&mut self, p: PlayerId) {
         self.holder = Some(EntityRef::Player(p));
-        self.props.ball.script = addr::SCRIPT_BALL_HELD;
+        self.props.ball.script = self.rom.script(Script::BallHeld);
         self.props.ball.script_index = 0;
         self.ball_in_multiplier = false;
     }

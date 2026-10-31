@@ -4,10 +4,12 @@
 use super::{ContentError, ContentSource};
 use crate::config::Platform;
 use crate::data::amiga::Overlays;
+use crate::data::animations::AnimationTable;
 use crate::data::files::AmigaFiles;
 use crate::data::lookups::Lookups;
 use crate::data::AtariRom;
 use crate::game::roster::Teams;
+use crate::game::start::StartTable;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
 use crate::menu::intro::{IntroGraphics, IntroText};
@@ -74,6 +76,14 @@ impl ContentSource for Originals<'_> {
 
     fn teams(&self) -> Result<Teams, ContentError> {
         Ok(Teams::read(self.rom))
+    }
+
+    fn animations(&self) -> Result<AnimationTable, ContentError> {
+        Ok(AnimationTable::read(self.rom))
+    }
+
+    fn match_start(&self) -> Result<StartTable, ContentError> {
+        Ok(self.rom.start().table(self.rom.animations()))
     }
 
     fn menu_tables(&self) -> Result<MenuTables, ContentError> {

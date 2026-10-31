@@ -78,6 +78,18 @@ Rules:
     prices and the results of matches you are not in.
   - manager_screens.json: the manager screens' keypads (where each key is
     and what it does), the gym's buttons and armour, and their labels.
+  - animations.json: the match's animation scripts, each a list of sprite
+    numbers shown a frame each, with control words: 'loop' (start again),
+    'hold' (stay on the last sprite), 'end_action', 'end_fall', 'hide'.
+    Each per-direction animation names its script for each direction (0
+    up, then clockwise). Scripts are laid out in the order listed, and an
+    entity carries its place in a script over when its script changes, as
+    in the original: keep scripts the same length unless you mean to
+    change that.
+  - start.json: what every match starts from: each entity's record (the
+    ball, the pitch's furniture, items), each player's (where they stand
+    at kick-off, the zone they patrol), and the roster. Scripts are named
+    as in animations.json.
   Skills are always in this order: aggression, attack, defence, speed,
   throwing, power, stamina, intelligence. Tables must keep their sizes.
 

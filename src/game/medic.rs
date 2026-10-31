@@ -6,7 +6,7 @@ use super::player::{count, PlayerId};
 use super::roster::PersonRef;
 use super::state::{EntityRef, Match, PITCH_CENTER};
 use super::text::TextId;
-use crate::data::addr;
+use crate::data::animations::{Animation, Script};
 
 /// Medic 0 carries the front of the stretcher, medic 1 the back.
 const FRONT: usize = 0;
@@ -49,7 +49,7 @@ impl Match {
         *self.controlled.get_mut(side) = p;
 
         let entity = &mut self.players[p.0].entity;
-        entity.script = addr::SCRIPT_PLAYER_ON_GROUND;
+        entity.script = self.rom.script(Script::PlayerOnGround);
         entity.script_index = 0;
         let mut pos = Point::new(entity.pos.x & 0xFFFE, entity.pos.y & 0xFFFE);
         pos.x = pos.x.clamp(48, 592);
@@ -115,7 +115,7 @@ impl Match {
             return false;
         }
         rear.dir = rom.dir_from_bits(bits);
-        rear.set_animation(&rom, addr::ANIM_MEDIC_WALK, MEDIC_SPEED);
+        rear.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
         if restart_animation {
             rear.script_index = 0;
         }
@@ -137,7 +137,7 @@ impl Match {
             front.velocity = Point::ZERO;
         } else {
             front.dir = dir;
-            front.set_animation(&rom, addr::ANIM_MEDIC_WALK, MEDIC_SPEED);
+            front.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
             front.script_index = 0;
         }
     }
@@ -175,9 +175,9 @@ impl Match {
         self.props.medics[REAR].velocity.y = 0;
         self.injury.front_medic_offset.y = self.injury.rear_medic_target.y;
         let (speed, script, exit_x) = if self.players[injured.0].entity.pos.x <= 320 {
-            (MEDIC_SPEED, addr::SCRIPT_MEDIC_CARRY_RIGHT, 592)
+            (MEDIC_SPEED, self.rom.script(Script::MedicCarryRight), 592)
         } else {
-            (-MEDIC_SPEED, addr::SCRIPT_MEDIC_CARRY_LEFT, 48)
+            (-MEDIC_SPEED, self.rom.script(Script::MedicCarryLeft), 48)
         };
         self.players[injured.0].entity.velocity.x = speed;
         let rear = &mut self.props.medics[REAR];
@@ -197,7 +197,7 @@ impl Match {
                 .dir_from_bits(front.dir_bits_towards_exact(target))
                 .max(0);
             front.dir = dir;
-            front.set_animation(&rom, addr::ANIM_MEDIC_WALK, MEDIC_SPEED);
+            front.set_animation(&rom, Animation::MedicWalk, MEDIC_SPEED);
             return;
         }
         // The original reads the seed without advancing it, so this does not
@@ -205,12 +205,19 @@ impl Match {
         if self.rng.high_byte() & (1 << 5) != 0 {
             self.play_sound(Sound::ICE_CREAM);
         }
-        self.players[injured.0].entity.script = addr::SCRIPT_PLAYER_CARRIED;
-        let rear_walks_left = self.props.medics[REAR].script == addr::SCRIPT_MEDIC_CARRY_LEFT;
+        self.players[injured.0].entity.script = self.rom.script(Script::PlayerCarried);
+        let rear_walks_left =
+            self.props.medics[REAR].script == self.rom.script(Script::MedicCarryLeft);
         let (front_script, rear_script) = if rear_walks_left {
-            (addr::SCRIPT_MEDIC_LIFT_B, addr::SCRIPT_MEDIC_LIFT_A)
+            (
+                self.rom.script(Script::MedicLiftB),
+                self.rom.script(Script::MedicLiftA),
+            )
         } else {
-            (addr::SCRIPT_MEDIC_LIFT_A, addr::SCRIPT_MEDIC_LIFT_B)
+            (
+                self.rom.script(Script::MedicLiftA),
+                self.rom.script(Script::MedicLiftB),
+            )
         };
         self.props.medics[FRONT].script = front_script;
         self.props.medics[REAR].script = rear_script;

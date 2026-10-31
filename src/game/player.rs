@@ -75,8 +75,6 @@ pub struct Player {
 }
 
 impl Player {
-    pub const SIZE: i32 = 0x72;
-
     pub fn read(rom: &AtariRom, address: i32, index: usize) -> Self {
         let p = address + Entity::SIZE;
         let point = |offset: i32| Point::new(rom.u16(p + offset), rom.u16(p + offset + 2));

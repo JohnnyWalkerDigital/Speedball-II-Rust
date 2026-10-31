@@ -2,8 +2,8 @@
 //! handles the logic uses to refer to any entity.
 
 use super::Match;
-use crate::data::{addr, AtariRom};
-use crate::game::entity::Entity;
+use crate::data::AtariRom;
+use crate::game::entity::{Entity, EntityId};
 use crate::game::player::PlayerId;
 
 /// A handle to any entity the logic needs to refer to indirectly.
@@ -38,18 +38,18 @@ pub struct Props {
 
 impl Props {
     pub(super) fn read(rom: &AtariRom) -> Self {
-        let read = |address| Entity::read(rom, address);
+        let read = |id| rom.start().entity(id);
         Self {
-            ball: read(addr::BALL),
-            big_ball: read(addr::BIG_BALL),
-            terrain_center: read(addr::TERRAIN_CENTER),
-            launcher: read(addr::LAUNCHER),
-            goal_indicators: addr::GOAL_INDICATORS.map(read),
-            player_indicators: addr::PLAYER_INDICATORS.map(read),
-            medics: addr::MEDICS.map(read),
-            coins: addr::COINS.map(read),
-            tokens: addr::TOKENS.map(read),
-            equipment: read(addr::EQUIPMENT),
+            ball: read(EntityId::Ball),
+            big_ball: read(EntityId::BigBall),
+            terrain_center: read(EntityId::TerrainCenter),
+            launcher: read(EntityId::Launcher),
+            goal_indicators: [0, 1].map(|i| read(EntityId::GoalIndicator(i))),
+            player_indicators: [0, 1].map(|i| read(EntityId::PlayerIndicator(i))),
+            medics: [0, 1].map(|i| read(EntityId::Medic(i))),
+            coins: [0, 1, 2, 3].map(|i| read(EntityId::Coin(i))),
+            tokens: [0, 1].map(|i| read(EntityId::Token(i))),
+            equipment: read(EntityId::Equipment),
         }
     }
 }

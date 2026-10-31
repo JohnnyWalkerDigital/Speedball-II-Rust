@@ -5,9 +5,9 @@
 //! its goal replays store sprites by bank and index, so saving and showing
 //! replays needs the Amiga's numbering.
 
-use super::entity::{Entity, Flags, Think};
+use super::entity::{Entity, EntityId, Flags, Gfx, Think};
 use super::geometry::Point;
-use crate::data::addr;
+use crate::data::animations::ScriptRef;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bank {
@@ -47,14 +47,14 @@ pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
     if e.is_electrobounce() {
         return sprite(
             Bank::Launcher,
-            i32::from(e.address != addr::ELECTROBOUNCES[0]),
+            i32::from(e.id != EntityId::Electrobounce(0)),
         );
     }
-    if addr::BOUNCE_DOMES.contains(&e.address) && e.sprite != DOME_HIT_FRAME {
+    if matches!(e.id, EntityId::BounceDome(_)) && e.sprite != DOME_HIT_FRAME {
         return None;
     }
     match e.gfx {
-        addr::GFX_ENTITIES => {
+        Gfx::Entities => {
             let mut index = e.sprite;
             if e.is_ball() && e.is_charged() {
                 index += 11;
@@ -64,7 +64,7 @@ pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
             }
             sprite(Bank::Entities, index)
         }
-        addr::GFX_PLAYERS => {
+        Gfx::Players => {
             let mut index = e.sprite;
             if index >= FIRST_SHIFTED_FRAME {
                 index += 1;
@@ -75,7 +75,7 @@ pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
                 i => sprite(Bank::Players, i),
             }
         }
-        addr::GFX_BIG_BALL => sprite(Bank::BigBall, e.sprite),
+        Gfx::BigBall => sprite(Bank::BigBall, e.sprite),
         _ => None,
     }
 }
@@ -86,41 +86,34 @@ pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
 /// players' bank.
 pub fn entity_for(sprite: AmigaSprite, team1: bool, top_left: Point, size: i32) -> Entity {
     let index = sprite.index;
-    let (address, gfx, st_index) = match sprite.bank {
+    let (id, gfx, st_index) = match sprite.bank {
         Bank::Entities => {
             let st_index = if index >= UNUSED_TOKEN {
                 index + 1
             } else {
                 index
             };
-            (0, addr::GFX_ENTITIES, st_index)
+            (EntityId::Unattached, Gfx::Entities, st_index)
         }
         Bank::Players => {
-            let first = if team1 {
-                addr::PLAYERS_TEAM1
-            } else {
-                addr::PLAYERS_TEAM2
-            };
-            (first, addr::GFX_PLAYERS, index)
+            // Each team's first player.
+            let first = if team1 { 0 } else { 9 };
+            (EntityId::Player(first), Gfx::Players, index)
         }
-        Bank::BigBall => (addr::BIG_BALL, addr::GFX_BIG_BALL, index),
+        Bank::BigBall => (EntityId::BigBall, Gfx::BigBall, index),
         Bank::Launcher => match index {
-            0 | 1 => (addr::ELECTROBOUNCES[index as usize], addr::GFX_PLAYERS, 0),
-            2 => (addr::BOUNCE_DOMES[0], addr::GFX_PLAYERS, DOME_HIT_FRAME),
-            _ => (
-                addr::LAUNCHER,
-                addr::GFX_PLAYERS,
-                LAUNCHER_FIRST + index - 1,
-            ),
+            0 | 1 => (EntityId::Electrobounce(index as u8), Gfx::Players, 0),
+            2 => (EntityId::BounceDome(0), Gfx::Players, DOME_HIT_FRAME),
+            _ => (EntityId::Launcher, Gfx::Players, LAUNCHER_FIRST + index - 1),
         },
     };
     let mut flags = Flags::default();
     flags.set_bit3(team1);
     Entity {
-        address,
+        id,
         gfx,
         think: Think::Idle,
-        script: 0,
+        script: ScriptRef(0),
         width: size,
         height: size,
         pos: top_left,

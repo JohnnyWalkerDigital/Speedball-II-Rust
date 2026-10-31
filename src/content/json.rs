@@ -31,21 +31,35 @@ pub fn to_string<T: Serialize>(value: &T) -> String {
     out
 }
 
-/// Where the array starting `text` ends, if it holds only numbers (or
-/// lists of them: deeper lists are laid out a row to a line).
+/// Where the array starting `text` ends, if it holds numbers, perhaps
+/// with a few words among them (deeper lists are laid out a row to a
+/// line, and lists of only words an item to a line).
 fn numeric_array_end(text: &str) -> Option<usize> {
     let mut depth = 0;
-    for (i, c) in text.char_indices() {
+    let mut numbers = false;
+    let mut chars = text.char_indices();
+    while let Some((i, c)) = chars.next() {
         match c {
             '[' if depth == 2 => return None,
             '[' => depth += 1,
             ']' => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(i + 1);
+                    return numbers.then_some(i + 1);
                 }
             }
-            '0'..='9' | '-' | '+' | '.' | 'e' | 'E' | ',' => {}
+            '"' => {
+                let mut escaped = false;
+                for (_, c) in chars.by_ref() {
+                    match c {
+                        '"' if !escaped => break,
+                        '\\' => escaped = !escaped,
+                        _ => escaped = false,
+                    }
+                }
+            }
+            '0'..='9' => numbers = true,
+            '-' | '+' | '.' | 'e' | 'E' | ',' => {}
             c if c.is_whitespace() => {}
             _ => return None,
         }
@@ -118,12 +132,14 @@ mod tests {
             "grid": [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
             "many": (0..60).collect::<Vec<_>>(),
             "lines": ["a", "b"],
+            "frames": [1, 2, "loop"],
             "empty": [],
             "quoted": "a \"[1, 2]\" b \\",
         });
         let text = to_string(&value);
         assert!(text.contains("\"pairs\": [[1, -2], [3, 4]]"), "{text}");
         assert!(text.contains("\"lines\": [\n"), "{text}");
+        assert!(text.contains("\"frames\": [1, 2, \"loop\"]"), "{text}");
         assert!(
             text.contains("\"grid\": [\n    [[1, 2], [3, 4]],"),
             "{text}"

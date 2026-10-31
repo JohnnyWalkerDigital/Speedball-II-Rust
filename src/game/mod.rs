@@ -24,6 +24,7 @@ pub mod scene;
 pub mod setup;
 pub mod sprites;
 pub mod squad;
+pub mod start;
 pub mod state;
 pub mod statistics;
 pub mod text;

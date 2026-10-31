@@ -1,11 +1,13 @@
 //! Pitch furniture: wall stars, score-multiplier ramps, bounce domes and
 //! electrobounces.
 
-use super::entity::{Entity, Think};
+use super::entity::{Entity, EntityId, Think};
 use super::events::Sound;
 use super::geometry::{PerTeam, Point, Side};
 use super::state::Match;
-use crate::data::{addr, AtariRom};
+use crate::data::animations::Script;
+use crate::data::lookups::MultiplierPath;
+use crate::data::AtariRom;
 
 pub struct Arena {
     pub stars: Stars,
@@ -19,7 +21,7 @@ impl Arena {
         Self {
             stars: Stars::default(),
             multipliers: ScoreMultipliers::new(rom),
-            domes: addr::BOUNCE_DOMES.map(|a| Entity::read(rom, a)),
+            domes: [0, 1].map(|i| rom.start().entity(EntityId::BounceDome(i))),
             electrobounces: Electrobounces::new(rom),
         }
     }
@@ -125,7 +127,8 @@ fn bump_magnitude(value: &mut i32, delta: i32) {
 /// the opponent's multiplier, then raises your own (x1.5, then x2).
 pub struct ScoreMultipliers {
     level: PerTeam<i32>,
-    path: i32,
+    /// The ball's way through the ramp it is in.
+    path: MultiplierPath,
     step: i32,
     origin: Point,
     /// Indicator lights: team 1 pair at 0 and 2, team 2 pair at 1 and 3.
@@ -139,14 +142,14 @@ impl ScoreMultipliers {
     fn new(rom: &AtariRom) -> Self {
         let sprites = [41, 39, 37, 35];
         let lights = std::array::from_fn(|i| {
-            let mut light = Entity::read(rom, addr::SCORE_MULTIPLIERS[i]);
+            let mut light = rom.start().entity(EntityId::ScoreMultiplier(i as u8));
             light.sprite = sprites[i];
             light.flags.set_invisible(true);
             light
         });
         Self {
             level: PerTeam::default(),
-            path: 0,
+            path: MultiplierPath::LeftUp,
             step: 0,
             origin: Point::ZERO,
             lights,
@@ -217,7 +220,7 @@ pub struct Electrobounces {
 impl Electrobounces {
     fn new(rom: &AtariRom) -> Self {
         let pads = std::array::from_fn(|i| {
-            let mut pad = Entity::read(rom, addr::ELECTROBOUNCES[i]);
+            let mut pad = rom.start().entity(EntityId::Electrobounce(i as u8));
             pad.flags.set_invisible(true);
             pad.width = 32;
             pad.height = 32;
@@ -300,16 +303,16 @@ impl Match {
         let heading_straight = ball.dir == 0 || ball.dir == 4;
         let (left, top, bottom, entrance_ok, path, origin_x) = if ball.pos.x < 64 {
             let path = if ball.dir == 4 {
-                addr::MULTIPLIER_PATH_LEFT_DOWN
+                MultiplierPath::LeftDown
             } else {
-                addr::MULTIPLIER_PATH_LEFT_UP
+                MultiplierPath::LeftUp
             };
             (true, 576, 640, ball.pos.x >= 48, path, 0)
         } else if ball.pos.x > 576 {
             let path = if ball.dir == 4 {
-                addr::MULTIPLIER_PATH_RIGHT_DOWN
+                MultiplierPath::RightDown
             } else {
-                addr::MULTIPLIER_PATH_RIGHT_UP
+                MultiplierPath::RightUp
             };
             (false, 512, 576, ball.pos.x <= 592, path, 640)
         } else {
@@ -324,7 +327,7 @@ impl Match {
             multipliers.step = 0;
             multipliers.origin = Point::new(origin_x, top);
             self.ball_in_multiplier = true;
-            self.props.ball.script = addr::SCRIPT_BALL_IN_MULTIPLIER;
+            self.props.ball.script = self.rom.script(Script::BallInMultiplier);
             self.props.ball.script_index = 0;
         } else {
             self.bounce_off_multiplier(left, top, bottom);
@@ -362,7 +365,7 @@ impl Match {
             self.set_ball_speed_from_throw(self.thrower_skill_thr());
             self.ball_in_multiplier = false;
             let ball = &mut self.props.ball;
-            ball.script = addr::SCRIPT_BALL_HELD;
+            ball.script = self.rom.script(Script::BallHeld);
             ball.script_index = 0;
             ball.velocity.y = if ball.velocity.y >= 0 { 8 } else { -8 };
             return;

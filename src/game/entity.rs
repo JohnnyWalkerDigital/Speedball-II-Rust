@@ -2,6 +2,7 @@
 //! furniture.
 
 use super::geometry::{bit_accessors, DirBits, Point};
+use crate::data::animations::{Animation, ScriptRef};
 use crate::data::{addr, AtariRom};
 
 /// What an entity does each frame. In the original this is a code pointer;
@@ -59,6 +60,91 @@ impl Think {
     }
 }
 
+/// Which entity a record is: the original told them apart by their
+/// addresses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EntityId {
+    Ball,
+    Launcher,
+    BigBall,
+    Coin(u8),
+    Token(u8),
+    Equipment,
+    GoalIndicator(u8),
+    PlayerIndicator(u8),
+    StatusLed,
+    ScoreMultiplier(u8),
+    BounceDome(u8),
+    Electrobounce(u8),
+    /// Team 1's players are 0 to 8, team 2's 9 to 17.
+    Player(u8),
+    Medic(u8),
+    TerrainCenter,
+    /// A sprite read back from a replay, belonging to no entity.
+    Unattached,
+}
+
+/// The size of a player's record, after which the next one starts.
+pub(crate) const PLAYER_RECORD: i32 = 0x72;
+
+impl EntityId {
+    /// The entity whose record starts at `address`.
+    pub fn at(address: i32) -> Self {
+        let index = |list: &[i32]| list.iter().position(|&a| a == address).map(|i| i as u8);
+        let player = |first: i32| {
+            let offset = address - first;
+            (offset >= 0 && offset % PLAYER_RECORD == 0 && offset / PLAYER_RECORD < 9)
+                .then_some((offset / PLAYER_RECORD) as u8)
+        };
+        match address {
+            addr::BALL => EntityId::Ball,
+            addr::LAUNCHER => EntityId::Launcher,
+            addr::BIG_BALL => EntityId::BigBall,
+            addr::EQUIPMENT => EntityId::Equipment,
+            addr::STATUS_LED => EntityId::StatusLed,
+            addr::TERRAIN_CENTER => EntityId::TerrainCenter,
+            _ => None
+                .or(index(&addr::COINS).map(EntityId::Coin))
+                .or(index(&addr::TOKENS).map(EntityId::Token))
+                .or(index(&addr::GOAL_INDICATORS).map(EntityId::GoalIndicator))
+                .or(index(&addr::PLAYER_INDICATORS).map(EntityId::PlayerIndicator))
+                .or(index(&addr::SCORE_MULTIPLIERS).map(EntityId::ScoreMultiplier))
+                .or(index(&addr::BOUNCE_DOMES).map(EntityId::BounceDome))
+                .or(index(&addr::ELECTROBOUNCES).map(EntityId::Electrobounce))
+                .or(index(&addr::MEDICS).map(EntityId::Medic))
+                .or(player(addr::PLAYERS_TEAM1).map(EntityId::Player))
+                .or(player(addr::PLAYERS_TEAM2).map(|i| EntityId::Player(i + 9)))
+                .unwrap_or_else(|| panic!("no entity record at {address:#X}")),
+        }
+    }
+}
+
+/// Which sprites an entity is drawn from (a graphics pointer in the
+/// original).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gfx {
+    /// The ball, items and indicators (16x16).
+    Entities,
+    /// Players and medics, and on the ST the launcher and domes (32x32).
+    Players,
+    BigBall,
+    Pitch,
+    /// A pointer this port does not know about: drawn as nothing.
+    Unknown(u32),
+}
+
+impl Gfx {
+    pub fn from_pointer(pointer: u32) -> Self {
+        match pointer {
+            addr::GFX_ENTITIES => Gfx::Entities,
+            addr::GFX_PLAYERS => Gfx::Players,
+            addr::GFX_BIG_BALL => Gfx::BigBall,
+            addr::GFX_PITCH => Gfx::Pitch,
+            other => Gfx::Unknown(other),
+        }
+    }
+}
+
 /// The entity's flag byte.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Flags(u8);
@@ -76,6 +162,14 @@ impl Flags {
         tackling / set_tackling = 1 << 5;
         offscreen / set_offscreen = 1 << 6;
         invisible / set_invisible = 1 << 7;
+    }
+
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub fn from_bits(bits: u8) -> Self {
+        Self(bits)
     }
 
     /// Clears the "doing an action" flags (jumping, throwing, falling, tackling).
@@ -99,12 +193,11 @@ pub enum ScriptEvent {
 
 #[derive(Clone, Debug)]
 pub struct Entity {
-    /// Original RAM address; identifies the entity's role.
-    pub address: i32,
-    pub gfx: u32,
+    pub id: EntityId,
+    pub gfx: Gfx,
     pub think: Think,
-    /// RAM address of the current animation script.
-    pub script: i32,
+    /// The current animation script.
+    pub script: ScriptRef,
     pub width: i32,
     pub height: i32,
     pub pos: Point,
@@ -124,11 +217,11 @@ impl Entity {
 
     pub fn read(rom: &AtariRom, address: i32) -> Self {
         Self {
-            address,
-            gfx: rom.u32(address) as u32,
+            id: EntityId::at(address),
+            gfx: Gfx::from_pointer(rom.u32(address) as u32),
             // +4 holds a draw routine pointer the port does not need.
             think: Think::from_address(rom.u32(address + 8)),
-            script: rom.u32(address + 12),
+            script: ScriptRef(rom.u32(address + 12)),
             width: rom.u16(address + 16),
             height: rom.u16(address + 18),
             pos: Point::new(rom.u16(address + 20), rom.u16(address + 22)),
@@ -145,15 +238,15 @@ impl Entity {
     // -- Role -----------------------------------------------------------------
 
     pub fn is_ball(&self) -> bool {
-        self.address == addr::BALL
+        self.id == EntityId::Ball
     }
 
     pub fn is_player_or_medic(&self) -> bool {
-        (addr::PLAYERS_TEAM1..addr::MEDICS_END).contains(&self.address)
+        matches!(self.id, EntityId::Player(_) | EntityId::Medic(_))
     }
 
     pub fn is_electrobounce(&self) -> bool {
-        (addr::ELECTROBOUNCES[0]..addr::PLAYERS_TEAM1).contains(&self.address)
+        matches!(self.id, EntityId::Electrobounce(_))
     }
 
     /// Players: which team. (Shares bit 3 with `is_charged`.)
@@ -223,11 +316,12 @@ impl Entity {
 
     /// Selects the script for the current direction from a per-direction
     /// list and sets the matching velocity (`sub_F5A8`).
-    pub fn set_animation(&mut self, rom: &AtariRom, list: i32, speed: i32) {
-        self.script = rom.script_for_dir(list, self.dir);
+    pub fn set_animation(&mut self, rom: &AtariRom, animation: Animation, speed: i32) {
+        self.script = rom.script_for_dir(animation, self.dir);
         debug_assert_ne!(
-            self.script, 0,
-            "no script for dir {} in {list:#X}",
+            self.script,
+            ScriptRef(0),
+            "no script for dir {} in {animation:?}",
             self.dir
         );
         self.velocity = rom.velocity(self.dir, speed);
