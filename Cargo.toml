@@ -11,7 +11,10 @@ path = "src/main.rs"
 
 [dependencies]
 minifb = "0.29.0"
+png = "0.17"
 rodio = { version = "0.19", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.dev]
 # The engine decodes ~1 MB of bitplanes at startup; keep debug builds snappy.

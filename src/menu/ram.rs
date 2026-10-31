@@ -132,8 +132,6 @@ pub mod addr {
     // The manager screens' graphics.
     pub const PALETTE_MANAGEMENT_A: usize = 0x132;
     pub const SPRITES_MGMT_BACKGROUND: usize = 0x3D744;
-    pub const MANAGER_TRANSFER_TILE_MAP: usize = 0x5DE20;
-    pub const GYM_TILE_MAP: usize = 0x5DD1C;
     pub const SPRITES_PLAYER_FACES: usize = 0x531FC;
     pub const SPRITES_GROUP_LOGO: usize = 0x5B8FC;
     pub const SPRITES_MGMT_LIGHTS: usize = 0x47B7C;

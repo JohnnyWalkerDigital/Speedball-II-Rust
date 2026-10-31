@@ -26,6 +26,18 @@ impl IndexedImage {
         }
     }
 
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    pub fn pixels(&self) -> &[u8] {
+        &self.pixels
+    }
+
     pub fn pixel(&self, x: usize, y: usize) -> u8 {
         self.pixels[y * self.width + x]
     }

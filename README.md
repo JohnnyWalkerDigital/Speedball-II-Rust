@@ -36,6 +36,33 @@ Options (`--help` lists them all): `--atari`/`--amiga` (match graphics),
 With `--mode knockout`, both teams are computer controlled until you touch a
 team's controls, as in the C# port.
 
+## Asset packs
+
+The graphics can be extracted from your originals into a folder of PNG
+files, edited, and played with:
+
+```bash
+cargo run --release -- --extract assets
+```
+
+```bash
+cargo run --release -- --assets assets
+```
+
+`content/` is the seam: everything that draws asks a `GraphicsSource`,
+which is either `Originals` (decoding the disk images and dumps as before)
+or a `Pack`. A pack holds the match graphics for both platforms as RGBA
+PNGs (pitch, tiles, sprites, panels, fonts, status bar), and the menu and
+intro pictures, fonts and manager-screen sheets as indexed PNGs, since
+the menus fade by palette. `pack.json` lists each sprite sheet's cell
+size and count and holds the palettes; the pack's `README.txt` explains
+the rules for editing. A test extracts a pack and checks every image,
+sheet and palette loads back identical to the originals.
+
+Text, tables and sound still come from the originals, so they are still
+needed. `/assets` is in `.gitignore`: an extracted pack is the game's own
+art, so it should not be shared.
+
 ## Menus
 
 `menu/` is a port of the Amiga front end (`main_menu` and the game-mode

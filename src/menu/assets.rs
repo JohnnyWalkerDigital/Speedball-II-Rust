@@ -7,6 +7,7 @@ use crate::graphics::ilbm::{self, IlbmError, Picture};
 use crate::graphics::indexed::{ColorWords, IndexedImage};
 use crate::graphics::planar::{decode_indexed_sprites, Layout, SpriteFormat};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MenuAssets {
     /// The steel "SB II" backdrop behind every menu (`splash_backdrop`).
     pub backdrop: Picture,
@@ -26,13 +27,12 @@ pub struct MenuAssets {
 }
 
 /// The manager, transfer and gym screens' graphics.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ManagerGraphics {
     /// `palette_management_a`.
     pub palette: ColorWords,
-    /// 16x16 tiles, and the 20x13 maps of them behind each screen.
+    /// 16x16 tiles for the screens' backgrounds.
     pub tiles: Vec<IndexedImage>,
-    pub manager_map: Vec<u8>,
-    pub gym_map: Vec<u8>,
     /// 16x16 pieces of the 48x48 faces, six faces to a row of 18.
     pub faces: Vec<IndexedImage>,
     /// 16x16 pieces of the group and team logos, five to a row of 15.
@@ -122,8 +122,6 @@ impl ManagerGraphics {
         Self {
             palette: std::array::from_fn(|i| bytes.u16_at(addr::PALETTE_MANAGEMENT_A + i * 2)),
             tiles: sheet(addr::SPRITES_MGMT_BACKGROUND, 173, 16, 5),
-            manager_map: ram.slice(addr::MANAGER_TRANSFER_TILE_MAP, 260).to_vec(),
-            gym_map: ram.slice(addr::GYM_TILE_MAP, 260).to_vec(),
             faces: sheet(addr::SPRITES_PLAYER_FACES, 270, 16, 4),
             logos: sheet(addr::SPRITES_GROUP_LOGO, 45, 16, 5),
             lights: sheet(addr::SPRITES_MGMT_LIGHTS, 16, 16, 5),

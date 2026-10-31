@@ -3,6 +3,7 @@
 use super::indexed::{ColorWords, IndexedImage};
 
 /// A decoded picture and its colour map.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Picture {
     pub image: IndexedImage,
     pub palette: ColorWords,

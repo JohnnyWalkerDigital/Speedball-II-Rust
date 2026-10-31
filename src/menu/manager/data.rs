@@ -32,6 +32,10 @@ mod addr {
     pub const STR_H_O: usize = 0x2817;
     pub const STR_P_R: usize = 0x2822;
     pub const STR_00000: usize = 0x2828;
+    pub const MANAGER_TRANSFER_TILE_MAP: usize = 0x5DE20;
+    pub const GYM_TILE_MAP: usize = 0x5DD1C;
+    /// 20x13 tiles.
+    pub const TILE_MAP_LENGTH: usize = 260;
 }
 
 /// What a key does (its function pointer in the original).
@@ -162,6 +166,10 @@ pub struct ManagerTables {
     pub title_transfer: Vec<u8>,
     pub title_gym: Vec<u8>,
     pub cash_template: Vec<u8>,
+    /// The 20x13 maps of background tiles behind the manager and transfer
+    /// screens, and the gym.
+    pub manager_map: Vec<u8>,
+    pub gym_map: Vec<u8>,
 }
 
 impl ManagerTables {
@@ -272,6 +280,12 @@ impl ManagerTables {
             title_transfer: string_bytes(addr::STR_H_O),
             title_gym: string_bytes(addr::STR_P_R),
             cash_template: string_bytes(addr::STR_00000),
+            manager_map: ram
+                .slice(addr::MANAGER_TRANSFER_TILE_MAP, addr::TILE_MAP_LENGTH)
+                .to_vec(),
+            gym_map: ram
+                .slice(addr::GYM_TILE_MAP, addr::TILE_MAP_LENGTH)
+                .to_vec(),
         }
     }
 }

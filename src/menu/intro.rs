@@ -63,25 +63,17 @@ const STEP_VBLANKS: u32 = 5;
 /// The title stays up until the 8-bit frame timer wraps from 1.
 const TITLE_VBLANKS: u32 = 255;
 
-pub struct IntroAssets {
-    title: Picture,
-    backdrop: Picture,
-    font: Vec<IndexedImage>,
-    presents: Vec<Vec<u8>>,
-    story: Vec<Vec<u8>>,
-    credits: Vec<Vec<u8>>,
-    loading_game: Vec<u8>,
+/// The intro's pictures and font.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntroGraphics {
+    pub title: Picture,
+    pub backdrop: Picture,
+    pub font: Vec<IndexedImage>,
 }
 
-impl IntroAssets {
+impl IntroGraphics {
+    /// Decodes them from the intro's RAM dump.
     pub fn load(dump: &[u8]) -> Result<Self, IlbmError> {
-        let string = |at: usize| -> Vec<u8> {
-            let end = dump[at..]
-                .iter()
-                .position(|&b| b == 0)
-                .map_or(dump.len(), |n| at + n);
-            dump[at..end].to_vec()
-        };
         let format = SpriteFormat {
             width: GLYPH_SIZE,
             height: GLYPH_SIZE,
@@ -89,8 +81,6 @@ impl IntroAssets {
             layout: Layout::AmigaPlanar,
         };
         let font_bytes = FONT_GLYPHS * format.bytes_per_sprite();
-        let mut presents: Vec<Vec<u8>> = addr::PRESENTS.into_iter().map(string).collect();
-        presents[0] = ORIGINAL_PRESENTS.to_vec();
         Ok(Self {
             title: ilbm::decode(&dump[addr::SPLASH_TITLE_SCREEN..])?,
             backdrop: ilbm::decode(&dump[addr::SPLASH_ARENA_BACKDROP..])?,
@@ -98,11 +88,38 @@ impl IntroAssets {
                 &dump[addr::SPRITES_TITLE_FONT..addr::SPRITES_TITLE_FONT + font_bytes],
                 format,
             ),
+        })
+    }
+}
+
+/// The intro's graphics and text.
+pub struct IntroAssets {
+    graphics: IntroGraphics,
+    presents: Vec<Vec<u8>>,
+    story: Vec<Vec<u8>>,
+    credits: Vec<Vec<u8>>,
+    loading_game: Vec<u8>,
+}
+
+impl IntroAssets {
+    /// The text from the intro's RAM dump, shown with `graphics`.
+    pub fn new(graphics: IntroGraphics, dump: &[u8]) -> Self {
+        let string = |at: usize| -> Vec<u8> {
+            let end = dump[at..]
+                .iter()
+                .position(|&b| b == 0)
+                .map_or(dump.len(), |n| at + n);
+            dump[at..end].to_vec()
+        };
+        let mut presents: Vec<Vec<u8>> = addr::PRESENTS.into_iter().map(string).collect();
+        presents[0] = ORIGINAL_PRESENTS.to_vec();
+        Self {
+            graphics,
             presents,
             story: addr::STORY.into_iter().map(string).collect(),
             credits: addr::CREDITS.into_iter().map(string).collect(),
             loading_game: string(addr::LOADING_GAME),
-        })
+        }
     }
 }
 
@@ -113,7 +130,7 @@ pub fn run(ui: &mut Ui, assets: &IntroAssets) -> Flow {
     let mut intro = Intro {
         ui,
         assets,
-        page: Page::blank(assets.backdrop.palette),
+        page: Page::blank(assets.graphics.backdrop.palette),
         presenting: true,
         skippable: true,
         fire_held: false,
@@ -148,7 +165,7 @@ impl Intro<'_, '_, '_> {
     fn presents(&mut self) -> Flow {
         let assets = self.assets;
         for (text, blinks) in assets.presents.iter().zip([13, 13]) {
-            self.page = Page::blank(assets.backdrop.palette);
+            self.page = Page::blank(assets.graphics.backdrop.palette);
             self.ui.transition(&self.page)?;
             let (x, y) = self.type_text(text)?;
             self.blink(x, y, blinks)?;
@@ -162,10 +179,10 @@ impl Intro<'_, '_, '_> {
     fn intro(&mut self) -> Flow<bool> {
         let assets = self.assets;
         self.ui
-            .transition_playing(&Page::picture(&assets.title), MUSIC)?;
+            .transition_playing(&Page::picture(&assets.graphics.title), MUSIC)?;
         self.wait(TITLE_VBLANKS)?;
         self.screens(&assets.story, 17)?;
-        self.ui.transition(&Page::picture(&assets.title))?;
+        self.ui.transition(&Page::picture(&assets.graphics.title))?;
         self.wait(TITLE_VBLANKS)?;
         self.screens(&assets.credits, 16)?;
         Ok(self.fire_held())
@@ -199,7 +216,7 @@ impl Intro<'_, '_, '_> {
 
     /// `draw_arena_backdrop`.
     fn backdrop(&mut self) -> Flow {
-        self.page = Page::picture(&self.assets.backdrop);
+        self.page = Page::picture(&self.assets.graphics.backdrop);
         self.ui.transition(&self.page)
     }
 
@@ -263,7 +280,7 @@ impl Intro<'_, '_, '_> {
 
     /// `display_title_font_char` with `mask_char_to_screen`.
     fn glyph(&mut self, index: usize, x: u8, y: u8) {
-        if let Some(image) = self.assets.font.get(index) {
+        if let Some(image) = self.assets.graphics.font.get(index) {
             let (px, py) = position(x, y);
             self.page.sprite(image, px, py);
             self.ui.show_page(&self.page);

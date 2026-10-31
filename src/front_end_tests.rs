@@ -950,12 +950,13 @@ fn f_speeds_up_a_team_managers_league_match() {
 #[test]
 fn the_intro_runs_until_fire_then_loads_the_game() {
     use crate::data::files::read_amiga_intro_dump;
-    use crate::menu::intro::{self, IntroAssets};
+    use crate::menu::intro::{self, IntroAssets, IntroGraphics};
     let Ok(dump) = read_amiga_intro_dump(&Config::default().data_dir) else {
         eprintln!("skipping: no intro dump");
         return;
     };
-    let assets = IntroAssets::load(&dump).expect("the intro pictures decode");
+    let graphics = IntroGraphics::load(&dump).expect("the intro pictures decode");
+    let assets = IntroAssets::new(graphics, &dump);
     let mut shot = 0;
     let mut host = ScriptedHost::new(300, |m| {
         let t = m.time.as_millis();

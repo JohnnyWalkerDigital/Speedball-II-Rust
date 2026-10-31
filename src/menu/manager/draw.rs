@@ -51,7 +51,7 @@ pub fn draw(scene: &Scene, view: &View) -> Page {
 
 /// `draw_manager_screen`.
 fn draw_manager(canvas: &mut Canvas, scene: &Scene, view: &View) {
-    canvas.background(&scene.graphics.manager_map);
+    canvas.background(&scene.tables.manager_map);
     attribute_labels(canvas, scene);
     keypad(canvas, scene, &scene.tables.manager_keypad, view);
     canvas.title(&scene.tables.title_manager, 0);
@@ -63,7 +63,7 @@ fn draw_manager(canvas: &mut Canvas, scene: &Scene, view: &View) {
 
 /// `draw_transfer_screen`.
 fn draw_transfer(canvas: &mut Canvas, scene: &Scene, view: &View) {
-    canvas.background(&scene.graphics.manager_map);
+    canvas.background(&scene.tables.manager_map);
     if scene.buyable_count > 0 {
         attribute_labels(canvas, scene);
     }
@@ -77,7 +77,7 @@ fn draw_transfer(canvas: &mut Canvas, scene: &Scene, view: &View) {
 
 /// `draw_gym_screen`, with the upgrade lights and armour model.
 fn draw_gym(canvas: &mut Canvas, scene: &Scene, view: &View) {
-    canvas.background(&scene.graphics.gym_map);
+    canvas.background(&scene.tables.gym_map);
     attribute_labels(canvas, scene);
     canvas.title(&scene.tables.title_gym, 0);
     upgrade_description(canvas, scene, view);

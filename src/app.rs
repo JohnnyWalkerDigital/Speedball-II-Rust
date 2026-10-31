@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
 use crate::config::{Config, Platform};
+use crate::content::{self, AmigaOriginals, GraphicsSource, Originals, Pack};
 use crate::data::amiga::{menu_ram, Overlays};
 use crate::data::files::{
     read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
@@ -23,7 +24,7 @@ use crate::graphics::{Assets, Canvas};
 use crate::menu::assets::MenuAssets;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
-use crate::menu::intro::{self, IntroAssets};
+use crate::menu::intro::{self, IntroAssets, IntroGraphics};
 use crate::menu::play::{run_match, Controls};
 use crate::menu::ram::MenuRam;
 use crate::menu::ui::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -79,26 +80,147 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let files = GameFiles::load(&config.data_dir, config.platform)?;
-    let rom = Rc::new(AtariRom::new(files.atari_disk));
-    let renderer = MatchRenderer::new(
-        Assets::load(&rom, files.amiga.as_ref(), config.platform),
-        &rom,
-    );
-    match config.mode {
-        Some(_) => play_one_match(&config, rom, renderer),
-        None => {
-            // The menus come from the Amiga version, whatever the graphics.
-            let amiga = match files.amiga {
-                Some(amiga) => amiga,
-                None => read_amiga_files(&config.data_dir).map_err(|e| {
+/// The originals the game needs, as loaded.
+struct Loaded {
+    rom: Rc<AtariRom>,
+    amiga: Option<AmigaFiles>,
+    intro_dump: Option<Vec<u8>>,
+}
+
+impl Loaded {
+    /// The ST disk always; the Amiga files for Amiga graphics, and for the
+    /// menus (unless `--mode` skips them).
+    fn load(config: &Config) -> Result<Self, Box<dyn Error>> {
+        let files = GameFiles::load(&config.data_dir, config.platform)?;
+        let amiga = match files.amiga {
+            Some(amiga) => Some(amiga),
+            None if config.mode.is_none() => {
+                Some(read_amiga_files(&config.data_dir).map_err(|e| {
                     format!("the menus need the Amiga files ({e}); use --mode to skip them")
-                })?,
-            };
-            play_with_menus(&config, rom, renderer, amiga)
-        }
+                })?)
+            }
+            None => None,
+        };
+        let intro_dump = if config.mode.is_none() {
+            read_amiga_intro_dump(&config.data_dir)
+                .map_err(|error| eprintln!("no intro: {error}"))
+                .ok()
+        } else {
+            None
+        };
+        Ok(Self {
+            rom: Rc::new(AtariRom::new(files.atari_disk)),
+            amiga,
+            intro_dump,
+        })
     }
+}
+
+/// The menus' memory, rebuilt from the Amiga disk and dump.
+fn amiga_menu_ram(amiga: &AmigaFiles) -> Result<(Overlays<'_>, MenuRam), Box<dyn Error>> {
+    let overlays = Overlays::new(&amiga.disk).ok_or("the Amiga disk has no overlay directory")?;
+    let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
+    Ok((overlays, ram))
+}
+
+/// The graphics a game needs, from the originals or `--assets`.
+struct Graphics {
+    matches: Assets,
+    menus: Option<MenuAssets>,
+    intro: Option<IntroGraphics>,
+}
+
+impl Graphics {
+    fn load(
+        config: &Config,
+        originals: &Originals,
+        with_menus: bool,
+    ) -> Result<Self, Box<dyn Error>> {
+        let pack = config.assets.as_deref().map(Pack::open).transpose()?;
+        let source: &dyn GraphicsSource = match &pack {
+            Some(pack) => pack,
+            None => originals,
+        };
+        Ok(Self {
+            matches: source.match_graphics(config.platform)?,
+            menus: with_menus.then(|| source.menu_graphics()).transpose()?,
+            intro: if with_menus {
+                source.intro_graphics()?
+            } else {
+                None
+            },
+        })
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let loaded = Loaded::load(&config)?;
+    let with_menus = config.mode.is_none();
+    let menu_memory = match (&loaded.amiga, with_menus) {
+        (Some(amiga), true) => Some(amiga_menu_ram(amiga)?),
+        _ => None,
+    };
+    let originals = Originals {
+        rom: &loaded.rom,
+        amiga: loaded.amiga.as_ref().zip(menu_memory.as_ref()).map(
+            |(files, (overlays, menu_ram))| AmigaOriginals {
+                files,
+                overlays,
+                menu_ram,
+            },
+        ),
+        intro_dump: loaded.intro_dump.as_deref(),
+    };
+    let graphics = Graphics::load(&config, &originals, with_menus)?;
+    let renderer = MatchRenderer::new(graphics.matches, &loaded.rom);
+    let rom = Rc::clone(&loaded.rom);
+    match (menu_memory, loaded.amiga.as_ref(), graphics.menus) {
+        (Some((_, ram)), Some(amiga), Some(menus)) => {
+            let intro = graphics.intro.zip(loaded.intro_dump);
+            play_with_menus(&config, rom, renderer, amiga, ram, menus, intro)
+        }
+        _ => play_one_match(&config, rom, renderer),
+    }
+}
+
+/// `--extract`: writes the graphics as an asset pack.
+pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
+    // Whatever originals there are: the Amiga ones are optional.
+    let files = GameFiles::load(&config.data_dir, Platform::Atari)?;
+    let rom = AtariRom::new(files.atari_disk);
+    let amiga = read_amiga_files(&config.data_dir)
+        .map_err(|error| eprintln!("no Amiga graphics or menus: {error}"))
+        .ok();
+    let menu_memory = amiga.as_ref().map(amiga_menu_ram).transpose()?;
+    let intro_dump = read_amiga_intro_dump(&config.data_dir)
+        .map_err(|error| eprintln!("no intro: {error}"))
+        .ok();
+    let originals = Originals {
+        rom: &rom,
+        amiga: amiga
+            .as_ref()
+            .zip(menu_memory.as_ref())
+            .map(|(files, (overlays, menu_ram))| AmigaOriginals {
+                files,
+                overlays,
+                menu_ram,
+            }),
+        intro_dump: intro_dump.as_deref(),
+    };
+    let extracted = content::extract(&originals, dir)?;
+    let platforms: Vec<_> = extracted
+        .platforms
+        .iter()
+        .map(|p| format!("{p:?}"))
+        .collect();
+    println!(
+        "Wrote an asset pack to {}: match graphics ({}){}{}. Play with it using --assets.",
+        dir.display(),
+        platforms.join(", "),
+        if extracted.menus { ", menus" } else { "" },
+        if extracted.intro { ", intro" } else { "" },
+    );
+    Ok(())
 }
 
 /// `--mode`: one match, as before the menus existed.
@@ -134,19 +256,15 @@ fn play_with_menus(
     config: &Config,
     rom: Rc<AtariRom>,
     renderer: MatchRenderer,
-    amiga: AmigaFiles,
+    amiga: &AmigaFiles,
+    ram: MenuRam,
+    menus: MenuAssets,
+    intro: Option<(IntroGraphics, Vec<u8>)>,
 ) -> Result<(), Box<dyn Error>> {
-    let overlays = Overlays::new(&amiga.disk).ok_or("the Amiga disk has no overlay directory")?;
-    let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
-    let assets = MenuAssets::load(&ram, &overlays)?;
-    let intro_dump = match read_amiga_intro_dump(&config.data_dir) {
-        Ok(dump) => Some(dump),
-        Err(error) => {
-            eprintln!("no intro: {error}");
-            None
-        }
+    let (intro, intro_dump) = match intro {
+        Some((graphics, dump)) => (Some(IntroAssets::new(graphics, &dump)), Some(dump)),
+        None => (None, None),
     };
-    let intro = intro_dump.as_deref().map(IntroAssets::load).transpose()?;
     let sound = SoundBanks::with_menus(config, &amiga.match_dump, ram.bytes(), intro_dump);
     let mut host = WindowHost::open(config.scale, WINDOW_TITLE, sound)?;
     let mut ui = Ui::new(&mut host);
@@ -156,7 +274,7 @@ fn play_with_menus(
         }
     }
     let save_disk = SaveDisk::new(&config.save_disk);
-    let mut game = Game::new(rom, ram, assets, renderer, save_disk, config.seed);
+    let mut game = Game::new(rom, ram, menus, renderer, save_disk, config.seed);
     flow::run(&mut ui, &mut game);
     Ok(())
 }

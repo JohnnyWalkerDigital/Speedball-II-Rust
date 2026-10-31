@@ -1,0 +1,180 @@
+//! Where the game's graphics come from: the original disks and memory
+//! dumps ([`Originals`]), or a [`Pack`] of ordinary image files extracted
+//! from them, which can be edited.
+//!
+//! Everything that draws asks a [`GraphicsSource`], so it does not matter
+//! which. Text, tables and sound still come from the originals.
+
+mod graphics;
+mod originals;
+mod pack;
+mod png_files;
+
+use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
+
+use crate::config::Platform;
+use crate::graphics::ilbm::IlbmError;
+use crate::graphics::Assets;
+use crate::menu::assets::MenuAssets;
+use crate::menu::intro::IntroGraphics;
+
+pub use originals::{AmigaOriginals, Originals};
+pub use pack::Pack;
+
+/// Supplies decoded graphics.
+pub trait GraphicsSource {
+    /// Everything a match draws, in one platform's style.
+    fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError>;
+    /// The menus' pictures, fonts and manager screens.
+    fn menu_graphics(&self) -> Result<MenuAssets, ContentError>;
+    /// The intro's pictures and font, if there is an intro.
+    fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError>;
+}
+
+#[derive(Debug)]
+pub enum ContentError {
+    Io {
+        path: PathBuf,
+        source: io::Error,
+    },
+    Png {
+        path: PathBuf,
+        message: String,
+    },
+    Manifest(String),
+    Missing(String),
+    Picture(IlbmError),
+    /// The originals needed are not there (the Amiga files).
+    Unavailable(&'static str),
+}
+
+impl ContentError {
+    pub(crate) fn io(path: &Path, source: io::Error) -> Self {
+        ContentError::Io {
+            path: path.to_owned(),
+            source,
+        }
+    }
+
+    pub(crate) fn png(path: &Path, message: String) -> Self {
+        ContentError::Png {
+            path: path.to_owned(),
+            message,
+        }
+    }
+}
+
+impl fmt::Display for ContentError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ContentError::Io { path, source } => write!(f, "{}: {source}", path.display()),
+            ContentError::Png { path, message } => write!(f, "{}: {message}", path.display()),
+            ContentError::Manifest(message) => write!(f, "{message}"),
+            ContentError::Missing(what) => write!(f, "missing {what}"),
+            ContentError::Picture(error) => write!(f, "{error}"),
+            ContentError::Unavailable(what) => write!(f, "needs {what}"),
+        }
+    }
+}
+
+impl std::error::Error for ContentError {}
+
+impl From<IlbmError> for ContentError {
+    fn from(error: IlbmError) -> Self {
+        ContentError::Picture(error)
+    }
+}
+
+/// What [`extract`] wrote.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Extracted {
+    pub platforms: Vec<Platform>,
+    pub menus: bool,
+    pub intro: bool,
+}
+
+/// Writes everything `source` has into a pack at `dir`. Parts whose
+/// originals are missing are left out.
+pub fn extract(source: &dyn GraphicsSource, dir: &Path) -> Result<Extracted, ContentError> {
+    let mut writer = pack::PackWriter::new(dir);
+    let mut extracted = Extracted::default();
+    for platform in [Platform::Amiga, Platform::Atari] {
+        match source.match_graphics(platform) {
+            Ok(assets) => {
+                graphics::write_match(&mut writer, &assets)?;
+                extracted.platforms.push(platform);
+            }
+            Err(ContentError::Unavailable(_)) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    match source.menu_graphics() {
+        Ok(menus) => {
+            graphics::write_menus(&mut writer, &menus)?;
+            extracted.menus = true;
+        }
+        Err(ContentError::Unavailable(_)) => {}
+        Err(error) => return Err(error),
+    }
+    if let Some(intro) = source.intro_graphics()? {
+        graphics::write_intro(&mut writer, &intro)?;
+        extracted.intro = true;
+    }
+    writer.finish()?;
+    Ok(extracted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::data::amiga::{menu_ram, Overlays};
+    use crate::data::files::{read_amiga_intro_dump, GameFiles};
+    use crate::data::AtariRom;
+    use crate::menu::ram::MenuRam;
+
+    #[test]
+    fn a_pack_loads_back_exactly_what_was_extracted() {
+        let config = Config::default();
+        let Ok(files) = GameFiles::load(&config.data_dir, Platform::Amiga) else {
+            eprintln!("skipping: no originals");
+            return;
+        };
+        let rom = AtariRom::new(files.atari_disk.clone());
+        let amiga = files.amiga.as_ref().expect("loaded for the Amiga");
+        let overlays = Overlays::new(&amiga.disk).expect("the disk has overlays");
+        let ram = MenuRam::new(menu_ram(&amiga.match_dump, &overlays));
+        let intro_dump = read_amiga_intro_dump(&config.data_dir).ok();
+        let originals = Originals {
+            rom: &rom,
+            amiga: Some(AmigaOriginals {
+                files: amiga,
+                overlays: &overlays,
+                menu_ram: &ram,
+            }),
+            intro_dump: intro_dump.as_deref(),
+        };
+        let dir = std::env::temp_dir().join(format!("sb2-pack-{}", std::process::id()));
+        let extracted = extract(&originals, &dir).expect("the pack is written");
+        assert_eq!(extracted.platforms, [Platform::Amiga, Platform::Atari]);
+        assert!(extracted.menus);
+
+        let pack = Pack::open(&dir).expect("the pack opens");
+        for platform in [Platform::Amiga, Platform::Atari] {
+            assert!(
+                pack.match_graphics(platform).unwrap()
+                    == originals.match_graphics(platform).unwrap(),
+                "{platform:?} match graphics differ"
+            );
+        }
+        assert!(pack.menu_graphics().unwrap() == originals.menu_graphics().unwrap());
+        assert!(pack.intro_graphics().unwrap() == originals.intro_graphics().unwrap());
+        assert_eq!(
+            pack.intro_graphics().unwrap().is_some(),
+            intro_dump.is_some()
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}

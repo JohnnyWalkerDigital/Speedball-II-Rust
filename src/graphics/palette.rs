@@ -39,6 +39,15 @@ impl Palette {
         }
     }
 
+    /// A palette of ARGB colours.
+    pub fn from_colors(colors: Vec<u32>) -> Self {
+        Self { colors }
+    }
+
+    pub fn colors(&self) -> &[u32] {
+        &self.colors
+    }
+
     pub fn color(&self, index: usize) -> u32 {
         self.colors.get(index).copied().unwrap_or(Self::MISSING)
     }

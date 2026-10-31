@@ -21,6 +21,7 @@ pub enum Sheet {
     Pitch,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Assets {
     pub platform: Platform,
     /// The whole 640x1152 pitch.
@@ -31,9 +32,10 @@ pub struct Assets {
     pub panel_font: Vec<Image>,
     pub digits: Vec<Image>,
     pub status_bar: Image,
-    entities: Vec<Image>,
-    players: Vec<Image>,
-    players_blue: Vec<Image>,
+    pub entities: Vec<Image>,
+    pub players: Vec<Image>,
+    /// `players` with team 1's blue kit.
+    pub players_blue: Vec<Image>,
     pub palette: Palette,
 }
 

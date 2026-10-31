@@ -40,6 +40,10 @@ pub struct Config {
     pub mute: bool,
     /// The game save disk image.
     pub save_disk: PathBuf,
+    /// Write the graphics here as an asset pack, and exit.
+    pub extract: Option<PathBuf>,
+    /// Take the graphics from this asset pack instead of the originals.
+    pub assets: Option<PathBuf>,
 }
 
 pub const TEAM_COUNT: usize = 16;
@@ -64,6 +68,9 @@ OPTIONS:
     --mute                 No sound
     --save-disk <FILE>     Save disk image for leagues and cups
                            (default: saves/save-disk.adf)
+    --extract <DIR>        Write the graphics as an editable asset pack of
+                           PNG files, and exit
+    --assets <DIR>         Take the graphics from an asset pack
     -h, --help             Show this help
 
 CONTROLS:
@@ -100,6 +107,8 @@ impl Config {
                 }
                 "--mute" => config.mute = true,
                 "--save-disk" => config.save_disk = PathBuf::from(value("--save-disk")?),
+                "--extract" => config.extract = Some(PathBuf::from(value("--extract")?)),
+                "--assets" => config.assets = Some(PathBuf::from(value("--assets")?)),
                 other => return Err(format!("unknown argument `{other}`")),
             }
         }
@@ -123,6 +132,8 @@ impl Default for Config {
             export_sounds: None,
             mute: false,
             save_disk: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("saves/save-disk.adf"),
+            extract: None,
+            assets: None,
         }
     }
 }

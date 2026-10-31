@@ -3,6 +3,7 @@
 //! Layout:
 //! - `data`: reading the original disk images and their lookup tables
 //! - `game`: the match simulation (no I/O, no drawing)
+//! - `content`: where the graphics come from: the originals or an asset pack
 //! - `graphics`: decoding bitplane graphics into images
 //! - `render`: drawing a match onto a framebuffer
 //! - `sound`: the original sound driver and an Amiga sound-chip emulation
@@ -10,6 +11,7 @@
 
 mod app;
 mod config;
+mod content;
 mod data;
 #[cfg(test)]
 mod front_end_tests;
@@ -37,9 +39,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = match &config.export_sounds {
-        Some(dir) => app::export_sounds(&config, dir),
-        None => app::run(config),
+    let result = match (&config.export_sounds, &config.extract) {
+        (Some(dir), _) => app::export_sounds(&config, dir),
+        (None, Some(dir)) => app::extract(&config, dir),
+        (None, None) => app::run(config),
     };
     if let Err(error) = result {
         eprintln!("error: {error}");

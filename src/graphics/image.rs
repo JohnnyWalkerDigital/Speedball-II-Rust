@@ -24,6 +24,18 @@ impl Image {
         Self::new(width, height, vec![color; width * height])
     }
 
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
+
+    pub fn pixels(&self) -> &[u32] {
+        &self.pixels
+    }
+
     pub fn row(&self, y: usize) -> &[u32] {
         &self.pixels[y * self.width..(y + 1) * self.width]
     }
