@@ -262,12 +262,6 @@ impl AtariRom {
             }
         }
     }
-
-    /// 10-character position name ("GOALKEEPER" etc.) for player slot 0..9.
-    pub fn position_name(&self, player_index: usize) -> [u8; 10] {
-        let base = addr::POSITION_NAMES + player_index as i32 * 10;
-        std::array::from_fn(|i| self.u8(base + i as i32) as u8)
-    }
 }
 
 fn pair([x, y]: [i32; 2]) -> Point {

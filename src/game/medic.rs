@@ -5,7 +5,7 @@ use super::geometry::{Point, Side};
 use super::player::{count, PlayerId};
 use super::roster::PersonRef;
 use super::state::{EntityRef, Match, PITCH_CENTER};
-use super::text::TextId;
+use super::text::{TextId, POSITION_NAMES};
 use crate::data::animations::{Animation, Script};
 
 /// Medic 0 carries the front of the stretcher, medic 1 the back.
@@ -167,10 +167,8 @@ impl Match {
             return;
         }
         self.show_message(Some(TextId::Injured));
-        let name = self.rom.position_name(self.players[injured.0].index);
-        self.text_panel
-            .text_mut(TextId::Injured)
-            .overwrite(2, &name);
+        let name = POSITION_NAMES[self.players[injured.0].index];
+        self.text_panel.text_mut(TextId::Injured).overwrite(2, name);
 
         self.props.medics[REAR].velocity.y = 0;
         self.injury.front_medic_offset.y = self.injury.rear_medic_target.y;

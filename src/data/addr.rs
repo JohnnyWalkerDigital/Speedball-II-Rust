@@ -57,7 +57,6 @@ pub const THINK_DELAY_BY_INT: i32 = 0x532;
 pub const PREDICTION_SHIFT_BY_INT: i32 = 0x542;
 pub const JUMP_BONUS_BY_SPD: i32 = 0x562;
 pub const TACKLE_DEF_MALUS_BY_ANGLE: i32 = 0x582;
-pub const POSITION_NAMES: i32 = 0xFA2;
 pub const STATUS_LEDS: i32 = 0x2A8A;
 pub const BALL_OFFSET_BY_SPRITE: i32 = 0x2AA2;
 pub const SPRITE_ORIGIN: i32 = 0x2B8C;

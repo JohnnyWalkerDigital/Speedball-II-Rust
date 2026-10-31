@@ -129,8 +129,9 @@ a hash of every frame drawn and sound requested; refactors are checked
 against its output from before, and `SPEEDBALL_PACK=<dir>` plays the same
 matches from a pack's tables.
 
-The match's panel messages ("GOAL", "HALF TIME" and the rest) are defined
-in `game/text.rs`; a test checks them against the original bytes. The
+The match's panel messages ("GOAL", "HALF TIME" and the rest) and the
+injured players' position names are defined in `game/text.rs`; a test
+checks them against the original bytes. The
 memory the sound banks are laid over still comes from the originals, so
 they are still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should

@@ -101,6 +101,19 @@ impl Text {
     }
 }
 
+/// The positions shown under "INJURED", by formation slot (0 to 8).
+pub const POSITION_NAMES: [&[u8; 10]; 9] = [
+    b"  GOALIE  ",
+    b" LEFT DEF ",
+    b"RIGHT DEF ",
+    b" LEFT MID ",
+    b"RIGHT MID ",
+    b"CENTRE MID",
+    b"LEFT WING ",
+    b"RIGHT WING",
+    b"CENTRE FWD",
+];
+
 /// The fixed messages. Each is numbered by the address it had in the
 /// original data segment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -239,6 +252,12 @@ mod tests {
         let rom = AtariRom::new(files.atari_disk);
         for id in TextId::ALL {
             assert_eq!(id.bytes(), Text::read(&rom, id as i32).bytes(), "{id:?}");
+        }
+        for (slot, name) in POSITION_NAMES.iter().enumerate() {
+            // Where the original held them.
+            let at = 0xFA2 + slot as i32 * 10;
+            let original: Vec<u8> = (0..10).map(|i| rom.u8(at + i) as u8).collect();
+            assert_eq!(name.as_slice(), original, "position {slot}");
         }
     }
 }
