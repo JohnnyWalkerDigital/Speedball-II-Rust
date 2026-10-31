@@ -2,7 +2,7 @@
 //! menus, messages, the panel screens' lines and the teams' names.
 //!
 //! Read from the original's memory ([`MenuText::read`]) or an asset pack,
-//! where they are written in the [`readable`](super::readable) form.
+//! where they are written in the [`readable`] form.
 
 use serde::{Deserialize, Serialize};
 

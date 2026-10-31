@@ -8,8 +8,8 @@
 //!
 //! - [`session`]: a visit (whose squad, what for, and what is on screen),
 //!   drawn by [`draw`] from the tables in [`data`];
-//! - [`keypad`] moves round the keys, and [`keys`] does what they say;
-//! - [`squad_table`], [`transfers`] and [`gym`] are the other places the
+//! - [`keypad`](mod@keypad) moves round the keys, and [`keys`] does what they say;
+//! - [`squad_table`](mod@squad_table), [`transfers`] and [`gym`] are the other places the
 //!   joystick goes.
 
 pub mod data;

@@ -14,7 +14,7 @@ pub struct Text {
     bytes: Vec<u8>,
 }
 
-/// Written in the [readable](readable) form.
+/// Written in the [readable] form.
 impl Serialize for Text {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         readable::menu::serialize(&self.bytes, s)
