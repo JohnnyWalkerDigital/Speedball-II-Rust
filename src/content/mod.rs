@@ -2,13 +2,16 @@
 //! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
 //! files extracted from them, which can be edited.
 //!
-//! The game asks a [`ContentSource`], so it does not matter which. Tables
-//! and sound still come from the originals.
+//! The game asks a [`ContentSource`], so it does not matter which. Sound,
+//! animation, the match's entity records and its panel messages still come
+//! from the originals.
 
 mod graphics;
+mod json;
 mod originals;
 mod pack;
 mod png_files;
+mod tables;
 mod text;
 
 use std::fmt;
@@ -16,11 +19,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::config::Platform;
+use crate::data::lookups::Lookups;
+use crate::game::roster::Teams;
 use crate::graphics::ilbm::IlbmError;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
 use crate::menu::intro::{IntroGraphics, IntroText};
+use crate::menu::manager::data::ManagerTables;
 use crate::menu::strings::MenuText;
+use crate::menu::tables::MenuTables;
 
 pub use originals::{AmigaOriginals, Originals};
 pub use pack::Pack;
@@ -37,6 +44,14 @@ pub trait ContentSource {
     fn menu_text(&self) -> Result<MenuText, ContentError>;
     /// The intro's text, if there is an intro.
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError>;
+    /// The match's lookup tables.
+    fn lookups(&self) -> Result<Lookups, ContentError>;
+    /// The league teams' names and skills, and player two's.
+    fn teams(&self) -> Result<Teams, ContentError>;
+    /// The squads, market, prices and results behind the menus' games.
+    fn menu_tables(&self) -> Result<MenuTables, ContentError>;
+    /// The manager screens' layout: keypads, gym buttons, labels.
+    fn manager_tables(&self) -> Result<ManagerTables, ContentError>;
 }
 
 #[derive(Debug)]
@@ -119,6 +134,8 @@ pub struct Extracted {
 pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, ContentError> {
     let mut writer = pack::PackWriter::new(dir);
     let mut extracted = Extracted::default();
+    tables::write_lookups(&mut writer, &source.lookups()?)?;
+    tables::write_teams(&mut writer, &source.teams()?)?;
     for platform in [Platform::Amiga, Platform::Atari] {
         match source.match_graphics(platform) {
             Ok(assets) => {
@@ -133,6 +150,8 @@ pub fn extract(source: &dyn ContentSource, dir: &Path) -> Result<Extracted, Cont
         Ok(menus) => {
             graphics::write_menus(&mut writer, &menus)?;
             text::write_menus(&mut writer, &source.menu_text()?)?;
+            tables::write_menus(&mut writer, &source.menu_tables()?)?;
+            tables::write_manager(&mut writer, &source.manager_tables()?)?;
             extracted.menus = true;
         }
         Err(ContentError::Unavailable(_)) => {}
@@ -171,6 +190,22 @@ impl ContentSource for Pack {
 
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
         text::read_intro(self)
+    }
+
+    fn lookups(&self) -> Result<Lookups, ContentError> {
+        tables::read_lookups(self)
+    }
+
+    fn teams(&self) -> Result<Teams, ContentError> {
+        tables::read_teams(self)
+    }
+
+    fn menu_tables(&self) -> Result<MenuTables, ContentError> {
+        tables::read_menus(self)
+    }
+
+    fn manager_tables(&self) -> Result<ManagerTables, ContentError> {
+        tables::read_manager(self)
     }
 }
 
@@ -221,6 +256,16 @@ mod tests {
         assert!(pack.intro_graphics().unwrap() == originals.intro_graphics().unwrap());
         assert_eq!(pack.menu_text().unwrap(), originals.menu_text().unwrap());
         assert_eq!(pack.intro_text().unwrap(), originals.intro_text().unwrap());
+        assert_eq!(pack.lookups().unwrap(), originals.lookups().unwrap());
+        assert_eq!(pack.teams().unwrap(), originals.teams().unwrap());
+        assert_eq!(
+            pack.menu_tables().unwrap(),
+            originals.menu_tables().unwrap()
+        );
+        assert_eq!(
+            pack.manager_tables().unwrap(),
+            originals.manager_tables().unwrap()
+        );
         assert_eq!(
             pack.intro_graphics().unwrap().is_some(),
             intro_dump.is_some()

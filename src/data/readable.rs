@@ -14,7 +14,8 @@
 
 use serde::{Deserialize, Deserializer, Serializer};
 
-use super::text::DIGIT_ZERO;
+/// Where `'0'` is in the fonts: just after `'Z'`.
+pub const DIGIT_ZERO: u8 = b'A' + 26;
 
 /// The rules a set of strings follows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +35,13 @@ pub const MENU: Dialect = Dialect {
     leading_cursor: true,
     cursor_below: b' ',
     symbols: &[('_', b'0')],
+};
+
+/// The manager screens' labels: no position of their own (they are
+/// placed by their tables).
+pub const LABEL: Dialect = Dialect {
+    leading_cursor: false,
+    ..MENU
 };
 
 /// The panel screens, in the orange font, whose digits are followed by
@@ -230,6 +238,7 @@ macro_rules! serde_with {
 
 serde_with!(menu, menu_list, MENU);
 serde_with!(panel, panel_list, PANEL);
+serde_with!(label, label_list, LABEL);
 serde_with!(intro, intro_list, INTRO);
 
 /// A text cell's column and row, as `"x,y"`.

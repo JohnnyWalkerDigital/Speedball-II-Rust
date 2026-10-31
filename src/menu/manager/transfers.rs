@@ -43,7 +43,7 @@ pub(super) fn step_buyable(game: &Game, session: &mut Session, step: isize) {
 /// `keypad_fn_transfer_buy`: the market player shown into the chosen place.
 pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
     let (index, slot) = (session.view.index, session.view.grid_slot());
-    let upgrades = game.ram.upgrades();
+    let upgrades = game.tables.upgrades;
     let career = &mut game.career;
     let (squad, cash) = (
         career.squads.get_mut(session.side),

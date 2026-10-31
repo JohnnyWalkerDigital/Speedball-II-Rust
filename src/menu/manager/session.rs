@@ -65,7 +65,7 @@ impl<'a> Session<'a> {
             buyable_count: career.market.buyable_count,
             rounds: career.market.rounds,
             cash: *career.money.cash.get(self.side),
-            upgrades: &game.ram.upgrades(),
+            upgrades: &game.tables.upgrades,
             context: self.context,
         };
         draw::draw(&scene, &self.view)

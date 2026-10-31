@@ -1,9 +1,13 @@
-//! The tables behind the manager screens, read from Amiga memory: the
-//! keypads, the gym's upgrades and armour, labels and the squad table.
+//! The tables behind the manager screens, read from Amiga memory or an
+//! asset pack: the keypads, the gym's upgrade buttons and armour, labels
+//! and the squad table.
+
+use serde::{Deserialize, Serialize};
 
 use super::super::ram::MenuRam;
 use crate::data::bytes::BigEndian;
-use crate::game::squad::{Upgrade, SQUAD_SIZE};
+use crate::data::readable;
+use crate::game::squad::SQUAD_SIZE;
 
 mod addr {
     pub const MANAGER_KEYPAD_TABLE: usize = 0x3D7C;
@@ -39,7 +43,8 @@ mod addr {
 }
 
 /// What a key does (its function pointer in the original).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum KeyAction {
     /// `keypad_fn_noop`: a blank key.
     Noop,
@@ -91,7 +96,7 @@ impl KeyAction {
 }
 
 /// A keypad button: its centre, its button sprites and what it does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
     pub x: i32,
     pub y: i32,
@@ -104,29 +109,38 @@ pub struct Key {
 pub type Keypad = [[Option<Key>; 4]; 3];
 
 /// A line of small text at a pixel position.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextLine {
     pub x: i32,
     pub y: i32,
+    #[serde(with = "readable::label")]
+    pub text: Vec<u8>,
+}
+
+/// A skill's label beside its stat bar, and the bar's row.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillLabel {
+    pub row: i32,
+    #[serde(with = "readable::menu")]
     pub text: Vec<u8>,
 }
 
 /// An armour piece on the gym's model: centre and sprite.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Armour {
     pub x: i32,
     pub y: i32,
     pub sprite: usize,
 }
 
-/// One of the gym's eight upgrade buttons.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One of the gym's eight upgrade buttons, for the upgrade of the same
+/// number.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpgradeButton {
     pub x: i32,
     pub y: i32,
     /// The light sprite, unlit; the next sprite is lit.
     pub light: usize,
-    pub upgrade: Upgrade,
     /// Two lines of name, then the price line ("000 CRD").
     pub description: [TextLine; 3],
     /// The armour pieces it lights up on the model.
@@ -137,6 +151,7 @@ pub struct UpgradeButton {
 /// stays, or leaves the grid).
 pub type GridMoves = [[i8; 3]; 4];
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManagerTables {
     pub manager_keypad: Keypad,
     pub transfer_keypad: Keypad,
@@ -149,7 +164,7 @@ pub struct ManagerTables {
     pub not_enough_cash: [TextLine; 3],
     pub maximum_boost: [TextLine; 3],
     /// The skill labels, with the row each stat bar is on.
-    pub attributes: Vec<(i32, Vec<u8>)>,
+    pub attributes: Vec<SkillLabel>,
     /// Each squad place's spot in the squad table.
     pub table_places: [(i32, i32); SQUAD_SIZE],
     pub table_x: i32,
@@ -157,14 +172,22 @@ pub struct ManagerTables {
     pub grid_right: GridMoves,
     pub grid_up: GridMoves,
     pub grid_down: GridMoves,
-    pub position_names: [[u8; 4]; SQUAD_SIZE],
+    #[serde(with = "readable::label_list")]
+    pub position_names: Vec<Vec<u8>>,
     /// "DEF MID FWD ".
+    #[serde(with = "readable::label")]
     pub def_mid_fwd: Vec<u8>,
+    #[serde(with = "readable::menu")]
     pub no_players_on_the_market: Vec<u8>,
-    /// The screen titles, drawn with the title letters.
+    /// The screen titles, drawn with the title letters: each letter is a
+    /// piece of the title picture, A first.
+    #[serde(with = "readable::menu")]
     pub title_manager: Vec<u8>,
+    #[serde(with = "readable::menu")]
     pub title_transfer: Vec<u8>,
+    #[serde(with = "readable::menu")]
     pub title_gym: Vec<u8>,
+    #[serde(with = "readable::menu")]
     pub cash_template: Vec<u8>,
     /// The 20x13 maps of background tiles behind the manager and transfer
     /// screens, and the gym.
@@ -173,6 +196,63 @@ pub struct ManagerTables {
 }
 
 impl ManagerTables {
+    /// Finds what the manager screens could not use.
+    pub fn check(&self) -> Result<(), String> {
+        let mut problems = Vec::new();
+        if self.upgrades.len() != 8 {
+            problems.push("upgrades must have 8 buttons, one for each upgrade".to_string());
+        }
+        let mut order = self.buy_all_order.clone();
+        order.sort_unstable();
+        if order != (0..8).collect::<Vec<_>>() {
+            problems.push("buy_all_order must list each upgrade, 0 to 7, once".to_string());
+        }
+        if self.attributes.len() != 8 {
+            problems.push("attributes must have a label for each of the 8 skills".to_string());
+        }
+        if self.position_names.len() != SQUAD_SIZE
+            || self.position_names.iter().any(|name| name.len() < 2)
+        {
+            problems.push(format!(
+                "position_names must have {SQUAD_SIZE} names of at least 2 letters"
+            ));
+        }
+        // The price is written into each button's third line, and the cash
+        // into its template.
+        if self
+            .upgrades
+            .iter()
+            .any(|b| b.description[2].text.len() < 3)
+        {
+            problems.push("each upgrade's third line needs 3 characters for its price".to_string());
+        }
+        if self.cash_template.len() < 7 {
+            problems.push(
+                "cash_template must be at least 7 characters long, counting its position as two"
+                    .to_string(),
+            );
+        }
+        if self.def_mid_fwd.len() != 12 {
+            problems.push("def_mid_fwd must be 12 characters, 4 for each row".to_string());
+        }
+        for (name, map) in [
+            ("manager_map", &self.manager_map),
+            ("gym_map", &self.gym_map),
+        ] {
+            if map.len() != addr::TILE_MAP_LENGTH {
+                problems.push(format!(
+                    "{name} must have {} tiles, 20 by 13",
+                    addr::TILE_MAP_LENGTH
+                ));
+            }
+        }
+        if problems.is_empty() {
+            Ok(())
+        } else {
+            Err(problems.join("\n"))
+        }
+    }
+
     pub fn read(ram: &MenuRam) -> Self {
         let bytes = ram.bytes();
         let word = |at: usize| bytes.u16_at(at) as i16 as i32;
@@ -209,11 +289,9 @@ impl ManagerTables {
         let upgrade_records: Vec<usize> = (0..8)
             .map(|i| pointer(addr::UPGRADES_TABLE + i * 4))
             .collect();
-        let upgrades = ram.upgrades();
         let buttons = upgrade_records
             .iter()
-            .zip(upgrades)
-            .map(|(&record, upgrade)| {
+            .map(|&record| {
                 let list = pointer(record + 10);
                 let armours = (0..7)
                     .map(|k| pointer(list + k * 4))
@@ -224,7 +302,6 @@ impl ManagerTables {
                     x: word(record),
                     y: word(record + 2),
                     light: word(record + 4) as usize,
-                    upgrade,
                     description: description(pointer(record + 14)),
                     armours,
                 }
@@ -259,7 +336,10 @@ impl ManagerTables {
             attributes: (0..8)
                 .map(|i| {
                     let record = pointer(addr::ATTRIBUTES + i * 4);
-                    (word(record), string_bytes(pointer(record + 4)))
+                    SkillLabel {
+                        row: word(record),
+                        text: string_bytes(pointer(record + 4)),
+                    }
                 })
                 .collect(),
             table_places: std::array::from_fn(|slot| {
@@ -271,9 +351,9 @@ impl ManagerTables {
             grid_right: grid(addr::PLAYER_GRID_RIGHT),
             grid_up: grid(addr::PLAYER_GRID_UP),
             grid_down: grid(addr::PLAYER_GRID_DOWN),
-            position_names: std::array::from_fn(|slot| {
-                std::array::from_fn(|i| bytes[addr::POSITION_STRINGS + slot * 4 + i])
-            }),
+            position_names: (0..SQUAD_SIZE)
+                .map(|slot| ram.slice(addr::POSITION_STRINGS + slot * 4, 4).to_vec())
+                .collect(),
             def_mid_fwd: ram.slice(addr::STR_DEF_MID_FWD, 12).to_vec(),
             no_players_on_the_market: string_bytes(addr::STR_NO_PLAYERS_ON_THE_MARKET),
             title_manager: string_bytes(addr::STR_A_G),

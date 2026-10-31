@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use super::json;
 use super::png_files::{self, Indexed, Rgba};
 use super::ContentError;
 use crate::graphics::ilbm::Picture;
@@ -67,6 +68,18 @@ Rules:
   The game writes numbers and names into some strings at fixed places, so
   keep those where they are. It checks what it can when it starts, and
   says what is wrong.
+- tables/: the game's numbers, in JSON.
+  - match.json: the match's lookup tables: speeds, the computer players'
+    thinking and look-ahead by intelligence, jumping by speed, tackling,
+    equipment, where attackers run to support, where sprites hold the ball.
+  - teams.json: each league team's skills, by group (defence, midfield,
+    attack, substitutes), and their names on the match panel.
+  - squads.json: the squads you start with, the transfer market, the gym's
+    prices and the results of matches you are not in.
+  - manager_screens.json: the manager screens' keypads (where each key is
+    and what it does), the gym's buttons and armour, and their labels.
+  Skills are always in this order: aggression, attack, defence, speed,
+  throwing, power, stamina, intelligence. Tables must keep their sizes.
 
 Don't share a pack you extracted: the art belongs to the game's owners.
 ";
@@ -219,8 +232,7 @@ impl PackWriter {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| ContentError::io(dir, e))?;
         }
-        let json = serde_json::to_string_pretty(value).expect("text serializes");
-        std::fs::write(&path, json + "\n").map_err(|e| ContentError::io(&path, e))
+        std::fs::write(&path, json::to_string(value)).map_err(|e| ContentError::io(&path, e))
     }
 
     /// Writes `pack.json`, and a README for whoever edits the pack.
@@ -266,6 +278,20 @@ impl Pack {
 
     pub fn json_path(&self, name: &str) -> PathBuf {
         self.dir.join(format!("{name}.json"))
+    }
+
+    /// Reads `{name}.json`, which must be there and pass `check`.
+    pub fn checked_json<T: DeserializeOwned>(
+        &self,
+        name: &str,
+        check: impl FnOnce(&T) -> Result<(), String>,
+    ) -> Result<T, ContentError> {
+        let path = self.json_path(name);
+        let value = self
+            .json(name)?
+            .ok_or_else(|| ContentError::Missing(path.display().to_string()))?;
+        check(&value).map_err(|problems| ContentError::invalid(&path, problems))?;
+        Ok(value)
     }
 
     /// Reads `{name}.json`, `None` if there is none.

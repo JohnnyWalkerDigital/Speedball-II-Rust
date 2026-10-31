@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::data::readable;
 use crate::data::AtariRom;
 
 /// A message in the game's own encoding: a run of letters where bytes below
@@ -9,6 +12,19 @@ use crate::data::AtariRom;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Text {
     bytes: Vec<u8>,
+}
+
+/// Written in the [readable](readable) form.
+impl Serialize for Text {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        readable::menu::serialize(&self.bytes, s)
+    }
+}
+
+impl<'de> Deserialize<'de> for Text {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        readable::menu::deserialize(d).map(Text::new)
+    }
 }
 
 impl Text {

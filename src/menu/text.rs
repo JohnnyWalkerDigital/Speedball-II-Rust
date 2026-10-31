@@ -80,8 +80,7 @@ pub fn write_digits(text: &mut [u8], last: usize, value: i16, count: usize) {
     }
 }
 
-/// Where `'0'` is in the fonts: just after `'Z'`.
-pub const DIGIT_ZERO: u8 = b'A' + 26;
+pub use crate::data::readable::DIGIT_ZERO;
 
 #[cfg(test)]
 mod tests {

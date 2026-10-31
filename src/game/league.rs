@@ -169,6 +169,9 @@ fn replace(teams: &mut [TeamId], from: TeamId, to: TeamId) {
     }
 }
 
+/// One of [`ScoresTable`]'s tables: `[team1][team2]` = `[score1, score2]`.
+pub type ResultsTable = [[[u8; 2]; 16]; 16];
+
 /// `cup_league_match_not_bd`: matches without Brutal Deluxe are not
 /// played but looked up in `scores_table`, four tables of results between
 /// every pair of league teams, one picked at random.
@@ -178,11 +181,14 @@ pub struct ScoresTable {
 }
 
 impl ScoresTable {
-    pub fn new(bytes: &[u8]) -> Self {
+    /// From four tables of `[team1][team2]` results.
+    pub fn new(tables: &[ResultsTable]) -> Self {
         Self {
-            scores: bytes
-                .chunks_exact(2)
-                .map(|pair| (pair[0], pair[1]))
+            scores: tables
+                .iter()
+                .flatten()
+                .flatten()
+                .map(|&[a, b]| (a, b))
                 .collect(),
         }
     }

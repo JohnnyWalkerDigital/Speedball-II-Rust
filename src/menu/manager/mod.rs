@@ -68,7 +68,7 @@ pub fn manager_screen(
         Screen::Manager,
         BuyMode::Player,
     );
-    let upgrades = game.ram.upgrades();
+    let upgrades = game.tables.upgrades;
     game.career
         .market
         .update(&mut game.rng, &upgrades, session.context);

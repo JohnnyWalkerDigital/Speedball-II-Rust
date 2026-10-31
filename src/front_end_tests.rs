@@ -12,10 +12,13 @@ use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::graphics::{Assets, Canvas};
 use crate::menu::assets::MenuAssets;
+use crate::menu::flow::MenuContent;
 use crate::menu::flow::{self, Game};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
+use crate::menu::manager::data::ManagerTables;
 use crate::menu::ram::MenuRam;
 use crate::menu::strings::MenuText;
+use crate::menu::tables::MenuTables;
 use crate::menu::ui::Ui;
 use crate::render::MatchRenderer;
 
@@ -47,7 +50,14 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
         &rom,
     );
     let text = MenuText::read(&ram);
-    Some(Game::new(rom, ram, text, assets, renderer, save_disk, 1))
+    let tables = MenuTables::read(&ram);
+    let content = MenuContent {
+        assets,
+        text,
+        tables,
+        manager: ManagerTables::read(&ram),
+    };
+    Some(Game::new(rom, ram, content, renderer, save_disk, 1))
 }
 
 /// What the script sees each frame.

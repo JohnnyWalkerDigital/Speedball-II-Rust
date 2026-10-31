@@ -13,8 +13,9 @@ use super::manager::data::ManagerTables;
 use super::manager::{self, Cursors, Standings};
 use super::panels::{self, Competition};
 use super::play::{run_match, Controls, ReplaySaves};
-use super::ram::{addr, MenuRam};
+use super::ram::MenuRam;
 use super::strings::{MenuSpec, MenuText, Title};
+use super::tables::MenuTables;
 use super::text::write_digits;
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
@@ -66,6 +67,7 @@ pub struct Game {
     pub rom: Rc<AtariRom>,
     pub ram: MenuRam,
     pub text: MenuText,
+    pub tables: MenuTables,
     pub assets: MenuAssets,
     pub renderer: MatchRenderer,
     /// Money and results, kept across games like the original's globals.
@@ -95,28 +97,38 @@ pub struct Game {
     seed: u64,
 }
 
+/// What the menus show and play with, from the originals or a pack.
+pub struct MenuContent {
+    pub assets: MenuAssets,
+    pub text: MenuText,
+    pub tables: MenuTables,
+    pub manager: ManagerTables,
+}
+
 impl Game {
     pub fn new(
         rom: Rc<AtariRom>,
         ram: MenuRam,
-        text: MenuText,
-        assets: MenuAssets,
+        content: MenuContent,
         renderer: MatchRenderer,
         save_disk: SaveDisk,
         seed: u64,
     ) -> Self {
-        let squads = PerTeam::new(
-            ram.squad(addr::TEAM_INFO_TABLE),
-            ram.squad(addr::TEAM_INFO_TABLE_OTHER),
-        );
-        let career = Career::new(ram.team_records(), squads, Market::new(ram.market()));
-        let manager_tables = ManagerTables::read(&ram);
-        let scores_table =
-            ScoresTable::new(ram.slice(addr::SCORES_TABLE, addr::SCORES_TABLE_LENGTH));
+        let MenuContent {
+            assets,
+            text,
+            tables,
+            manager: manager_tables,
+        } = content;
+        let squads = PerTeam::new(tables.squad.clone(), tables.squad_two.clone());
+        let market = Market::new(tables.market.clone());
+        let career = Career::new(ram.team_records(), squads, market);
+        let scores_table = ScoresTable::new(&tables.other_results);
         Self {
             rom,
             ram,
             text,
+            tables,
             assets,
             renderer,
             career,
@@ -188,7 +200,7 @@ pub fn run(ui: &mut Ui, game: &mut Game) {
 /// `main_menu`: pick a game, play it, then "GAME OVER".
 fn main_menu(ui: &mut Ui, game: &mut Game) -> Flow {
     game.career.start_main_menu();
-    game.career.restore_identities(&game.ram.base_identities());
+    game.career.restore_identities(&game.tables.identities());
     game.sped_up = false;
     let choice = select_game(ui, game)?;
     match choice {

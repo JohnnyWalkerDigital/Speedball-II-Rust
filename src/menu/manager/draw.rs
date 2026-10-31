@@ -4,7 +4,7 @@
 //! buffers; here each frame is drawn whole from a [`View`], in the same
 //! order, so the result matches.
 
-use super::data::{Armour, Keypad, ManagerTables, TextLine};
+use super::data::{Armour, Keypad, ManagerTables, SkillLabel, TextLine};
 use super::view::{BuyMode, Message, Screen, View};
 use crate::game::squad::{self, group_averages, max_boost, team_average, Context, Squad};
 use crate::game::squad::{MarketPlayer, SkillBytes, SquadPlayer, Upgrade};
@@ -94,8 +94,8 @@ fn draw_gym(canvas: &mut Canvas, scene: &Scene, view: &View) {
 
 /// `draw_attribute_strings`: AGR, ATT, DEF... beside the stat bars.
 fn attribute_labels(canvas: &mut Canvas, scene: &Scene) {
-    for (_, label) in &scene.tables.attributes {
-        canvas.pixel_text(label);
+    for label in &scene.tables.attributes {
+        canvas.pixel_text(&label.text);
     }
 }
 
@@ -195,7 +195,7 @@ fn stat_bars(canvas: &mut Canvas, scene: &Scene, skills: &SkillBytes, limit: Lim
     const LEFT: usize = 0x1B;
     const FULL: usize = 50;
     const NUMBER_X: usize = 0x50;
-    for (skill, (row, _)) in scene.tables.attributes.iter().enumerate() {
+    for (skill, SkillLabel { row, .. }) in scene.tables.attributes.iter().enumerate() {
         let y = (*row + 1) as usize;
         let value = usize::from(skills[skill]) / 5;
         let max = match &limit {
@@ -315,8 +315,7 @@ fn upgrade_description(canvas: &mut Canvas, scene: &Scene, view: &View) {
     let last = &lines[2];
     let mut text = last.text.clone();
     if view.message.is_none() {
-        let cost = button
-            .upgrade
+        let cost = scene.upgrades[view.selected_upgrade]
             .price
             .wrapping_mul(view.mode.cost_multiplier());
         write_digits(&mut text, 2, cost as i16, 3);

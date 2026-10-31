@@ -1,6 +1,9 @@
 //! Squad data: skill attributes, persons (squad members) and teams.
 
+use serde::{Deserialize, Serialize};
+
 use super::text::Text;
+use crate::config::TEAM_COUNT;
 use crate::data::{addr, AtariRom};
 
 /// One of the eight player skills, in the order the game stores them.
@@ -190,14 +193,54 @@ pub enum PersonRef {
 }
 
 /// A league team: names and the skill template for each formation group.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Team {
+    /// On the match panel.
     pub full_name: Text,
     pub short_name: Text,
+    /// Each group's eight skills: aggression, attack, defence, speed,
+    /// throwing, power, stamina and intelligence.
     defence: [i32; 8],
     midfield: [i32; 8],
     attack: [i32; 8],
     substitutes: [i32; 8],
+}
+
+/// The teams a match can field.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Teams {
+    pub league: Vec<Team>,
+    /// Player two's, in two-player games.
+    pub player_two: Option<Team>,
+}
+
+impl Teams {
+    pub fn read(rom: &AtariRom) -> Self {
+        Self {
+            league: (0..TEAM_COUNT as i32)
+                .map(|i| Team::read(rom, addr::TEAMS + i * Team::SIZE))
+                .collect(),
+            player_two: Some(Team::read(rom, addr::TEAM_PLAYER2)),
+        }
+    }
+
+    pub fn check(&self) -> Result<(), String> {
+        if self.league.len() != TEAM_COUNT {
+            return Err(format!("league must have {TEAM_COUNT} teams"));
+        }
+        if self.player_two.is_none() {
+            return Err("player_two is missing".into());
+        }
+        Ok(())
+    }
+
+    pub fn league(&self, index: usize) -> Team {
+        self.league[index].clone()
+    }
+
+    pub fn player_two(&self) -> Team {
+        self.player_two.clone().expect("checked when loaded")
+    }
 }
 
 impl Team {

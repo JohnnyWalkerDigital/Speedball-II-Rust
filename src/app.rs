@@ -15,19 +15,19 @@ use crate::data::amiga::{menu_ram, Overlays};
 use crate::data::files::{
     read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, AmigaFiles,
 };
+use crate::data::lookups::Lookups;
 use crate::data::save_disk::SaveDisk;
 use crate::data::{sounds, AtariRom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
+use crate::game::roster::Teams;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::{Assets, Canvas};
-use crate::menu::assets::MenuAssets;
-use crate::menu::flow::{self, Game};
+use crate::menu::flow::{self, Game, MenuContent};
 use crate::menu::host::{Button, ButtonEvent, Closed, Control, Host, SoundBank};
 use crate::menu::intro::{self, IntroAssets};
 use crate::menu::play::{run_match, Controls};
 use crate::menu::ram::MenuRam;
-use crate::menu::strings::MenuText;
 use crate::menu::ui::{Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::render::MatchRenderer;
 use crate::sound::SoundOutput;
@@ -83,7 +83,7 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
 
 /// The originals the game needs, as loaded.
 struct Loaded {
-    rom: Rc<AtariRom>,
+    rom: AtariRom,
     amiga: Option<AmigaFiles>,
     intro_dump: Option<Vec<u8>>,
 }
@@ -110,7 +110,7 @@ impl Loaded {
             None
         };
         Ok(Self {
-            rom: Rc::new(AtariRom::new(files.atari_disk)),
+            rom: AtariRom::new(files.atari_disk),
             amiga,
             intro_dump,
         })
@@ -124,10 +124,13 @@ fn amiga_menu_ram(amiga: &AmigaFiles) -> Result<(Overlays<'_>, MenuRam), Box<dyn
     Ok((overlays, ram))
 }
 
-/// The graphics and text a game needs, from the originals or `--assets`.
+/// The graphics, text and tables a game needs, from the originals or
+/// `--assets`.
 struct Content {
+    lookups: Lookups,
+    teams: Teams,
     matches: Assets,
-    menus: Option<(MenuAssets, MenuText)>,
+    menus: Option<MenuContent>,
     intro: Option<IntroAssets>,
 }
 
@@ -142,9 +145,13 @@ impl Content {
             Some(pack) => pack,
             None => originals,
         };
+        let lookups = source.lookups()?;
+        let teams = source.teams()?;
         let matches = source.match_graphics(config.platform)?;
         if !with_menus {
             return Ok(Self {
+                lookups,
+                teams,
                 matches,
                 menus: None,
                 intro: None,
@@ -152,8 +159,15 @@ impl Content {
         }
         let intro = source.intro_graphics()?.zip(source.intro_text()?);
         Ok(Self {
+            lookups,
+            teams,
             matches,
-            menus: Some((source.menu_graphics()?, source.menu_text()?)),
+            menus: Some(MenuContent {
+                assets: source.menu_graphics()?,
+                text: source.menu_text()?,
+                tables: source.menu_tables()?,
+                manager: source.manager_tables()?,
+            }),
             intro: intro.map(|(graphics, text)| IntroAssets { graphics, text }),
         })
     }
@@ -178,8 +192,11 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         intro_dump: loaded.intro_dump.as_deref(),
     };
     let content = Content::load(&config, &originals, with_menus)?;
-    let renderer = MatchRenderer::new(content.matches, &loaded.rom);
-    let rom = Rc::clone(&loaded.rom);
+    let mut rom = loaded.rom;
+    rom.set_lookups(content.lookups);
+    rom.set_teams(content.teams);
+    let renderer = MatchRenderer::new(content.matches, &rom);
+    let rom = Rc::new(rom);
     match (menu_memory, loaded.amiga.as_ref(), content.menus) {
         (Some((_, ram)), Some(amiga), Some(menus)) => {
             // The intro's music is in its dump.
@@ -265,7 +282,7 @@ fn play_with_menus(
     renderer: MatchRenderer,
     amiga: &AmigaFiles,
     ram: MenuRam,
-    (menus, text): (MenuAssets, MenuText),
+    menus: MenuContent,
     intro: Option<(IntroAssets, Vec<u8>)>,
 ) -> Result<(), Box<dyn Error>> {
     let (intro, intro_dump) = intro.unzip();
@@ -278,7 +295,7 @@ fn play_with_menus(
         }
     }
     let save_disk = SaveDisk::new(&config.save_disk);
-    let mut game = Game::new(rom, ram, text, menus, renderer, save_disk, config.seed);
+    let mut game = Game::new(rom, ram, menus, renderer, save_disk, config.seed);
     flow::run(&mut ui, &mut game);
     Ok(())
 }

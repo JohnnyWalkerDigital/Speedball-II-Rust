@@ -38,8 +38,9 @@ team's controls, as in the C# port.
 
 ## Asset packs
 
-The graphics and the menus' and intro's words can be extracted from your
-originals into a folder of PNG and JSON files, edited, and played with:
+The graphics, the menus' and intro's words and the game's tables can be
+extracted from your originals into a folder of PNG and JSON files, edited,
+and played with:
 
 ```bash
 cargo run --release -- --extract assets
@@ -61,16 +62,35 @@ and holds the palettes.
 list menus and their arrows, messages, the panel screens' lines, team
 names), and `text/intro.json` the intro's. Strings are written in a
 readable form that converts back to the game's bytes exactly
-(`menu/readable.rs`): `{x,y}` for cursor codes, `_` for a blank the game
+(`data/readable.rs`): `{x,y}` for cursor codes, `_` for a blank the game
 writes a number into, and box-drawing characters for the panel tables'
 lines. The game writes into some strings at fixed places, so a pack's text
 is checked when it loads (`MenuText::check`) and problems are reported
 rather than crashing. The pack's `README.txt` explains the rules for
-editing. A test extracts a pack and checks every image, sheet, palette and
-string loads back identical to the originals.
+editing.
 
-The match's own panel messages, the manager screens' strings, tables and
-sound still come from the originals, so they are still needed. `/assets`
+`tables/` holds the game's numbers:
+- `match.json`: the match's lookup tables (`data/lookups.rs`): velocities,
+  the skill curves, tackling, equipment, the AI's support grid, ball and
+  sprite offsets. A lookup outside an edited table reads the original
+  memory around it, as the 68000 code did, so out-of-range indices behave
+  exactly as before; a test checks every lookup, in range and out,
+  against the raw ROM.
+- `teams.json`: the league teams' skill templates and match-panel names.
+- `squads.json`: the starting squads, the transfer market, the gym's
+  upgrades and prices, and the results table for matches without Brutal
+  Deluxe (`menu/tables.rs`). Saves still name players by their original
+  name offsets, mapped through these tables.
+- `manager_screens.json`: the keypads and what each key does, the gym's
+  buttons and armour, labels and the squad grid (`menu/manager/data.rs`).
+
+Each is checked when it loads. A test extracts a pack and checks every
+image, sheet, palette, string and table loads back identical to the
+originals.
+
+The match's own panel messages, its initial entity and roster records, the
+animation scripts and sound still come from the originals, so they are
+still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should
 not be shared.
 

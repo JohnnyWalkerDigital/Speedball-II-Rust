@@ -18,13 +18,7 @@ pub fn write_intro(w: &mut PackWriter, text: &IntroText) -> Result<(), ContentEr
 
 /// The menus' text, checked to be usable.
 pub fn read_menus(pack: &Pack) -> Result<MenuText, ContentError> {
-    let path = pack.json_path(MENUS);
-    let text: MenuText = pack
-        .json(MENUS)?
-        .ok_or_else(|| ContentError::Missing(path.display().to_string()))?;
-    text.check()
-        .map_err(|problems| ContentError::invalid(&path, problems))?;
-    Ok(text)
+    pack.checked_json(MENUS, MenuText::check)
 }
 
 pub fn read_intro(pack: &Pack) -> Result<Option<IntroText>, ContentError> {

@@ -95,7 +95,7 @@ fn leave(game: &mut Game, session: &mut Session, keypad_x: usize) {
 /// `keypad_fn_buy`: the selected upgrade for the current player, group or
 /// team.
 pub(super) fn buy(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Flow {
-    let upgrade = game.manager_tables.upgrades[session.view.selected_upgrade].upgrade;
+    let upgrade = game.tables.upgrades[session.view.selected_upgrade];
     let career = &mut game.career;
     let mut manager = Manager {
         squad: career.squads.get_mut(session.side),
@@ -135,7 +135,7 @@ pub(super) fn buy_all(ui: &mut Ui, game: &mut Game, session: &mut Session) -> Fl
         game.cursors.selected_upgrade = index;
         session.show(ui, game);
         ui.vblank()?;
-        let upgrade = game.manager_tables.upgrades[index].upgrade;
+        let upgrade = game.tables.upgrades[index];
         let cost = upgrade
             .price
             .wrapping_mul(session.view.mode.cost_multiplier());

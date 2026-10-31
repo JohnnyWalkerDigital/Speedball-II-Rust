@@ -5,12 +5,16 @@ use super::{ContentError, ContentSource};
 use crate::config::Platform;
 use crate::data::amiga::Overlays;
 use crate::data::files::AmigaFiles;
+use crate::data::lookups::Lookups;
 use crate::data::AtariRom;
+use crate::game::roster::Teams;
 use crate::graphics::Assets;
 use crate::menu::assets::MenuAssets;
 use crate::menu::intro::{IntroGraphics, IntroText};
+use crate::menu::manager::data::ManagerTables;
 use crate::menu::ram::MenuRam;
 use crate::menu::strings::MenuText;
+use crate::menu::tables::MenuTables;
 
 /// The original files, as loaded.
 pub struct Originals<'a> {
@@ -62,5 +66,21 @@ impl ContentSource for Originals<'_> {
 
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
         Ok(self.intro_dump.map(IntroText::read))
+    }
+
+    fn lookups(&self) -> Result<Lookups, ContentError> {
+        Ok(Lookups::read(self.rom))
+    }
+
+    fn teams(&self) -> Result<Teams, ContentError> {
+        Ok(Teams::read(self.rom))
+    }
+
+    fn menu_tables(&self) -> Result<MenuTables, ContentError> {
+        Ok(MenuTables::read(self.amiga()?.menu_ram))
+    }
+
+    fn manager_tables(&self) -> Result<ManagerTables, ContentError> {
+        Ok(ManagerTables::read(self.amiga()?.menu_ram))
     }
 }

@@ -9,7 +9,7 @@ use crate::data::save_disk::{CUP_SECTOR, GAME_SECTORS, LEAGUE_SECTOR};
 use crate::game::career::{TeamId, TeamRecord};
 use crate::game::events::Sound;
 use crate::game::save::{Progress, SaveGame, SavedMarketPlayer, SavedPlayer, SavedTeam};
-use crate::game::squad::SquadPlayer;
+use crate::game::squad::{SquadPlayer, MARKET_SIZE, SQUAD_SIZE};
 
 /// `misc_flags` bit 1: one player (the computer has team 2).
 const ONE_PLAYER: u16 = 1 << 1;
@@ -85,9 +85,10 @@ pub struct Snapshot {
 
 /// Builds a save of the career as it stands.
 pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
+    let names = SavedNames::new(game);
     let career = &game.career;
     let player = |p: &SquadPlayer| SavedPlayer {
-        name_offset: name_offset(game, &p.name),
+        name_offset: names.offset(&p.name),
         face: p.face,
         skills: p.skills,
     };
@@ -135,7 +136,8 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
 /// Puts a loaded game back into the career (`read_*`). Returns the teams
 /// in the save's order and the playing direction.
 pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
-    let name = |offset: u32| game.ram.c_string(addr::STR_JAMS + offset as usize);
+    let people = SavedNames::new(game);
+    let name = |offset: u32| people.name(game, offset);
     let squad: Vec<(String, u16, [u8; 8])> = save
         .squad
         .iter()
@@ -187,17 +189,48 @@ pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
     (teams, save.initial_dir as u8 as i32)
 }
 
-/// A name's offset from `str_jams`: names are only ever the squad's own
-/// or the market players'.
-fn name_offset(game: &Game, name: &str) -> u32 {
-    (0..12)
-        .map(|i| game.ram.pointer_at(addr::BASE_TEAM_NAMES + i * 4))
-        .chain((0..18).map(|i| {
-            game.ram
-                .pointer_at(game.ram.pointer_at(addr::PLAYERS_MARKET + i * 4) + 4)
-        }))
-        .find(|&pointer| game.ram.c_string(pointer) == name)
-        .map_or(0, |pointer| (pointer - addr::STR_JAMS) as u32)
+/// Saves name players by their name's offset from `str_jams` in the
+/// original's memory. Names are only ever the squad's own or the market
+/// players', the same people, in the same order, as the tables'.
+struct SavedNames {
+    names: Vec<String>,
+    offsets: Vec<u32>,
+}
+
+impl SavedNames {
+    fn new(game: &Game) -> Self {
+        let ram = &game.ram;
+        let tables = &game.tables;
+        let pointers = (0..SQUAD_SIZE)
+            .map(|i| ram.pointer_at(addr::BASE_TEAM_NAMES + i * 4))
+            .chain((0..MARKET_SIZE).map(|i| {
+                let record = ram.pointer_at(addr::PLAYERS_MARKET + i * 4);
+                ram.pointer_at(record + 4)
+            }));
+        Self {
+            names: (tables.base_identities.iter().map(|i| i.name.clone()))
+                .chain(tables.market.iter().map(|m| m.player.name.clone()))
+                .collect(),
+            offsets: pointers.map(|p| (p - addr::STR_JAMS) as u32).collect(),
+        }
+    }
+
+    /// The offset saved for `name`.
+    fn offset(&self, name: &str) -> u32 {
+        self.names
+            .iter()
+            .position(|n| n == name)
+            .map_or(0, |i| self.offsets[i])
+    }
+
+    /// The name a save's offset stands for. An offset no one has reads the
+    /// original's memory there, as the original would.
+    fn name(&self, game: &Game, offset: u32) -> String {
+        match self.offsets.iter().position(|&o| o == offset) {
+            Some(i) => self.names[i].clone(),
+            None => game.ram.c_string(addr::STR_JAMS + offset as usize),
+        }
+    }
 }
 
 fn team_index(team: TeamId) -> usize {

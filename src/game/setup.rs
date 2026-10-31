@@ -119,7 +119,7 @@ impl MatchRules {
                 skills: SquadSkills::Uniform(170),
             },
             team2: Lineup {
-                team: Team::read(rom, addr::TEAM_PLAYER2),
+                team: rom.teams().player_two(),
                 skills: SquadSkills::Uniform(170),
             },
             leg_duration: HALF_LENGTH_SECONDS,
@@ -159,7 +159,7 @@ const HALF_LENGTH_SECONDS: i32 = 90;
 
 /// One of the 16 league teams, in the original's order.
 pub fn league_team(rom: &AtariRom, index: usize) -> Team {
-    Team::read(rom, addr::TEAMS + index as i32 * Team::SIZE)
+    rom.teams().league(index)
 }
 
 impl MatchSetup {

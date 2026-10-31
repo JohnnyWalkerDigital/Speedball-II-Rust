@@ -3,6 +3,8 @@
 //! `keypad_manager_fn_substitute`, `update_market`, `get_player_value`,
 //! `get_max_boost`).
 
+use serde::{Deserialize, Serialize};
+
 use super::rng::Rng;
 
 /// Players in a squad: nine on the pitch, then three substitutes.
@@ -16,7 +18,7 @@ pub const LAST_SQUAD_FACE: u16 = 0x45;
 pub type SkillBytes = [u8; 8];
 
 /// One player record (`player_1_defense_1` and friends, and their stats).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SquadPlayer {
     pub name: String,
     /// Which face to draw, and whether they came from the market.
@@ -38,8 +40,9 @@ impl SquadPlayer {
 pub type Squad = [SquadPlayer; SQUAD_SIZE];
 
 /// A player on the market (`players_market`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MarketPlayer {
+    #[serde(flatten)]
     pub player: SquadPlayer,
     /// The management round at which they next come on or off the market.
     pub change_time: i16,
@@ -67,7 +70,7 @@ pub struct Context {
 
 /// The eight gym upgrades: which skill each improves and its price per
 /// player (`upgrades_table`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Upgrade {
     pub skill: usize,
     pub price: u16,

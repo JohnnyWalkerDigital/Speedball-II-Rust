@@ -8,8 +8,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::host::{Button, Control, SoundBank};
-use super::readable;
 use super::ui::{Flow, Page, Ui};
+use crate::data::readable;
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::graphics::ilbm::{self, IlbmError, Picture};

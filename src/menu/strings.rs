@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::ram::{addr, MenuRam};
-use super::readable;
+use crate::data::readable;
 use crate::game::career::{TeamId, LEAGUE_TEAMS};
 use crate::game::cup::ROUNDS as CUP_ROUNDS;
 
