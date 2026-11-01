@@ -3,6 +3,8 @@
 
 pub mod addr;
 pub mod amiga;
+#[cfg(test)]
+mod amiga_layout;
 pub mod animations;
 pub mod bytes;
 pub mod files;
