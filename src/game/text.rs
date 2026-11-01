@@ -242,11 +242,11 @@ mod tests {
     #[test]
     fn messages_are_the_originals() {
         let config = crate::config::Config::default();
-        let Ok(dump) = crate::data::files::read_amiga_intro_dump(&config.data_dir) else {
+        let Ok(amiga) = crate::data::files::read_amiga_files(&config.data_dir) else {
             eprintln!("skipping: no originals");
             return;
         };
-        let rom = Rom::new(&dump);
+        let rom = Rom::new(&amiga.intro_memory);
         for id in TextId::ALL {
             assert_eq!(id.bytes(), Text::read(&rom, id as i32).bytes(), "{id:?}");
         }

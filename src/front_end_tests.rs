@@ -34,7 +34,7 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
             return None;
         }
     };
-    let originals = OriginalFiles::new(files, true, None).expect("loaded");
+    let originals = OriginalFiles::new(files, true);
     let source = originals.originals();
     let content = content::menu_content(&source).expect("the menus load");
     let matches = source.match_graphics(Platform::Amiga).expect("loaded");
@@ -945,16 +945,17 @@ fn f_speeds_up_a_team_managers_league_match() {
 
 #[test]
 fn the_intro_runs_until_fire_then_loads_the_game() {
-    use crate::data::files::read_amiga_intro_dump;
+    use crate::data::files::read_amiga_files;
     use crate::menu::intro::{self, IntroAssets, IntroGraphics, IntroText};
-    let Ok(dump) = read_amiga_intro_dump(&Config::default().data_dir) else {
-        eprintln!("skipping: no intro dump");
+    let Ok(amiga) = read_amiga_files(&Config::default().data_dir) else {
+        eprintln!("skipping: no Amiga disk");
         return;
     };
-    let graphics = IntroGraphics::load(&dump).expect("the intro pictures decode");
+    let memory = &amiga.intro_memory;
+    let graphics = IntroGraphics::load(memory).expect("the intro pictures decode");
     let assets = IntroAssets {
         graphics,
-        text: IntroText::read(&dump),
+        text: IntroText::read(memory),
     };
     let mut shot = 0;
     let mut host = ScriptedHost::new(300, |m| {

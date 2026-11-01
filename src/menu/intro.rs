@@ -2,8 +2,8 @@
 //! the credits typed out letter by letter, round and round until fire (or
 //! space) is pressed.
 //!
-//! Its pictures, font, text and music come from a RAM dump taken during the
-//! intro, where they sit after the intro code.
+//! Its pictures, font, text and music come from the Amiga's memory as the
+//! intro starts, where they sit after the game's code.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,7 +30,7 @@ mod addr {
     pub const LOADING_GAME: usize = 0x49E4E;
 }
 
-/// The intro's first screen, shown whatever the dump holds there.
+/// The intro's first screen, shown whatever the memory holds there.
 const ORIGINAL_PRESENTS: &[u8] = b"\x0a\x14IMAGEWORKS\x0c\x19PRESENTS";
 
 /// The title font's letters; then the cursor and a blank.
@@ -74,8 +74,8 @@ pub struct IntroGraphics {
 }
 
 impl IntroGraphics {
-    /// Decodes them from the intro's RAM dump.
-    pub fn load(dump: &[u8]) -> Result<Self, IlbmError> {
+    /// Decodes them from the intro's memory.
+    pub fn load(memory: &[u8]) -> Result<Self, IlbmError> {
         let format = SpriteFormat {
             width: GLYPH_SIZE,
             height: GLYPH_SIZE,
@@ -84,10 +84,10 @@ impl IntroGraphics {
         };
         let font_bytes = FONT_GLYPHS * format.bytes_per_sprite();
         Ok(Self {
-            title: ilbm::decode(&dump[addr::SPLASH_TITLE_SCREEN..])?,
-            backdrop: ilbm::decode(&dump[addr::SPLASH_ARENA_BACKDROP..])?,
+            title: ilbm::decode(&memory[addr::SPLASH_TITLE_SCREEN..])?,
+            backdrop: ilbm::decode(&memory[addr::SPLASH_ARENA_BACKDROP..])?,
             font: decode_indexed_sprites(
-                &dump[addr::SPRITES_TITLE_FONT..addr::SPRITES_TITLE_FONT + font_bytes],
+                &memory[addr::SPRITES_TITLE_FONT..addr::SPRITES_TITLE_FONT + font_bytes],
                 format,
             ),
         })
@@ -109,14 +109,14 @@ pub struct IntroText {
 }
 
 impl IntroText {
-    /// Reads it from the intro's RAM dump.
-    pub fn read(dump: &[u8]) -> Self {
+    /// Reads it from the intro's memory.
+    pub fn read(memory: &[u8]) -> Self {
         let string = |at: usize| -> Vec<u8> {
-            let end = dump[at..]
+            let end = memory[at..]
                 .iter()
                 .position(|&b| b == 0)
-                .map_or(dump.len(), |n| at + n);
-            dump[at..end].to_vec()
+                .map_or(memory.len(), |n| at + n);
+            memory[at..end].to_vec()
         };
         let mut presents: Vec<Vec<u8>> = addr::PRESENTS.into_iter().map(string).collect();
         presents[0] = ORIGINAL_PRESENTS.to_vec();

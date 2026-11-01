@@ -1,4 +1,4 @@
-//! Read-only view of the Amiga match RAM dump, addressed like the original.
+//! Read-only view of the Amiga's memory in a match, addressed like the original.
 
 use std::sync::Arc;
 

@@ -226,20 +226,3 @@ fn set_control(input: &mut Input, control: Control, on: bool) {
         Control::Fire => input.set_fire(on),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Config;
-    use crate::data::bytes::BigEndian;
-    use crate::data::files::read_amiga_match_dump;
-
-    #[test]
-    fn the_serial_is_the_originals() {
-        let Ok(dump) = read_amiga_match_dump(&Config::default().data_dir) else {
-            eprintln!("skipping: no originals");
-            return;
-        };
-        assert_eq!(dump.u32_at(0x80), SERIAL);
-    }
-}

@@ -11,3 +11,8 @@
 
 # macOS folder metadata.
 .DS_Store
+
+# The original disk images (Amiga IPF, Atari ST): the game itself, not to
+# be shared.
+/originals/*.ipf
+/originals/*.st

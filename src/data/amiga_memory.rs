@@ -1,5 +1,5 @@
 //! The match's data as the Amiga holds it before any match is played
-//! (`Intro - Amiga.dmp`), read at the ST's addresses ([`super::addr`]),
+//! ([`super::amiga::intro_memory`]), read at the ST's addresses ([`super::addr`]),
 //! which is how the port names it.
 //!
 //! The data is the ST's, in blocks the Amiga keeps elsewhere. Its records
@@ -102,15 +102,15 @@ const THINKS: [(u32, u32); 4] = [
 
 /// The Amiga's memory before a match.
 pub struct AmigaMemory {
-    dump: Vec<u8>,
+    memory: Vec<u8>,
     /// The bank each record's sprite is in, by where the sprite is.
     sprite_banks: HashMap<i32, Bank>,
 }
 
 impl AmigaMemory {
-    pub fn new(dump: &[u8]) -> Self {
+    pub fn new(bytes: &[u8]) -> Self {
         let mut memory = Self {
-            dump: dump.to_vec(),
+            memory: bytes.to_vec(),
             sprite_banks: HashMap::new(),
         };
         memory.sprite_banks = EntityId::records()
@@ -144,7 +144,7 @@ impl AmigaMemory {
     fn raw_byte(&self, amiga: i32) -> u8 {
         usize::try_from(amiga)
             .ok()
-            .and_then(|at| self.dump.get(at))
+            .and_then(|at| self.memory.get(at))
             .copied()
             .unwrap_or(0)
     }
@@ -236,7 +236,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::data::animations::AnimationTable;
-    use crate::data::files::{read_amiga_intro_dump, read_atari_disk};
+    use crate::data::files::{read_amiga_files, read_atari_disk};
     use crate::data::lookups::Lookups;
     use crate::data::Rom;
     use crate::game::roster::Teams;
@@ -248,8 +248,8 @@ mod tests {
     fn both() -> Option<(Rom, Rom)> {
         let dir = Config::default().data_dir;
         let disk = read_atari_disk(&dir).ok()?;
-        let dump = read_amiga_intro_dump(&dir).ok()?;
-        Some((Rom::atari(disk), Rom::new(&dump)))
+        let amiga = read_amiga_files(&dir).ok()?;
+        Some((Rom::atari(disk), Rom::new(&amiga.intro_memory)))
     }
 
     /// Where two values differ, each as `path: ST value, Amiga value`.
@@ -265,7 +265,9 @@ mod tests {
                     for (i, (st, amiga)) in st.iter().zip(amiga).enumerate() {
                         // A record or a script by its name.
                         let name = st.get("id").or_else(|| st.get("names").map(|n| &n[0]));
-                        let step = name.and_then(Value::as_str).map_or(i.to_string(), str::to_string);
+                        let step = name
+                            .and_then(Value::as_str)
+                            .map_or(i.to_string(), str::to_string);
                         walk(&format!("{path}.{step}"), st, amiga, out);
                     }
                 }
@@ -340,14 +342,18 @@ mod tests {
 
     #[test]
     fn sprite_origins_past_the_table_read_the_memory_after_it() {
-        let Ok(dump) = read_amiga_intro_dump(&Config::default().data_dir) else {
+        let Ok(files) = read_amiga_files(&Config::default().data_dir) else {
             return;
         };
-        let amiga = Rom::new(&dump);
+        let memory = &files.intro_memory;
+        let amiga = Rom::new(memory);
         for sprite in [-2, 120, 130] {
             let at = (AMIGA_SPRITE_ORIGINS + sprite * 4) as usize;
-            let word = |at: usize| i32::from(i16::from_be_bytes([dump[at], dump[at + 1]]));
-            assert_eq!(amiga.sprite_origin(sprite), Point::new(word(at), word(at + 2)));
+            let word = |at: usize| i32::from(i16::from_be_bytes([memory[at], memory[at + 1]]));
+            assert_eq!(
+                amiga.sprite_origin(sprite),
+                Point::new(word(at), word(at + 2))
+            );
         }
     }
 }

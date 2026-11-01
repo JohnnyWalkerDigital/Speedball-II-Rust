@@ -6,7 +6,7 @@
 //! tremolo and vibrato. The driver steps every channel once per vertical
 //! blank (50 Hz).
 //!
-//! Its tables are read from the RAM dump, where the game left them. Word
+//! Its tables are read from the match's memory, where the game loads them. Word
 //! arithmetic wraps (`u16`), as the data relies on it.
 
 use super::layout::{
@@ -18,7 +18,7 @@ use super::memory::Memory;
 use super::paula::Paula;
 
 // ---------------------------------------------------------------------------
-// Addresses in the match RAM dump.
+// Addresses in the match's memory.
 // ---------------------------------------------------------------------------
 
 const STACK_SIZE: usize = 128;
@@ -829,9 +829,9 @@ mod tests {
     const RATE: u32 = 48_000;
 
     fn real_driver() -> Option<Driver> {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/Resources/Amiga.dmp");
-        let bytes = std::fs::read(path).ok()?;
-        Some(Driver::new(Memory::new(bytes), RATE))
+        let config = crate::config::Config::default();
+        let amiga = crate::data::files::read_amiga_files(&config.data_dir).ok()?;
+        Some(Driver::new(Memory::new(amiga.match_memory), RATE))
     }
 
     fn ticks(driver: &mut Driver, count: u32) -> Vec<f32> {

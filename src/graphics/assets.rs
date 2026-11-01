@@ -5,8 +5,8 @@ use super::image::Image;
 use super::palette::{ColorModel, Palette};
 use super::planar::{decode_sprites, Layout, Mask, SpriteFormat};
 use crate::config::Platform;
-use crate::data::files::AmigaFiles;
 use crate::data::addr;
+use crate::data::files::AmigaFiles;
 
 /// The sprite sheets entities draw from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,9 +139,9 @@ impl Assets {
     }
 
     pub fn load_amiga(files: &AmigaFiles) -> Self {
-        let dump = &files.match_dump[..];
+        let memory = &files.match_memory[..];
         let disk = &files.disk[..];
-        let palette = Palette::read(dump, 0xF2, 32, ColorModel::Amiga);
+        let palette = Palette::read(memory, 0xF2, 32, ColorModel::Amiga);
         let blue = palette.with_color_copied(Self::BLUE, Self::RED);
         let decode =
             |runs: &[Run], palette: &Palette| decode_runs(runs, palette, Layout::AmigaPlanar);
@@ -159,7 +159,7 @@ impl Assets {
         const LARGE: (usize, usize) = (32, 32);
 
         let pitch_tiles = decode(&[run(disk, 0xC2C00, 59840, SMALL, 5, Opaque)], &palette);
-        let pitch = field::build_amiga(&pitch_tiles, &dump[0x27A..0x27A + 5760]);
+        let pitch = field::build_amiga(&pitch_tiles, &memory[0x27A..0x27A + 5760]);
         let player_runs = [
             run(disk, 0xAFC80, 61440, LARGE, 4, Transparent),
             run(disk, 0xBEC80, 5120, LARGE, 4, Transparent),
@@ -169,11 +169,11 @@ impl Assets {
             pitch,
             pitch_tiles,
             panels: decode(
-                &[run(dump, 0x173BE, 3840 * 3, (96, 64), 5, Opaque)],
+                &[run(memory, 0x173BE, 3840 * 3, (96, 64), 5, Opaque)],
                 &palette,
             ),
-            panel_font: decode(&[run(dump, 0x1AFBE, 1440, (8, 8), 5, Opaque)], &palette),
-            digits: decode(&[run(dump, 0x1B55E, 400, (8, 8), 5, Opaque)], &palette),
+            panel_font: decode(&[run(memory, 0x1AFBE, 1440, (8, 8), 5, Opaque)], &palette),
+            digits: decode(&[run(memory, 0x1B55E, 400, (8, 8), 5, Opaque)], &palette),
             status_bar: decode(&[run(disk, 0x68398, 2560, (320, 16), 4, Opaque)], &palette)
                 .remove(0),
             entities: decode(

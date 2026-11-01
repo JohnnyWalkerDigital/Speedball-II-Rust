@@ -13,45 +13,34 @@ it will run.
 ## Getting started
 
 You need [Rust](https://www.rust-lang.org/tools/install) 1.80 or later, and
-these files from the original game:
+disk images of your own copy of the original game:
 
 | File | What it is | Needed for |
 | --- | --- | --- |
-| `Intro - Amiga.dmp` | The Amiga's 512 KB of memory, saved from an emulator during the intro | Always: the match's tables, teams and starting positions, and the intro |
-| `Amiga.dmp` | The same, saved during a match | The Amiga graphics, the menus and all sound |
-| A `.adf` file of 901,120 bytes | The Amiga disk image | The Amiga graphics and the menus |
+| A `.ipf` file | The Amiga disk, imaged by the Software Preservation Society (SPS) | Always: the match's data, the Amiga graphics, the menus, the intro and all sound |
 | A `.st` file of 819,200 bytes | The Atari ST disk image | The Atari ST graphics (`--atari`) only |
 
-The two disk images can have any names: the game finds them by their
-extension and size, so there must be only one of each. The memory dumps
-must have exactly the names above.
+The port reads SPS releases 180, 1876 and 2897 of the Amiga disk. Release
+2006 is a different build of the game, laid out differently, and is not
+supported yet. The files can have any names: the game finds them by their
+extension (and the `.st` by its size). If there are several `.ipf` files, it
+uses the first it can read.
 
-Put them in a folder called `src/Resources` next to this project's folder,
-not inside it:
+Put them in the `originals` folder of this project (git ignores them there):
 
 ```
-Speedball2/
-├── speedball2-rs/          this project
-└── src/
-    └── Resources/
-        ├── Speedball 2.st
-        ├── Speedball 2.adf
-        ├── Amiga.dmp
-        └── Intro - Amiga.dmp
+speedball2-rs/
+└── originals/
+    ├── Speedball2.ipf
+    └── Speedball 2.st
 ```
 
 To keep them somewhere else, run the game with `--data <folder>`. The tests
-always look in `../src/Resources`.
+always look in `originals`.
 
 The project builds without these files. Without them the game stops with a
 message naming the file it couldn't find, and the tests that need them are
-skipped.
-
-What works without some of the files:
-- **No `.st`:** everything except the Atari ST graphics.
-- **Only `Intro - Amiga.dmp` and the `.st`:** single matches with the
-  Atari ST graphics (`--mode ... --atari`), silent.
-- **The same and `Amiga.dmp`:** the same, with sound.
+skipped. Without the `.st`, everything but the Atari ST graphics works.
 
 ## Running
 
@@ -98,7 +87,7 @@ cargo run --release -- --assets assets
 ```
 
 `content/` is the seam: the game asks a `ContentSource`, which is either
-`Originals` (decoding the disk images and dumps as before) or a `Pack`. A
+`Originals` (decoding the disk images as before) or a `Pack`. A
 pack holds the match graphics for both platforms as RGBA PNGs (pitch,
 tiles, sprites, panels, fonts, status bar), and the menu and intro
 pictures, fonts and manager-screen sheets as indexed PNGs, since the menus
@@ -184,10 +173,28 @@ they are still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should
 not be shared.
 
+## The Amiga's memory
+
+The port reads the original's data where the Amiga has it in memory, so
+`data/amiga.rs` loads memory from the disk the way the game does
+(`data/ipf.rs` first decodes the IPF's sectors):
+
+- The boot block reads a small track loader, which reads the packed program
+  and the intro's data to 0x32000 and unpacks the program down to 0x84.
+  That is memory as the intro starts.
+- The copy protection, once satisfied, adds its key to three longs: a panel
+  message and two pieces of code. The port adds the same key.
+- A match loads the sound bank, its samples, its graphics and the pitch's
+  tiles over that, as numbered overlays listed on the disk; the menus load
+  theirs over the match's.
+
+What the game then builds as it runs (the squads' names, the market's
+timers, the numbers in the menus' strings) the port builds the same way.
+
 ## The match's data
 
 The match's tables, teams, animation scripts and starting records are read
-from the Amiga's memory before any match is played (`Intro - Amiga.dmp`).
+from the Amiga's memory before any match is played.
 The port names them by where the Atari ST keeps them (`data/addr.rs`), and
 `data/amiga_memory.rs` finds each where the Amiga has it: the same data, in
 blocks the Amiga keeps elsewhere, with pointers to its own code, graphics
@@ -214,10 +221,9 @@ The Amiga has no goal indicators; their records are the ST's.
 
 `menu/` is a port of the Amiga front end: the main menu and the game
 modes. It runs on the Amiga data whichever graphics the match uses:
-`data/amiga.rs` reads the disk's overlay directory and rebuilds the menus'
-memory from `Amiga.dmp` the way the game does on entering them, loading the menu
-graphics (overlay 1) and the menu sound samples (overlay 28) at their
-original addresses. The menu code then reads its strings, layouts and fonts
+`data/amiga.rs` builds the menus' memory the way the game does on entering
+them, loading the menu graphics (overlay 1) and the menu sound samples
+(overlay 28) over the match's at their original addresses. The menu code then reads its strings, layouts and fonts
 from there, and the sound driver switches between the menu and match
 samples as the original did.
 
@@ -314,7 +320,7 @@ team 1 reaches its cap (in two-player games, once both teams have).
 - The intro (`menu/intro.rs`): "IMAGEWORKS PRESENTS", "A BITMAP BROTHERS
   GAME", then the title with its music, the story and the credits typed out
   letter by letter over the arena, round and round until fire or space is
-  held, and "LOADING GAME". It comes from `Intro - Amiga.dmp`.
+  held, and "LOADING GAME". It comes from the intro's memory.
 
 There is no team selection in the original: one-player games are always
 Brutal Deluxe.
@@ -324,10 +330,10 @@ Brutal Deluxe.
 `sound/` is a port of the original Amiga sound driver and its sequencer,
 plus a small emulation of the Amiga's sound chip. It plays the original sequences,
 instruments, envelopes and effects from the memory they were in
-(`Amiga.dmp`, with the sound data laid back over it from the originals or
+(the match's, with the sound data laid back over it from the originals or
 a pack), ticking at 50 Hz like the original's vertical-blank interrupt. Channels 0 and 3 play on
-the left and 1 and 2 on the right, as on the Amiga. It needs `Amiga.dmp` even
-with `--atari` graphics; without it, or with `--mute`, the game is silent.
+the left and 1 and 2 on the right, as on the Amiga. It plays with `--atari`
+graphics too; with `--mute` the game is silent.
 
 The match requests sounds (`game/events.rs`) wherever the original plays one
 in a match, with the same sound ID and priority: kick-off, the ball

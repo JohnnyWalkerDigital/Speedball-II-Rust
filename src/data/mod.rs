@@ -1,5 +1,5 @@
-//! Access to the original game data: disk images, RAM dumps and the
-//! lookup tables the game relies on.
+//! Access to the original game data: disk images, the memory loaded from
+//! them and the lookup tables the game relies on.
 
 pub mod addr;
 pub mod amiga;
@@ -7,6 +7,7 @@ mod amiga_memory;
 pub mod animations;
 pub mod bytes;
 pub mod files;
+pub mod ipf;
 pub mod lookups;
 pub mod readable;
 pub mod rom;

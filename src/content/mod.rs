@@ -1,5 +1,5 @@
-//! Where the game's graphics and words come from: the original disks and
-//! memory dumps ([`Originals`]), or a [`Pack`] of ordinary image and text
+//! Where the game's graphics and words come from: the original disks
+//! ([`Originals`]), or a [`Pack`] of ordinary image and text
 //! files extracted from them, which can be edited.
 //!
 //! The game asks a [`ContentSource`], so it does not matter which.
@@ -278,7 +278,7 @@ mod tests {
         };
         let mut files = files;
         files.atari_disk = read_atari_disk(&config.data_dir).ok();
-        let files = OriginalFiles::new(files, true, None).expect("the originals load");
+        let files = OriginalFiles::new(files, true);
         let originals = files.originals();
         let dir = std::env::temp_dir().join(format!("sb2-pack-{}", std::process::id()));
         let extracted = extract(&originals, &dir).expect("the pack is written");

@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use crate::config::{Config, GameMode, Platform};
-use crate::data::{addr, Rom, GameFiles};
+use crate::data::{addr, GameFiles, Rom};
 use crate::game::entity::Entity;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::{Assets, Canvas};
@@ -22,7 +22,7 @@ impl Harness {
     fn assets(&self, platform: Platform) -> Assets {
         match platform {
             Platform::Atari => Assets::load_atari(self.files.atari_disk.as_ref().expect("loaded")),
-            Platform::Amiga => Assets::load_amiga(self.files.amiga.as_ref().expect("loaded")),
+            Platform::Amiga => Assets::load_amiga(&self.files.amiga),
         }
     }
 }
@@ -31,7 +31,7 @@ fn load(platform: Platform) -> Option<Harness> {
     let config = Config::default();
     match GameFiles::load(&config.data_dir, platform) {
         Ok(files) => {
-            let mut rom = Rom::new(&files.intro_dump);
+            let mut rom = Rom::new(&files.amiga.intro_memory);
             // `SPEEDBALL_PACK` plays from an asset pack's tables instead.
             if let Ok(dir) = std::env::var("SPEEDBALL_PACK") {
                 use crate::content::{ContentSource, Pack};

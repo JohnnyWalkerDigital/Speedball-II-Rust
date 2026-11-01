@@ -517,7 +517,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::data::amiga::{menu_ram, Overlays};
-    use crate::data::files::{read_amiga_files, read_amiga_intro_dump};
+    use crate::data::files::read_amiga_files;
     use crate::sound::driver::Driver;
     use crate::sound::memory::Memory;
 
@@ -527,12 +527,12 @@ mod tests {
         let config = Config::default();
         let amiga = read_amiga_files(&config.data_dir).ok()?;
         let overlays = Overlays::new(&amiga.disk)?;
-        let menus = menu_ram(&amiga.match_dump, &overlays);
-        let mut images = vec![("match", amiga.match_dump), ("menus", menus)];
-        if let Ok(intro) = read_amiga_intro_dump(&config.data_dir) {
-            images.push(("intro", intro));
-        }
-        Some(images)
+        let menus = menu_ram(&amiga.match_memory, &overlays);
+        Some(vec![
+            ("match", amiga.match_memory),
+            ("menus", menus),
+            ("intro", amiga.intro_memory),
+        ])
     }
 
     #[test]

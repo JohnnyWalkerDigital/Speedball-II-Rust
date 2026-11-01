@@ -32,8 +32,8 @@ enum Memory {
 
 impl Rom {
     /// The data from the Amiga's memory during the intro.
-    pub fn new(intro_dump: &[u8]) -> Self {
-        Self::read(Memory::Amiga(AmigaMemory::new(intro_dump)))
+    pub fn new(intro_memory: &[u8]) -> Self {
+        Self::read(Memory::Amiga(AmigaMemory::new(intro_memory)))
     }
 
     /// The data from the ST disk.
@@ -317,7 +317,7 @@ mod tests {
             eprintln!("skipping: no originals");
             return;
         };
-        let rom = Rom::new(&files.intro_dump);
+        let rom = Rom::new(&files.amiga.intro_memory);
         let raw_pair = |ram: i32| Point::new(rom.i8(ram), rom.i8(ram + 1));
         for dir in -10..20 {
             for speed in -2..12 {

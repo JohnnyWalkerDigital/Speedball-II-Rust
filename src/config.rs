@@ -61,7 +61,7 @@ OPTIONS:
     --team2 <0-15>         With --mode: team for player 2 (default: random)
     --seed <N>             Random seed, for reproducible matches
     --scale <1|2|4|8>      Window scale (default: 4)
-    --data <DIR>           Folder with the disk images (default: ../src/Resources)
+    --data <DIR>           Folder with the disk images (default: originals)
     --export-sounds <DIR>  Save the raw instrument samples, and every game sound
                            rendered through the driver, as WAV files and exit
     --mute                 No sound
@@ -121,7 +121,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            data_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src/Resources"),
+            data_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("originals"),
             platform: Platform::Amiga,
             mode: None,
             seed: time_seed(),

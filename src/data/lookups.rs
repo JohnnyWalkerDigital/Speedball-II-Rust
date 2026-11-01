@@ -138,11 +138,7 @@ impl Lookups {
             think_delay: bytes(addr::THINK_DELAY_BY_INT, SKILL_STEPS, Rom::u8),
             prediction_shift: bytes(addr::PREDICTION_SHIFT_BY_INT, SKILL_STEPS, Rom::u8),
             jump_bonus: bytes(addr::JUMP_BONUS_BY_SPD, SKILL_STEPS, Rom::u8),
-            tackle_defence_penalty: bytes(
-                addr::TACKLE_DEF_MALUS_BY_ANGLE,
-                DIRECTIONS,
-                Rom::u8,
-            ),
+            tackle_defence_penalty: bytes(addr::TACKLE_DEF_MALUS_BY_ANGLE, DIRECTIONS, Rom::u8),
             equipment_skill: bytes(addr::EQUIPMENT_SKILL, EQUIPMENT, Rom::u8),
             support_positions: grid(addr::SUPPORT_POSITIONS),
             support_positions_forward: grid(addr::SUPPORT_POSITIONS_FORWARD),

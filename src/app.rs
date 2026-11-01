@@ -9,15 +9,13 @@ use std::time::{Duration, Instant};
 
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
-use crate::config::{Config, Platform};
+use crate::config::Config;
 use crate::content::{self, ContentSource, OriginalFiles, Originals, Pack};
 use crate::data::animations::Animations;
-use crate::data::files::{
-    read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, read_atari_disk,
-};
+use crate::data::files::{read_amiga_files, read_atari_disk};
 use crate::data::lookups::Lookups;
 use crate::data::save_disk::SaveDisk;
-use crate::data::{Rom, GameFiles};
+use crate::data::{GameFiles, Rom};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::game::roster::Teams;
@@ -66,16 +64,15 @@ const BINDINGS: &[(Key, Button)] = &[
 
 /// Saves the Amiga sound samples as WAV files.
 pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
-    let files = GameFiles::load(&config.data_dir, Platform::Amiga)?;
-    let amiga = files.amiga.expect("loaded for the Amiga");
-    let samples = crate::sound::export_samples(&amiga.match_dump, dir)?;
+    let amiga = read_amiga_files(&config.data_dir)?;
+    let samples = crate::sound::export_samples(&amiga.match_memory, dir)?;
     println!(
         "Wrote {samples} raw instrument samples to {} (at {} Hz, which may not be their real pitch)",
         dir.display(),
         crate::sound::wav::SAMPLE_RATE
     );
     let rendered = dir.join("rendered");
-    let count = crate::sound::export_sounds(amiga.match_dump, &rendered)?;
+    let count = crate::sound::export_sounds(amiga.match_memory, &rendered)?;
     println!(
         "Wrote {count} game sounds, played through the driver, to {}",
         rendered.display()
@@ -83,30 +80,11 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-/// The originals the game needs: the Amiga intro dump always; the
-/// selected platform's files for its graphics; the Amiga files for the
-/// menus (unless `--mode` skips them); the Amiga match dump for sound
-/// otherwise.
+/// The originals the game needs: the Amiga disk always, and the ST's for
+/// its graphics.
 fn load_originals(config: &Config) -> Result<OriginalFiles, Box<dyn Error>> {
-    let mut files = GameFiles::load(&config.data_dir, config.platform)?;
-    let with_menus = config.mode.is_none();
-    files.amiga = match files.amiga {
-        Some(amiga) => Some(amiga),
-        None if with_menus => Some(read_amiga_files(&config.data_dir).map_err(|e| {
-            format!("the menus need the Amiga files ({e}); use --mode to skip them")
-        })?),
-        None => None,
-    };
-    // The sound driver runs on the Amiga data, whichever graphics are
-    // shown. Without it the game is silent.
-    let sound_dump = if files.amiga.is_none() && !config.mute {
-        read_amiga_match_dump(&config.data_dir)
-            .map_err(|error| eprintln!("sound off: {error}"))
-            .ok()
-    } else {
-        None
-    };
-    Ok(OriginalFiles::new(files, with_menus, sound_dump)?)
+    let files = GameFiles::load(&config.data_dir, config.platform)?;
+    Ok(OriginalFiles::new(files, config.mode.is_none()))
 }
 
 /// The graphics, text and tables a game needs, from the originals or
@@ -179,9 +157,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let sound = SoundBanks::new(
         &config,
         content.sound.as_ref(),
-        originals.match_dump(),
+        &originals.amiga.match_memory,
         originals.menu_ram.as_ref().map(MenuRam::bytes),
-        Some(&originals.intro_dump),
+        &originals.amiga.intro_memory,
     );
     let OriginalFiles {
         mut rom, menu_ram, ..
@@ -201,17 +179,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
 /// `--extract`: writes the tables and graphics as an asset pack.
 pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
-    // The intro dump, and whichever graphics there are.
+    // The Amiga disk, and the ST's graphics if there are any.
     let files = GameFiles {
-        intro_dump: read_amiga_intro_dump(&config.data_dir)?,
+        amiga: read_amiga_files(&config.data_dir)?,
         atari_disk: read_atari_disk(&config.data_dir)
             .map_err(|error| eprintln!("no ST graphics: {error}"))
             .ok(),
-        amiga: read_amiga_files(&config.data_dir)
-            .map_err(|error| eprintln!("no Amiga graphics or menus: {error}"))
-            .ok(),
     };
-    let originals = OriginalFiles::new(files, true, None)?;
+    let originals = OriginalFiles::new(files, true);
     let extracted = content::extract(&originals.originals(), dir)?;
     let platforms: Vec<_> = extracted
         .platforms
@@ -290,19 +265,19 @@ struct SoundBanks {
 
 impl SoundBanks {
     /// The sound content laid over the original memory of the match, the
-    /// menus and the intro (whichever there are). Without the match's (or
+    /// menus (if they are played) and the intro. Without sound content (or
     /// without an audio device) the game is silent.
     fn new(
         config: &Config,
         content: Option<&SoundContent>,
-        match_base: Option<&[u8]>,
+        match_base: &[u8],
         menu_base: Option<&[u8]>,
-        intro_base: Option<&[u8]>,
+        intro_base: &[u8],
     ) -> Option<Self> {
         if config.mute {
             return None;
         }
-        let (content, match_base) = (content?, match_base?);
+        let content = content?;
         let lay_out = |data: &SoundData, base: &[u8]| {
             data.lay_out(&content.tables, base)
                 .map_err(|error| eprintln!("sound off: {error}"))
@@ -313,8 +288,8 @@ impl SoundBanks {
             Some(base) => Some(lay_out(content.menus.as_ref()?, base)?),
             None => None,
         };
-        let intro_ram = match content.intro.as_ref().zip(intro_base) {
-            Some((data, base)) => Some(lay_out(data, base)?),
+        let intro_ram = match &content.intro {
+            Some(data) => Some(lay_out(data, intro_base)?),
             None => None,
         };
         let output = start_sound(menu_ram.clone().unwrap_or_else(|| match_ram.clone()))?;
