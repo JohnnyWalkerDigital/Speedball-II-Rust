@@ -1,9 +1,58 @@
 # Speedball 2 (Rust)
 
-A Rust port of the Speedball 2 match engine, with sound, goal replays and
-the front-end menus. Like the original, it reads graphics and the game's
-lookup tables straight from the Atari ST / Amiga disk images in
-`../src/Resources`.
+A faithful port of the Bitmap Brothers' *Speedball 2: Brutal Deluxe* to
+Rust: the matches, the computer players, the intro, the menus (knockout,
+league, cup, practice and two-player games, the manager screens, saving and
+loading), goal replays and the original sound. It looks and plays like the
+original, with the Amiga's graphics or the Atari ST's.
+
+The game's graphics, tables, words and sound are not included. It reads
+them from your own copy of the original game, so you need its files before
+it will run.
+
+## Getting started
+
+You need [Rust](https://www.rust-lang.org/tools/install) 1.80 or later, and
+these files from the original game:
+
+| File | What it is | Needed for |
+| --- | --- | --- |
+| A `.st` file of 819,200 bytes | The Atari ST disk image | Always: the match runs on its tables |
+| A `.adf` file of 901,120 bytes | The Amiga disk image | The Amiga graphics and the menus |
+| `Amiga.dmp` | The Amiga's 512 KB of memory, saved from an emulator during a match | The Amiga graphics, the menus and all sound |
+| `Intro - Amiga.dmp` | The same, saved during the intro | The intro (optional) |
+
+The two disk images can have any names: the game finds them by their
+extension and size, so there must be only one of each. The memory dumps
+must have exactly the names above.
+
+Put them in a folder called `src/Resources` next to this project's folder,
+not inside it:
+
+```
+Speedball2/
+├── speedball2-rs/          this project
+└── src/
+    └── Resources/
+        ├── Speedball 2.st
+        ├── Speedball 2.adf
+        ├── Amiga.dmp
+        └── Intro - Amiga.dmp
+```
+
+To keep them somewhere else, run the game with `--data <folder>`. The tests
+always look in `../src/Resources`.
+
+The project builds without these files. Without them the game stops with a
+message naming the file it couldn't find, and the tests that need them are
+skipped.
+
+What works without some of the files:
+- **No Amiga files:** only single matches with the Atari ST graphics
+  (`--mode ... --atari`), silent.
+- **`Amiga.dmp` but no `.adf`:** the same, with sound.
+- **No `Intro - Amiga.dmp`:** everything except the intro; the game starts
+  at the main menu.
 
 ## Running
 
@@ -21,7 +70,7 @@ cargo run --release -- --atari --mode two-players --team2 5
 Options (`--help` lists them all): `--atari`/`--amiga` (match graphics),
 `--mode knockout|two-players|practice|demo`, `--team1/--team2 <0-15>` (with
 `--mode`), `--seed <n>` (same seed, same matches), `--scale 1|2|4|8`,
-`--data <dir>`.
+`--data <dir>`, `--mute`.
 
 | Keys | Action |
 | --- | --- |
@@ -313,7 +362,8 @@ match, menu and result frames as BMPs.
 
 | Module | Role |
 | --- | --- |
-| `data/` | Disk loading, big-endian reads, named RAM addresses and lookup tables |
+| `data/` | Finding and loading the original files, big-endian reads, named RAM addresses and lookup tables |
+| `content/` | Where graphics, words, tables and sound come from: the originals or an asset pack |
 | `game/state.rs`, `state/` | `Match`: state and the per-frame update; the clock, camera, scoreboard, kick-off, ball, goals and message panel |
 | `game/actions.rs` | Running, tackling, jumping, catching, throwing |
 | `game/ai.rs` | Computer decisions |
@@ -329,7 +379,8 @@ match, menu and result frames as BMPs.
 | `render.rs` | Draws a `Match` onto the screen |
 | `menu/` | Intro, main menu, game modes, result screens, replay viewer |
 | `menu/manager/` | Manager screens: a session's view and drawing, the keypad and its keys, the squad table, transfers and the gym |
-| `app.rs` | Window, keyboard, timing |
+| `sound/` | The Amiga sound driver and sound chip, and the sound data in packs |
+| `app.rs` | Window, keyboard, timing, loading and the command-line modes |
 
 Design choices:
 
@@ -354,9 +405,6 @@ Design choices:
   original's F does nothing.
 - A sped-up match ran as fast as the Amiga could compute it; the port runs
   eight steps a frame.
-- The intro dump comes from a cracked copy that says "DUAL CREW PRESENT";
-  the port shows the original's "IMAGEWORKS PRESENTS" (the same number of
-  bytes).
 - A saved replay's buffer holds zeros where the replay doesn't reach; the
   original's held whatever earlier matches had left there.
 
