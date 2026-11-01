@@ -103,7 +103,7 @@ impl Match {
     }
 
     pub(crate) fn thrower_skill_thr(&self) -> i32 {
-        self.players[self.thrower.0].skills().thr
+        self.players[self.thrower].skills().thr
     }
 
     /// The tunnels on the side walls teleport the ball across the pitch.
@@ -162,7 +162,7 @@ impl Match {
         let mut nearest = PlayerId::of(side == Side::Team1, 0);
         let mut best = i32::MAX;
         for id in self.team(side) {
-            let distance = self.players[id.0].distance_to_ball;
+            let distance = self.players[id].distance_to_ball;
             if distance <= best {
                 best = distance;
                 nearest = id;
@@ -176,20 +176,20 @@ impl Match {
             return;
         }
         for p1 in PlayerId::team(true) {
-            if self.players[p1.0].entity.flags.offscreen() {
+            if self.players[p1].entity.flags.offscreen() {
                 continue;
             }
-            let e1 = &self.players[p1.0].entity;
+            let e1 = &self.players[p1].entity;
             let feet = e1.pos + e1.origin;
             for p2 in PlayerId::team(false) {
-                let opponent = &self.players[p2.0];
+                let opponent = &self.players[p2];
                 if opponent.entity.flags.offscreen() {
                     continue;
                 }
                 let distance = opponent.entity.distance_to(feet);
-                let (i1, i2) = (self.players[p1.0].index, opponent.index);
-                self.players[p1.0].distance_to_opponents[i2] = distance;
-                self.players[p2.0].distance_to_opponents[i1] = distance;
+                let (i1, i2) = (self.players[p1].index, opponent.index);
+                self.players[p1].distance_to_opponents[i2] = distance;
+                self.players[p2].distance_to_opponents[i1] = distance;
             }
         }
     }

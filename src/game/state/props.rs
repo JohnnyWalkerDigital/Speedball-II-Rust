@@ -57,7 +57,7 @@ impl Props {
 impl Match {
     pub(crate) fn entity(&self, r: EntityRef) -> &Entity {
         match r {
-            EntityRef::Player(p) => &self.players[p.0].entity,
+            EntityRef::Player(p) => &self.players[p].entity,
             EntityRef::Ball => &self.props.ball,
             EntityRef::BigBall => &self.props.big_ball,
             EntityRef::TerrainCenter => &self.props.terrain_center,
@@ -72,7 +72,7 @@ impl Match {
 
     pub(crate) fn entity_mut(&mut self, r: EntityRef) -> &mut Entity {
         match r {
-            EntityRef::Player(p) => &mut self.players[p.0].entity,
+            EntityRef::Player(p) => &mut self.players[p].entity,
             EntityRef::Ball => &mut self.props.ball,
             EntityRef::BigBall => &mut self.props.big_ball,
             EntityRef::TerrainCenter => &mut self.props.terrain_center,

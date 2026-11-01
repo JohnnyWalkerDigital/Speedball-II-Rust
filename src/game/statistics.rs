@@ -60,10 +60,10 @@ impl Match {
     fn team_statistics(&self, side: Side) -> TeamStatistics {
         let team1 = side == Side::Team1;
         // Slot 0 of each team is its goalkeeper.
-        let keeper = |team1: bool| &self.players[PlayerId::of(team1, 0).0].stats;
+        let keeper = |team1: bool| &self.players[PlayerId::of(team1, 0)].stats;
         let sum = |stat: fn(&MatchStats) -> u8| {
             PlayerId::team(team1)
-                .map(|p| u16::from(stat(&self.players[p.0].stats)))
+                .map(|p| u16::from(stat(&self.players[p].stats)))
                 .fold(0u16, u16::wrapping_add)
         };
         let goals_scored = sum(|s| s.goals_scored);

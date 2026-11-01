@@ -190,7 +190,7 @@ impl Match {
     fn pickup_distance(&self, item: EntityRef, p: PlayerId) -> i32 {
         const OUT_OF_REACH: i32 = 17;
         let item = self.entity(item);
-        let player = &self.players[p.0].entity;
+        let player = &self.players[p].entity;
         if player.flags.falling() || player.flags.jumping() {
             return OUT_OF_REACH;
         }
@@ -212,30 +212,30 @@ impl Match {
         let sprite = self.props.equipment.sprite;
         self.props.equipment.flags.set_invisible(true);
         self.equipment_on_floor = 0;
-        self.players[p.0].equipment_sprite = sprite;
+        self.players[p].equipment_sprite = sprite;
         let Some(skill) = self.equipment_skill(sprite) else {
             debug_assert!(false, "equipment sprite {sprite} has no skill");
             return;
         };
-        self.players[p.0].equip(skill);
+        self.players[p].equip(skill);
         self.equipment_pickups_left -= 1;
     }
 
     /// Drops whatever the player was wearing where they stand.
     pub(crate) fn drop_equipment(&mut self, p: PlayerId) {
-        let sprite = self.players[p.0].equipment_sprite;
+        let sprite = self.players[p].equipment_sprite;
         if sprite == 0 {
             return;
         }
-        let at = self.players[p.0].entity.pos;
+        let at = self.players[p].entity.pos;
         let equipment = &mut self.props.equipment;
         equipment.flags.set_invisible(false);
         equipment.pos = Point::new((at.x & 0xFE0) + 16, (at.y & 0xFE0) + 16);
         self.equipment_on_floor = sprite;
         if let Some(skill) = self.equipment_skill(sprite) {
-            self.players[p.0].unequip(skill);
+            self.players[p].unequip(skill);
         }
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         player.equipment_sprite = 0;
         player.equipment_backup = 0;
         if self.equipment_pickups_left == 0 {

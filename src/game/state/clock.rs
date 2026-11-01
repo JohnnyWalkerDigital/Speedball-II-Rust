@@ -4,7 +4,7 @@
 use super::Match;
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
-use crate::game::player::count;
+use crate::game::player::{count, PlayerId};
 use crate::game::text::TextId;
 
 const TICKS_PER_SECOND: i32 = 50;
@@ -167,7 +167,7 @@ impl Match {
 
     fn count_territory_and_possession(&mut self) {
         let in_top_half = self.props.ball.pos.y <= 576;
-        let team1_attacks_up = self.players[0].attacks_up();
+        let team1_attacks_up = self.players[PlayerId(0)].attacks_up();
         let side = if in_top_half == team1_attacks_up {
             Side::Team1
         } else {
@@ -175,7 +175,7 @@ impl Match {
         };
         *self.time_in_opponents_half.get_mut(side) += 1;
         if let Some(p) = self.holder_player() {
-            count(&mut self.players[p.0].stats.time_in_possession);
+            count(&mut self.players[p].stats.time_in_possession);
         }
     }
 }

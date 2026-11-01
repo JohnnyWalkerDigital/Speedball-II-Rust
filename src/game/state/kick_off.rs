@@ -81,10 +81,10 @@ impl Match {
     /// Whether both teams stand in their presentation line-up, facing
     /// forward: the end of the match.
     pub(super) fn teams_in_final_line_up(&self) -> bool {
-        let team1_attacks_up = self.players[0].attacks_up();
+        let team1_attacks_up = self.players[PlayerId(0)].attacks_up();
         let in_line = |side: Side, base: usize| {
             self.team(side).all(|id| {
-                let player = &self.players[id.0];
+                let player = &self.players[id];
                 player.entity.pos == self.presentation[base + player.index]
                     && player.entity.dir == player.attributes.initial_dir
             })

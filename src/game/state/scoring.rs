@@ -85,7 +85,7 @@ impl Match {
         }
 
         // An own goal is credited to the other team's active player.
-        let thrower_team1 = self.players[self.thrower.0].entity.is_team1();
+        let thrower_team1 = self.players[self.thrower].entity.is_team1();
         let message = if thrower_team1 && !top_goal {
             self.thrower = self.controlled.team2;
             TextId::OwnGoal
@@ -121,7 +121,7 @@ impl Match {
         self.play_sound(crowd);
         self.clock_paused = true;
         self.show_message(None);
-        count(&mut self.players[self.thrower.0].stats.goals_scored);
+        count(&mut self.players[self.thrower].stats.goals_scored);
         self.start_goal_celebration(self.thrower);
         self.score.release_display();
     }
@@ -139,7 +139,7 @@ impl Match {
     /// Whether `p`'s team attacked up at kick-off (the initial playing
     /// direction is team 1's). Several crowd sounds depend on it.
     pub(crate) fn started_attacking_up(&self, p: PlayerId) -> bool {
-        self.players[p.0].entity.is_team1() == (self.initial_dir_team1 == 0)
+        self.players[p].entity.is_team1() == (self.initial_dir_team1 == 0)
     }
 
     /// The crowd cheers when the last thrower's team started attacking up.
@@ -156,7 +156,7 @@ impl Match {
         let Some(holder) = self.held_token_holder(Token::GoalDoor) else {
             return true;
         };
-        if self.players[holder.0].attacks_up() {
+        if self.players[holder].attacks_up() {
             top_goal != self.reverse_side
         } else {
             top_goal == self.reverse_side

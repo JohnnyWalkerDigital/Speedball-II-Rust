@@ -66,14 +66,14 @@ impl Match {
     /// Stops play and sends the medics on.
     pub(crate) fn start_injury(&mut self, p: PlayerId) {
         if let Some(current) = self.injury.player {
-            if self.players[current.0].entity.flags.busy() {
+            if self.players[current].entity.flags.busy() {
                 return;
             }
         }
         let side = self.side_of(p);
         *self.controlled.get_mut(side) = p;
 
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.script = self.rom.script(Script::PlayerOnGround);
         entity.script_index = 0;
         let mut pos = Point::new(entity.pos.x & 0xFFFE, entity.pos.y & 0xFFFE);
@@ -149,7 +149,7 @@ impl Match {
 
     fn front_medic_target(&self, injured: PlayerId) -> Point {
         let mut target = self.injury.front_medic_offset;
-        target.x += self.players[injured.0].entity.pos.x;
+        target.x += self.players[injured].entity.pos.x;
         target
     }
 
@@ -172,7 +172,7 @@ impl Match {
             self.steer_front_medic(injured);
             return;
         }
-        let injured_pos = self.players[injured.0].entity.pos;
+        let injured_pos = self.players[injured].entity.pos;
         let injury = &mut self.injury;
         injury.rear_medic_target.y = injured_pos.y;
         if injured_pos.x <= 320 {
@@ -192,17 +192,17 @@ impl Match {
             return;
         }
         self.show_message(Some(TextId::Injured));
-        let name = POSITION_NAMES[self.players[injured.0].index];
+        let name = POSITION_NAMES[self.players[injured].index];
         self.text_panel.text_mut(TextId::Injured).overwrite(2, name);
 
         self.props.medics[REAR].velocity.y = 0;
         self.injury.front_medic_offset.y = self.injury.rear_medic_target.y;
-        let (speed, script, exit_x) = if self.players[injured.0].entity.pos.x <= 320 {
+        let (speed, script, exit_x) = if self.players[injured].entity.pos.x <= 320 {
             (MEDIC_SPEED, self.rom.script(Script::MedicCarryRight), 592)
         } else {
             (-MEDIC_SPEED, self.rom.script(Script::MedicCarryLeft), 48)
         };
-        self.players[injured.0].entity.velocity.x = speed;
+        self.players[injured].entity.velocity.x = speed;
         let rear = &mut self.props.medics[REAR];
         rear.velocity.x = speed;
         rear.script = script;
@@ -228,7 +228,7 @@ impl Match {
         if self.rng.high_byte() & (1 << 5) != 0 {
             self.play_sound(Sound::ICE_CREAM);
         }
-        self.players[injured.0].entity.script = self.rom.script(Script::PlayerCarried);
+        self.players[injured].entity.script = self.rom.script(Script::PlayerCarried);
         let rear_walks_left =
             self.props.medics[REAR].script == self.rom.script(Script::MedicCarryLeft);
         let (front_script, rear_script) = if rear_walks_left {
@@ -260,11 +260,11 @@ impl Match {
         self.substitute(injured);
         self.show_message(Some(TextId::Vs));
         self.play_sound(Sound::GET_READY);
-        let substitutions = self.players[injured.0].stats.substitutions;
+        let substitutions = self.players[injured].stats.substitutions;
         self.reload_player_attributes(injured);
 
         // The substitute runs on from the touchline.
-        let player = &mut self.players[injured.0];
+        let player = &mut self.players[injured];
         player.stats.substitutions = substitutions;
         count(&mut player.stats.substitutions);
         player.entity.timer = 25;
@@ -289,7 +289,7 @@ impl Match {
     /// the first substitute comes on and the injured player goes to the
     /// back of the bench.
     fn substitute(&mut self, injured: PlayerId) {
-        let player = &self.players[injured.0];
+        let player = &self.players[injured];
         let skills = player.attributes.skills;
         let index = player.index;
         self.roster.attributes_mut(player.person_attributes).skills = skills;

@@ -23,7 +23,7 @@ use super::entity::{Entity, ScriptEvent};
 use super::events::Sound;
 use super::geometry::{DirBits, Input, PerTeam, Point, Side};
 use super::medic::Injury;
-use super::player::{Player, PlayerId};
+use super::player::{Player, PlayerId, Players};
 use super::replay::Replay;
 use super::rng::Rng;
 use super::roster::{Roster, Team};
@@ -45,7 +45,7 @@ pub struct Match {
     pub(crate) rom: Rc<AtariRom>,
     pub(crate) rng: Rng,
     pub(crate) kind: MatchKind,
-    pub(crate) players: Vec<Player>,
+    pub(crate) players: Players,
     pub(crate) props: Props,
     pub(crate) arena: Arena,
     pub(crate) roster: Roster,
@@ -110,8 +110,8 @@ pub struct Match {
 
 impl Match {
     pub fn new(setup: MatchSetup, rom: Rc<AtariRom>) -> Self {
-        let players = setup.players;
-        let presentation = std::array::from_fn(|i| players[i].entity.pos);
+        let players = Players::new(setup.players);
+        let presentation = std::array::from_fn(|i| players[PlayerId(i)].entity.pos);
         let kick_off = PlayerId::of(true, 8);
         let mut m = Self {
             props: Props::read(&rom),
@@ -173,9 +173,9 @@ impl Match {
         if setup.initial_dir_team1 != 0 {
             m.switch_sides();
         }
-        for id in (0..m.players.len()).map(PlayerId) {
+        for id in m.players.ids() {
             m.reload_player_attributes(id);
-            m.players[id.0].update_zone_center();
+            m.players[id].update_zone_center();
         }
         m.scene = m.compose_scene();
         m
@@ -256,25 +256,30 @@ impl Match {
     // -- Lookups -------------------------------------------------------------------
 
     pub(crate) fn side_of(&self, p: PlayerId) -> Side {
-        Side::from_is_team1(self.players[p.0].entity.is_team1())
+        Side::from_is_team1(self.players[p].entity.is_team1())
     }
 
     /// Whether `a` and `b` play for the same team, by the end they started
     /// attacking.
     pub(crate) fn same_team(&self, a: PlayerId, b: PlayerId) -> bool {
-        self.players[a.0].attributes.initial_dir == self.players[b.0].attributes.initial_dir
+        self.players[a].attributes.initial_dir == self.players[b].attributes.initial_dir
     }
 
     pub(crate) fn teammates(&self, p: PlayerId) -> impl Iterator<Item = PlayerId> {
-        PlayerId::team(self.players[p.0].entity.is_team1())
+        PlayerId::team(self.players[p].entity.is_team1())
     }
 
     pub(crate) fn opponents(&self, p: PlayerId) -> impl Iterator<Item = PlayerId> {
-        PlayerId::team(!self.players[p.0].entity.is_team1())
+        PlayerId::team(!self.players[p].entity.is_team1())
     }
 
     pub(crate) fn team(&self, side: Side) -> impl Iterator<Item = PlayerId> {
         PlayerId::team(side == Side::Team1)
+    }
+
+    /// The player `side` is steering (or the computer is, for it).
+    pub(crate) fn controlled_player(&self, side: Side) -> &Player {
+        &self.players[*self.controlled.get(side)]
     }
 
     pub(crate) fn is_controlled(&self, p: PlayerId) -> bool {
@@ -382,8 +387,8 @@ impl Match {
     }
 
     fn on_knocked_down_ended(&mut self, p: PlayerId) {
-        if self.players[p.0].attributes.health != 0 {
-            let entity = &mut self.players[p.0].entity;
+        if self.players[p].attributes.health != 0 {
+            let entity = &mut self.players[p].entity;
             entity.script = self.rom.script(Script::PlayerOnGround);
             entity.script_index = 0;
             entity.flags.set_busy(false);
@@ -400,7 +405,7 @@ impl Match {
             [(0, Side::Team1, 33, 28), (1, Side::Team2, 27, 22)]
         {
             let id = *self.controlled.get(side);
-            let player = &self.players[id.0];
+            let player = &self.players[id];
             let sprite = if self.holds_ball(id) {
                 carrying_base + player.attributes.pos
             } else {
@@ -417,7 +422,7 @@ impl Match {
     }
 
     pub(crate) fn reload_player_attributes(&mut self, p: PlayerId) {
-        let source = *self.roster.attributes(self.players[p.0].person_attributes);
-        self.players[p.0].reset_attributes(&source);
+        let source = *self.roster.attributes(self.players[p].person_attributes);
+        self.players[p].reset_attributes(&source);
     }
 }

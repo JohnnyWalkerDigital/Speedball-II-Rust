@@ -13,7 +13,7 @@ impl Match {
     /// One frame of a player.
     pub(crate) fn player_think(&mut self, p: PlayerId) {
         self.update_control(p);
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.timer = (entity.timer - 1).max(0);
         match entity.think {
             Think::StartMove => self.start_move(p),
@@ -31,7 +31,7 @@ impl Match {
         }
         self.push_away_from_opponents(p);
         self.execute_script(EntityRef::Player(p));
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         player.entity.origin = self.rom.sprite_origin(player.entity.sprite);
         self.apply_movement_constraints(p);
     }
@@ -44,14 +44,14 @@ impl Match {
             self.control_active_player(p, Side::Team1);
         } else if p == self.controlled.team2 {
             self.control_active_player(p, Side::Team2);
-        } else if self.players[p.0].entity.timer == 0 {
+        } else if self.players[p].entity.timer == 0 {
             self.ai_support_play(p);
         }
     }
 
     /// Between goals: head for the kick-off spot (or the final line-up).
     fn walk_to_formation(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         if player.entity.flags.busy() || player.entity.timer != 0 {
             return;
         }
@@ -63,7 +63,7 @@ impl Match {
         };
         let scroll = self.camera.position();
         let rom = &self.rom;
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         player.reset_think_delay(rom);
         player.target = target;
         if player.entity.flags.invisible() {
@@ -80,13 +80,13 @@ impl Match {
 
     fn control_active_player(&mut self, p: PlayerId, side: Side) {
         self.try_catch_ball(p);
-        let on_screen = self.players[p.0]
+        let on_screen = self.players[p]
             .entity
             .is_well_inside_view(self.camera.position());
         if !*self.computer.get(side) && on_screen {
             let input = *self.inputs.get(side);
             self.apply_human_input(p, input);
-        } else if self.players[p.0].entity.timer == 0 {
+        } else if self.players[p].entity.timer == 0 {
             self.ai_active_player(p);
         }
     }
@@ -95,19 +95,17 @@ impl Match {
 
     /// Undoes movement into nearby opponents.
     fn push_away_from_opponents(&mut self, p: PlayerId) {
-        if self.clock_paused || self.players[p.0].entity.flags.offscreen() {
+        if self.clock_paused || self.players[p].entity.flags.offscreen() {
             return;
         }
         for q in self.opponents(p) {
-            let opponent = &self.players[q.0];
-            let close = self.players[p.0].distance_to_opponents[opponent.index] <= 30;
+            let opponent = &self.players[q];
+            let close = self.players[p].distance_to_opponents[opponent.index] <= 30;
             if opponent.entity.flags.falling() || !close || opponent.entity.flags.offscreen() {
                 continue;
             }
-            let towards = self.players[p.0]
-                .entity
-                .dir_bits_towards(opponent.entity.pos);
-            let entity = &mut self.players[p.0].entity;
+            let towards = self.players[p].entity.dir_bits_towards(opponent.entity.pos);
+            let entity = &mut self.players[p].entity;
             if entity.flags.falling() && entity.script_index >= 18 {
                 entity.velocity = Point::ZERO;
                 entity.script_index = 18;
@@ -124,11 +122,11 @@ impl Match {
 
     /// Goalkeepers stay in their box; "freeze team" stops opponents.
     fn apply_movement_constraints(&mut self, p: PlayerId) {
-        if self.clock_paused || self.players[p.0].entity.flags.falling() {
+        if self.clock_paused || self.players[p].entity.flags.falling() {
             return;
         }
         let frozen = self.is_frozen(p);
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         let e = &mut player.entity;
         if player.attributes.pos == 0 {
             let next_y = e.pos.y + e.velocity.y;
@@ -147,7 +145,7 @@ impl Match {
 
     /// Picks up a loose ball within reach.
     fn try_catch_ball(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         let flags = player.entity.flags;
         if self.holder.is_some()
             || flags.falling()
@@ -173,7 +171,7 @@ impl Match {
             && is_opponent_ball
         {
             self.hit_by_charged_ball(p);
-            let random = self.players[p.0].random;
+            let random = self.players[p].random;
             self.play_sound(Sound::knocked_down(random));
             return;
         }
@@ -190,7 +188,7 @@ impl Match {
         if !self.props.ball.is_charged() && is_opponent_ball {
             self.play_sound(self.interception_sound(p));
         }
-        self.props.ball.script_index = self.players[p.0].entity.script_index;
+        self.props.ball.script_index = self.players[p].entity.script_index;
         self.holder = Some(EntityRef::Player(p));
         if self.props.ball.velocity.is_zero() {
             return;
@@ -199,7 +197,7 @@ impl Match {
         if !is_opponent_ball {
             return;
         }
-        count(&mut self.players[p.0].stats.goals_saved);
+        count(&mut self.players[p].stats.goals_saved);
         self.props.ball.set_charged(false);
     }
 
@@ -215,7 +213,7 @@ impl Match {
     /// A charged ball knocks over the player it hits.
     fn hit_by_charged_ball(&mut self, p: PlayerId) {
         self.charged_hits_left -= 1;
-        self.players[p.0].entity.dir = self.props.ball.dir;
+        self.players[p].entity.dir = self.props.ball.dir;
         self.hit_by_tackle(p, self.thrower);
         self.knock_down(p, 3);
     }
@@ -232,10 +230,10 @@ impl Match {
         }
         self.play_sound(Sound::THROW);
         if is_opponent_ball {
-            count(&mut self.players[p.0].stats.goals_saved);
+            count(&mut self.players[p].stats.goals_saved);
             self.props.ball.set_charged(false);
         }
-        let keeper = &self.players[p.0];
+        let keeper = &self.players[p];
         let dir = self
             .rom
             .goalie_deflect_dir(keeper.entity.dir, keeper.attributes.initial_dir);
@@ -250,7 +248,7 @@ impl Match {
 
     /// Turns to catch a ball flying at a standing player.
     fn face_incoming_ball(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         let bits = player.entity.dir_bits_towards(self.props.ball.pos);
         if bits.has_direction() {
             let list = match (player.is_goalkeeper(), player.attacks_up()) {
@@ -260,20 +258,20 @@ impl Match {
             };
             let dir = self.rom.dir_from_bits(bits);
             let script = self.rom.script_for_dir(list, dir);
-            let entity = &mut self.players[p.0].entity;
+            let entity = &mut self.players[p].entity;
             entity.dir = dir;
             entity.script = script;
             entity.script_index = 0;
             entity.flags.set_busy(true);
         }
-        self.players[p.0].entity.think = Think::Idle;
+        self.players[p].entity.think = Think::Idle;
     }
 
     // -- Keyboard -----------------------------------------------------------------
 
     /// Steers a human-controlled player with the joystick, unless busy.
     fn apply_human_input(&mut self, p: PlayerId, input: Input) {
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.timer = 1;
         if !entity.flags.busy() {
             entity.think = Think::Idle;
@@ -287,14 +285,14 @@ impl Match {
         let mut dir = rom.dir_from_bits(input.dir_bits());
         let (mut list, mut speed) = self.stand_animation(p);
         if dir < 0 {
-            self.players[p.0].entity.script_index = 0;
+            self.players[p].entity.script_index = 0;
         } else {
             if self.controls_reversed(p) {
                 dir ^= 4;
             }
-            self.players[p.0].entity.dir = dir;
+            self.players[p].entity.dir = dir;
             (list, speed) = self.run_animation(p);
-            self.players[p.0].entity.script_index &= 7;
+            self.players[p].entity.script_index &= 7;
         }
 
         if input.fire() {
@@ -303,13 +301,13 @@ impl Match {
                 speed = 0;
                 self.begin_throw(p);
             } else {
-                let jump_bonus = self.players[p.0].speed_jump_bonus(&rom);
-                self.players[p.0].jump_bonus = jump_bonus;
-                let ball_overhead_in_reach = jump_bonus * 6 >= self.players[p.0].distance_to_ball
+                let jump_bonus = self.players[p].speed_jump_bonus(&rom);
+                self.players[p].jump_bonus = jump_bonus;
+                let ball_overhead_in_reach = jump_bonus * 6 >= self.players[p].distance_to_ball
                     && self.holder.is_none()
                     && !self.ball_in_multiplier
                     && self.props.ball.is_high();
-                let entity = &mut self.players[p.0].entity;
+                let entity = &mut self.players[p].entity;
                 entity.flags.set_busy(true);
                 if ball_overhead_in_reach {
                     list = Animation::Jump;
@@ -326,7 +324,7 @@ impl Match {
                 }
             }
         }
-        self.players[p.0].entity.set_animation(&rom, list, speed);
+        self.players[p].entity.set_animation(&rom, list, speed);
     }
 
     // -- Running ------------------------------------------------------------------
@@ -334,7 +332,7 @@ impl Match {
     /// Starts running towards `target`, or stands if already there.
     pub(crate) fn start_move(&mut self, p: PlayerId) {
         if self.steer_towards_target(p, false) {
-            let entity = &mut self.players[p.0].entity;
+            let entity = &mut self.players[p].entity;
             entity.script_index &= 7;
             entity.think = Think::Move;
         } else {
@@ -344,7 +342,7 @@ impl Match {
 
     /// Keeps running towards the player's target, re-steering as needed.
     fn keep_moving(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         let near = player.entity.axis_distance(player.target, 32) <= 32;
         // Far from the target, only re-steer at the start of a stride.
         if !near && player.entity.script_index != 0 {
@@ -355,13 +353,13 @@ impl Match {
         }
         // Arrived. Defenders of the controlled pair then chase the carrier.
         let chase_carrier = self.is_controlled(p)
-            && !self.players[p.0].is_goalkeeper()
+            && !self.players[p].is_goalkeeper()
             && !self.clock_paused
             && self.holder.is_some()
             && !self.holds_ball(p);
         if chase_carrier {
             let carrier = self.entity(self.holder.expect("checked above"));
-            self.players[p.0].target = self.players[p.0].predict(&self.rom, carrier);
+            self.players[p].target = self.players[p].predict(&self.rom, carrier);
             self.start_move(p);
         } else {
             self.stand(p);
@@ -371,7 +369,7 @@ impl Match {
     /// Points the player at `target`, snapping when within 4 pixels.
     /// Returns `false` if already there.
     fn steer_towards_target(&mut self, p: PlayerId, exact: bool) -> bool {
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         let target = player.target;
         let mut bits = if exact {
             player.dir_bits_towards_exact(target)
@@ -396,13 +394,13 @@ impl Match {
         player.entity.dir = self.rom.dir_from_bits(bits);
         let (list, speed) = self.run_animation(p);
         let rom = &self.rom;
-        self.players[p.0].entity.set_animation(rom, list, speed);
+        self.players[p].entity.set_animation(rom, list, speed);
         true
     }
 
     /// Animation and speed for running.
     fn run_animation(&self, p: PlayerId) -> (Animation, i32) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         let list = match (
             player.is_goalkeeper() && !self.clock_paused,
             player.attacks_up(),
@@ -428,7 +426,7 @@ impl Match {
 
     /// Animation for standing; goalkeepers also face up-pitch.
     fn stand_animation(&mut self, p: PlayerId) -> (Animation, i32) {
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         if player.is_goalkeeper() && !self.clock_paused {
             player.entity.dir = player.attributes.initial_dir;
             let list = if player.attacks_up() {
@@ -445,7 +443,7 @@ impl Match {
     /// default direction.
     pub(crate) fn stand(&mut self, p: PlayerId) {
         let paused = self.clock_paused;
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         let facing = player.attributes.initial_dir;
         if paused && player.entity.dir != facing {
             let step = if facing == 0 { -1 } else { 1 };
@@ -454,7 +452,7 @@ impl Match {
         }
         let (list, speed) = self.stand_animation(p);
         let rom = &self.rom;
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.set_animation(rom, list, speed);
         entity.script_index = 0;
         entity.think = Think::Idle;
@@ -465,8 +463,8 @@ impl Match {
     /// Dives (tackle) at a point, or jumps for an overhead ball.
     pub(crate) fn dive_at(&mut self, p: PlayerId, target: Point) {
         let rom = self.rom.clone();
-        let jump_bonus = self.players[p.0].speed_jump_bonus(&rom);
-        let player = &mut self.players[p.0];
+        let jump_bonus = self.players[p].speed_jump_bonus(&rom);
+        let player = &mut self.players[p];
         player.target = target;
         player.entity.flags.set_busy(true);
         player.jump_bonus = jump_bonus;
@@ -482,7 +480,7 @@ impl Match {
                 player.attributes.initial_dir
             };
             let (list, speed) = self.lunge_animation(p);
-            self.players[p.0].entity.set_animation(&rom, list, speed);
+            self.players[p].entity.set_animation(&rom, list, speed);
             return;
         }
         let speed = if bits.has_direction() {
@@ -501,7 +499,7 @@ impl Match {
 
     /// Dives at where `target` is heading.
     pub(crate) fn dive_at_entity(&mut self, p: PlayerId, target: EntityRef) {
-        let point = self.players[p.0].predict(&self.rom, self.entity(target));
+        let point = self.players[p].predict(&self.rom, self.entity(target));
         self.dive_at(p, point);
     }
 
@@ -510,7 +508,7 @@ impl Match {
         self.play_sound(Sound::SLIDE);
         let ball_flying = !self.props.ball.velocity.is_zero();
         let holder_none = self.holder.is_none();
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         player.entity.flags.set_tackling(true);
         player.entity.script_index = 0;
         let sideways = player.entity.dir & 3 != 0;
@@ -531,8 +529,8 @@ impl Match {
     /// Standing tackle towards an opponent.
     pub(crate) fn standing_tackle(&mut self, p: PlayerId, opponent: PlayerId) {
         let rom = &self.rom;
-        let opponent_pos = self.players[opponent.0].entity.pos;
-        let player = &mut self.players[p.0];
+        let opponent_pos = self.players[opponent].entity.pos;
+        let player = &mut self.players[p];
         player.entity.dir = player.dir_towards(rom, opponent_pos);
         let entity = &mut player.entity;
         entity.script_index = 0;
@@ -543,8 +541,8 @@ impl Match {
 
     /// Runs directly away from `threat`.
     pub(crate) fn run_away_from(&mut self, p: PlayerId, threat: PlayerId) {
-        let threat_pos = self.players[threat.0].entity.pos;
-        let player = &mut self.players[p.0];
+        let threat_pos = self.players[threat].entity.pos;
+        let player = &mut self.players[p];
         let bits = player.entity.dir_bits_towards(threat_pos);
         player.entity.dir = if bits.has_direction() {
             (self.rom.dir_from_bits(bits) + 4) & 7
@@ -554,19 +552,19 @@ impl Match {
         player.entity.script_index &= 7;
         let (list, speed) = self.run_animation(p);
         let rom = &self.rom;
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.set_animation(rom, list, speed);
         entity.think = Think::Idle;
     }
 
     /// Knocks over the first opponent in reach, if the tackle succeeds.
     fn check_tackle_hits(&mut self, p: PlayerId) {
-        if self.clock_paused || self.players[p.0].entity.flags.offscreen() {
+        if self.clock_paused || self.players[p].entity.flags.offscreen() {
             return;
         }
         for victim in self.opponents(p) {
-            let target = &self.players[victim.0];
-            let in_reach = self.players[p.0].distance_to_opponents[target.index] <= 30;
+            let target = &self.players[victim];
+            let in_reach = self.players[p].distance_to_opponents[target.index] <= 30;
             if target.entity.flags.falling()
                 || !in_reach
                 || target.entity.flags.offscreen()
@@ -575,7 +573,7 @@ impl Match {
                 continue;
             }
             self.play_sound(Sound::TACKLE);
-            self.players[p.0].entity.think = Think::TackleRecover;
+            self.players[p].entity.think = Think::TackleRecover;
             if self.rng.next_byte() > self.tackle_success_chance(victim, p) {
                 return;
             }
@@ -585,12 +583,12 @@ impl Match {
     }
 
     fn land_tackle(&mut self, p: PlayerId, victim: PlayerId) {
-        let victim_random = self.players[victim.0].random;
+        let victim_random = self.players[victim].random;
         self.play_sound(Sound::knocked_down(victim_random));
-        count(&mut self.players[p.0].stats.successful_tackles);
+        count(&mut self.players[p].stats.successful_tackles);
         self.hit_by_tackle(victim, p);
 
-        let attacker = &self.players[p.0].entity;
+        let attacker = &self.players[p].entity;
         let attacker_falling = attacker.flags.falling();
         let dir = if attacker_falling {
             (attacker.dir + 4) & 7
@@ -598,7 +596,7 @@ impl Match {
             attacker.dir
         };
         let speed = if attacker.flags.tackling() { 4 } else { 3 };
-        let target = &mut self.players[victim.0].entity;
+        let target = &mut self.players[victim].entity;
         let previous_think = target.think;
         target.dir = dir;
         self.knock_down(victim, speed);
@@ -607,7 +605,7 @@ impl Match {
             previous_think,
             Think::GoalieDive | Think::SlideTackle | Think::StandingTackle
         ) {
-            self.players[victim.0].entity.think = previous_think;
+            self.players[victim].entity.think = previous_think;
         }
 
         if !self.holds_ball(victim) {
@@ -627,7 +625,7 @@ impl Match {
     /// Puts a player on the floor, sliding at `speed` in its current direction.
     pub(crate) fn knock_down(&mut self, p: PlayerId, speed: i32) {
         let rom = &self.rom;
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.script_index = 0;
         entity.flags.set_busy(true);
         entity.flags.set_falling(true);
@@ -639,8 +637,8 @@ impl Match {
     fn tackle_success_chance(&self, defender: PlayerId, attacker: PlayerId) -> i32 {
         const TACKLING_PENALTY: i32 = 16;
         const JUMPING_PENALTY: i32 = 32;
-        let defender = &self.players[defender.0];
-        let attacker = &self.players[attacker.0];
+        let defender = &self.players[defender];
+        let attacker = &self.players[attacker];
         let mut defence = defender.skills().def;
         if defender.is_goalkeeper() {
             defence = (defence + defence / 2).min(255);
@@ -658,14 +656,14 @@ impl Match {
 
     /// Damage from a tackle; the victim drops any equipment.
     pub(crate) fn hit_by_tackle(&mut self, victim: PlayerId, attacker: PlayerId) {
-        let power = self.players[attacker.0].skills().pow;
-        self.players[victim.0].take_tackle_damage(power);
+        let power = self.players[attacker].skills().pow;
+        self.players[victim].take_tackle_damage(power);
         self.drop_equipment(victim);
     }
 
     /// Lands after the jump's airtime.
     fn land_jump(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         if player.jump_bonus + 2 > player.entity.script_index {
             return;
         }
@@ -674,7 +672,7 @@ impl Match {
         if self.holds_ball(p) {
             self.props.ball.script_index = 18;
         }
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.script_index = 18;
         entity.think = Think::Idle;
         entity.flags.set_jumping(false);
@@ -683,12 +681,12 @@ impl Match {
 
     /// Gets back up once a tackle's floor time is over.
     fn recover_from_tackle(&mut self, p: PlayerId) {
-        let player = &self.players[p.0];
+        let player = &self.players[p];
         // Byte arithmetic: a zero bonus wraps to 255.
         if (player.jump_bonus + 255) & 0xFF > player.entity.script_index {
             return;
         }
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.script_index = 15;
         entity.think = Think::Idle;
         self.own_input_mut(p).set_fire(false);
@@ -724,14 +722,14 @@ impl Match {
     /// Turns towards the target and starts the throw animation.
     fn start_throw(&mut self, p: PlayerId) {
         let rom = &self.rom;
-        let player = &mut self.players[p.0];
+        let player = &mut self.players[p];
         player.entity.dir = player.dir_towards(rom, player.target);
         player.entity.set_animation(rom, Animation::Throw, 0);
         self.begin_throw(p);
     }
 
     fn begin_throw(&mut self, p: PlayerId) {
-        let entity = &mut self.players[p.0].entity;
+        let entity = &mut self.players[p].entity;
         entity.script_index = 0;
         entity.flags.set_busy(true);
         entity.flags.set_throwing(true);
@@ -742,15 +740,15 @@ impl Match {
 
     /// Lets go of the ball on frame 4 of the throw.
     fn release_throw(&mut self, p: PlayerId) {
-        if self.players[p.0].entity.script_index < 4 {
+        if self.players[p].entity.script_index < 4 {
             return;
         }
         if !self.clock_paused {
             self.holder = None;
         }
-        let thr = self.players[p.0].skills().thr;
+        let thr = self.players[p].skills().thr;
         self.set_ball_speed_from_throw(thr);
-        let dir = self.players[p.0].entity.dir;
+        let dir = self.players[p].entity.dir;
         let ball = &mut self.props.ball;
         ball.dir = dir;
         ball.velocity = self.rom.velocity(dir, 8);
@@ -786,7 +784,7 @@ impl Match {
                 ball.velocity.y = 4;
             }
         }
-        self.players[p.0].entity.think = Think::Idle;
+        self.players[p].entity.think = Think::Idle;
     }
 
     // -- Goals ----------------------------------------------------------------------
@@ -795,11 +793,11 @@ impl Match {
     pub(crate) fn start_goal_celebration(&mut self, scorer: PlayerId) {
         let rom = &self.rom;
         for id in self.teammates(scorer) {
-            let flags = self.players[id.0].entity.flags;
+            let flags = self.players[id].entity.flags;
             if flags.falling() || flags.invisible() {
                 continue;
             }
-            let player = &mut self.players[id.0];
+            let player = &mut self.players[id];
             let entity = &mut player.entity;
             entity.flags.set_busy(true);
             entity.script_index = 0;
@@ -813,7 +811,7 @@ impl Match {
             } else {
                 (Animation::Celebrate, 0)
             };
-            let entity = &mut self.players[id.0].entity;
+            let entity = &mut self.players[id].entity;
             entity.set_animation(rom, list, speed);
             entity.think = Think::Idle;
         }

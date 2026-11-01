@@ -102,9 +102,9 @@ impl Match {
         });
         for id in self.affected_by(token, holder) {
             if token == Token::SlowTeam {
-                self.players[id.0].restore_speed();
+                self.players[id].restore_speed();
             } else {
-                self.players[id.0].restore_all_skills();
+                self.players[id].restore_all_skills();
             }
         }
     }
@@ -114,7 +114,7 @@ impl Match {
         match token.affected() {
             Some(Affected::Opponents) => self.opponents(holder).collect(),
             Some(Affected::Team) => self.teammates(holder).collect(),
-            Some(Affected::Everyone) => (0..self.players.len()).map(PlayerId).collect(),
+            Some(Affected::Everyone) => self.players.ids().collect(),
             None => Vec::new(),
         }
     }
@@ -128,7 +128,7 @@ impl Match {
         if token.is_timed() {
             self.hold_token(token, picker);
             for id in self.affected_by(token, picker) {
-                let player = &mut self.players[id.0];
+                let player = &mut self.players[id];
                 match token {
                     Token::ReduceTeam => player.boost_all_skills(100),
                     Token::SlowTeam => player.slow_down(),
@@ -143,8 +143,8 @@ impl Match {
             }
             Token::Transport => {
                 // The ball teleports to the team's centre forward.
-                let forward = PlayerId::of(self.players[picker.0].entity.is_team1(), 8);
-                if !self.players[forward.0].entity.flags.falling() {
+                let forward = PlayerId::of(self.players[picker].entity.is_team1(), 8);
+                if !self.players[forward].entity.flags.falling() {
                     self.give_ball_to(forward);
                     self.play_sound(Sound::TELEPORT);
                 }
@@ -185,12 +185,12 @@ impl Match {
     /// Knocks down every visible opponent.
     fn zap_team(&mut self, picker: PlayerId) {
         for id in self.opponents(picker) {
-            let flags = self.players[id.0].entity.flags;
+            let flags = self.players[id].entity.flags;
             if flags.offscreen() || !self.shield_allows_hit(id) || flags.falling() {
                 continue;
             }
             self.hit_by_tackle(id, picker);
-            let standing_still = self.players[id.0].entity.velocity == Point::ZERO;
+            let standing_still = self.players[id].entity.velocity == Point::ZERO;
             self.knock_down(id, if standing_still { 3 } else { 4 });
             if self.holds_ball(id) {
                 self.holder = None;
@@ -209,8 +209,8 @@ impl Match {
     pub(crate) fn controls_reversed(&self, p: PlayerId) -> bool {
         self.held_token_holder(Token::ReverseControls)
             .is_some_and(|holder| {
-                let holder_dir = self.players[holder.0].attributes.initial_dir ^ 4;
-                holder_dir == self.players[p.0].attributes.initial_dir
+                let holder_dir = self.players[holder].attributes.initial_dir ^ 4;
+                holder_dir == self.players[p].attributes.initial_dir
             })
     }
 

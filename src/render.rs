@@ -271,7 +271,7 @@ impl MatchRenderer {
             (Side::Team1, 64, Assets::BLUE),
             (Side::Team2, 224, Assets::RED),
         ] {
-            let health = m.players[m.controlled.get(side).0].attributes.health;
+            let health = m.controlled_player(side).attributes.health;
             canvas.fill_rect(x, 193, 32, 3, palette.color(Assets::BACKGROUND));
             canvas.fill_rect(
                 x,
@@ -315,11 +315,11 @@ impl MatchRenderer {
             let (x, sprite) = m.rom.status_led(slot);
             self.draw_status_icon(canvas, sprite + OFF_SPRITE_OFFSET, x, m.scroll());
         }
-        let team1 = &m.players[m.controlled.team1.0];
+        let team1 = m.controlled_player(Side::Team1);
         let (sprite, x) = position_light(Side::Team1, team1.attributes.pos);
         self.draw_status_icon(canvas, sprite, x, m.scroll());
 
-        let team2 = &m.players[m.controlled.team2.0];
+        let team2 = m.controlled_player(Side::Team2);
         if !team2.entity.flags.invisible() {
             let (sprite, x) = position_light(Side::Team2, team2.attributes.pos);
             self.draw_status_icon(canvas, sprite, x, m.scroll());

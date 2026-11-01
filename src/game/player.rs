@@ -1,5 +1,7 @@
 //! A player: an entity plus tactics, skills and match statistics.
 
+use std::ops::{Deref, DerefMut, Index, IndexMut};
+
 use super::entity::Entity;
 use super::geometry::{DirBits, Point};
 use super::roster::{Attributes, AttributesRef, Skill, Skills};
@@ -24,6 +26,68 @@ impl PlayerId {
         } else {
             Self::TEAM_SIZE + index
         })
+    }
+}
+
+/// The players on the pitch, team 1's then team 2's, looked up by
+/// [`PlayerId`]. Otherwise a slice of players.
+#[derive(Clone, Debug)]
+pub struct Players(Vec<Player>);
+
+impl Players {
+    pub fn new(players: Vec<Player>) -> Self {
+        Self(players)
+    }
+
+    /// Every player, team 1's first.
+    pub fn ids(&self) -> impl Iterator<Item = PlayerId> {
+        (0..self.0.len()).map(PlayerId)
+    }
+}
+
+impl Deref for Players {
+    type Target = [Player];
+
+    fn deref(&self) -> &[Player] {
+        &self.0
+    }
+}
+
+impl DerefMut for Players {
+    fn deref_mut(&mut self) -> &mut [Player] {
+        &mut self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a Players {
+    type Item = &'a Player;
+    type IntoIter = std::slice::Iter<'a, Player>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Players {
+    type Item = &'a mut Player;
+    type IntoIter = std::slice::IterMut<'a, Player>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
+
+impl Index<PlayerId> for Players {
+    type Output = Player;
+
+    fn index(&self, id: PlayerId) -> &Player {
+        &self.0[id.0]
+    }
+}
+
+impl IndexMut<PlayerId> for Players {
+    fn index_mut(&mut self, id: PlayerId) -> &mut Player {
+        &mut self.0[id.0]
     }
 }
 
