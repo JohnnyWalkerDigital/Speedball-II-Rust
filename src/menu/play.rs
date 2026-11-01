@@ -3,12 +3,13 @@
 
 use std::time::Duration;
 
+use super::flow::is_fire_or_escape;
 use super::host::{Button, Control, SoundBank};
 use super::saving::DISK_ERROR;
 use super::strings::MenuText;
 use super::ui::{Flow, Stop, Ui, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::data::save_disk::{replay_sector, SaveDisk};
-use crate::game::geometry::{Input, PerTeam, Side};
+use crate::game::geometry::{Input, PerTeam};
 use crate::game::replay::SavedReplay;
 use crate::game::text::Text;
 use crate::game::Match;
@@ -94,9 +95,7 @@ impl<'a> ReplaySaves<'a> {
         ui.clear_input();
         loop {
             ui.show_frame(&shown, FRAME_TIME)?;
-            let pressed = ui.next_press(|b| {
-                b == Button::Joystick(Side::Team1, Control::Fire) || b == Button::Escape
-            });
+            let pressed = ui.next_press(is_fire_or_escape);
             match pressed {
                 Some(Button::Escape) => return Ok(false),
                 Some(_) => return Ok(true),

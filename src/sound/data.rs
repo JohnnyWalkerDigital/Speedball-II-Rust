@@ -148,11 +148,7 @@ impl SoundTables {
                 PITCH_TABLES.len()
             ));
         }
-        if problems.is_empty() {
-            Ok(())
-        } else {
-            Err(problems.join("; "))
-        }
+        crate::data::report(problems)
     }
 
     /// Writes the tables in place. A sound's first byte (a priority the
@@ -417,11 +413,7 @@ impl SoundData {
                 Some(_) => {}
             }
         }
-        if problems.is_empty() {
-            Ok(())
-        } else {
-            Err(problems.join("; "))
-        }
+        crate::data::report(problems)
     }
 
     /// Whether every sound's sequences are in this bank.
@@ -434,11 +426,7 @@ impl SoundData {
             .filter(|&(_, n)| n != 0 && !self.sequences.iter().any(|s| s.number == n))
             .map(|(i, n)| format!("sound {i}: there is no sequence {n}"))
             .collect();
-        if missing.is_empty() {
-            Ok(())
-        } else {
-            Err(missing.join("; "))
-        }
+        crate::data::report(missing)
     }
 
     /// `base` with `tables` and this bank written over it. The sequences

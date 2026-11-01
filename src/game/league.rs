@@ -4,10 +4,19 @@
 //! Division 1 is index 0 and division 2 index 1, as the original stores
 //! them. League placings (1 to 16) live in the teams' records.
 
-use super::career::{compare_scores, Career, TeamId, BRUTAL_DELUXE, LEAGUE_TEAMS};
+use super::career::{Career, TeamId, BRUTAL_DELUXE, LEAGUE_TEAMS};
+use super::geometry::PerTeam;
 use super::rng::Rng;
 
 pub const DIVISION_SIZE: usize = 8;
+/// The play-off is between these placings: seventh in division 1 and second
+/// in division 2.
+pub const PLAYOFF_DIVISION_1: u8 = 7;
+pub const PLAYOFF_DIVISION_2: u8 = 10;
+/// The bottom of division 1 and the top of division 2, which swap at the
+/// end of a season.
+pub const BOTTOM_OF_DIVISION_1: u8 = 8;
+pub const TOP_OF_DIVISION_2: u8 = 9;
 pub const ROUNDS: usize = 7;
 pub const MATCHES_PER_ROUND: usize = 4;
 
@@ -30,7 +39,7 @@ pub struct League {
     /// Each division in table order.
     pub tables: [[TeamId; DIVISION_SIZE]; 2],
     /// This round's scores.
-    pub results: [[(i32, i32); MATCHES_PER_ROUND]; 2],
+    pub results: [[PerTeam<i32>; MATCHES_PER_ROUND]; 2],
 }
 
 impl League {
@@ -45,7 +54,7 @@ impl League {
         Self {
             fixtures,
             tables: fixtures,
-            results: [[(0, 0); MATCHES_PER_ROUND]; 2],
+            results: [[PerTeam::new(0, 0); MATCHES_PER_ROUND]; 2],
         }
     }
 
@@ -57,7 +66,7 @@ impl League {
         Self {
             fixtures,
             tables: fixtures,
-            results: [[(0, 0); MATCHES_PER_ROUND]; 2],
+            results: [[PerTeam::new(0, 0); MATCHES_PER_ROUND]; 2],
         }
     }
 
@@ -75,6 +84,18 @@ impl League {
         usize::from(placing > DIVISION_SIZE as u8)
     }
 
+    pub fn in_division_1(placing: u8) -> bool {
+        Self::division_of(placing) == 0
+    }
+
+    /// A placing within its division, 1 to 8.
+    pub fn place_in_division(placing: u8) -> u8 {
+        match placing & 7 {
+            0 => 8,
+            n => n,
+        }
+    }
+
     /// A new fixture order each half-season for both divisions: shuffled,
     /// then Brutal Deluxe moved first.
     pub fn shuffle_fixtures(&mut self, rng: &mut Rng) {
@@ -85,10 +106,10 @@ impl League {
     }
 
     /// The teams in a division's match this round.
-    pub fn fixture(&self, division: usize, round: usize, game: usize) -> (TeamId, TeamId) {
+    pub fn fixture(&self, division: usize, round: usize, game: usize) -> PerTeam<TeamId> {
         let pair = &MATCH_PERMUTATIONS[round][game * 2..game * 2 + 2];
         let team = |n: u8| self.fixtures[division][usize::from(n) - 1];
-        (team(pair[0]), team(pair[1]))
+        PerTeam::new(team(pair[0]), team(pair[1]))
     }
 
     /// Sorts each division by league points, then goal difference, and
@@ -190,27 +211,21 @@ impl ScoresTable {
         }
     }
 
-    pub fn result(&self, rng: &mut Rng, team1: TeamId, team2: TeamId) -> (i32, i32) {
+    pub fn result(&self, rng: &mut Rng, teams: PerTeam<TeamId>) -> PerTeam<i32> {
         let table = (rng.next() & 3) as usize;
         let index = |team: TeamId| match team {
             TeamId::League(i) => i,
             TeamId::PlayerTwo => unreachable!("player 2 is never in a league"),
         };
-        let (a, b) = self.scores[table * 256 + index(team1) * 16 + index(team2)];
-        (i32::from(a), i32::from(b))
+        let (a, b) = self.scores[table * 256 + index(teams.team1) * 16 + index(teams.team2)];
+        PerTeam::new(i32::from(a), i32::from(b))
     }
-}
-
-/// Whether team 2 beat team 1, the way the cup and play-offs decide it.
-pub fn team2_won(scores: (i32, i32)) -> bool {
-    compare_scores(scores.1, scores.0).is_gt()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::game::career::TeamRecord;
-    use crate::game::geometry::PerTeam;
 
     fn career() -> Career {
         Career::with_records([TeamRecord::default(); LEAGUE_TEAMS + 1])
@@ -233,7 +248,7 @@ mod tests {
         let mut met = std::collections::HashSet::new();
         for round in 0..ROUNDS {
             for game in 0..MATCHES_PER_ROUND {
-                let (a, b) = league.fixture(1, round, game);
+                let PerTeam { team1: a, team2: b } = league.fixture(1, round, game);
                 assert!(met.insert((a.min_key(), b.min_key()).min((b.min_key(), a.min_key()))));
             }
         }

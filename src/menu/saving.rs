@@ -6,11 +6,13 @@ use super::strings::Title;
 use super::tables::MenuTables;
 use super::ui::{Flow, Stop, Ui};
 use crate::data::save_disk::{CUP_SECTOR, GAME_SECTORS, LEAGUE_SECTOR};
-use crate::game::career::{TeamId, TeamRecord};
+use crate::game::career::TeamId;
 use crate::game::events::Sound;
 use crate::game::save::{Progress, SaveGame, SavedMarketPlayer, SavedPlayer, SavedTeam};
 use crate::game::squad::{SquadPlayer, MARKET_SIZE, SQUAD_SIZE};
 
+/// Bit 0 of the saved flags: the computer plays Brutal Deluxe's matches.
+const MANAGER_MODE: u16 = 1;
 /// Bit 1 of the saved flags: one player (the computer has team 2).
 const ONE_PLAYER: u16 = 1 << 1;
 pub(super) const DISK_ERROR: Sound = Sound { id: 8, priority: 2 };
@@ -96,26 +98,12 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
         cash: career.money.cash.team1,
         caps: (career.money.cap.team1, career.money.cap.team2),
         initial_dir: snapshot.initial_dir as u16,
-        flags: ONE_PLAYER | u16::from(game.manager_mode),
+        flags: ONE_PLAYER | if game.manager_mode { MANAGER_MODE } else { 0 },
         squad: career.squads.team1.iter().map(player).collect(),
         teams: snapshot
             .teams
             .iter()
-            .map(|&team| {
-                let record = career.record(team);
-                SavedTeam {
-                    team_offset: SavedTeam::offset_of(team),
-                    played: record.played,
-                    won: record.won,
-                    drawn: record.drawn,
-                    lost: record.lost,
-                    points_for: record.points_for,
-                    points_against: record.points_against,
-                    league_points: record.league_points,
-                    league_placing: u16::from(record.league_placing),
-                    old_league_placing: u16::from(record.old_league_placing),
-                }
-            })
+            .map(|&team| SavedTeam::new(team, career.record(team)))
             .collect(),
         management_rounds: career.market.rounds,
         buyable_count: career.market.buyable_count,
@@ -133,9 +121,9 @@ pub fn snapshot(game: &Game, snapshot: Snapshot) -> SaveGame {
     }
 }
 
-/// Puts a loaded game back into the career. Returns the teams
-/// in the save's order and the playing direction.
-pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
+/// Puts a loaded game back into the career. Returns what the league or cup
+/// picks up from: the inverse of [`snapshot`].
+pub fn restore(game: &mut Game, save: SaveGame) -> Snapshot {
     let name = |offset: u32| game.saved_names.name(offset);
     let squad: Vec<(String, u16, [u8; 8])> = save
         .squad
@@ -167,25 +155,19 @@ pub fn restore(game: &mut Game, save: &SaveGame) -> (Vec<TeamId>, i32) {
         .iter()
         .map(|saved| {
             let team = saved.team();
-            *career.record_mut(team) = TeamRecord {
-                played: saved.played,
-                won: saved.won,
-                drawn: saved.drawn,
-                lost: saved.lost,
-                points_for: saved.points_for,
-                points_against: saved.points_against,
-                league_points: saved.league_points,
-                league_placing: saved.league_placing as u8,
-                old_league_placing: saved.old_league_placing as u8,
-            };
+            *career.record_mut(team) = saved.record();
             team
         })
         .collect();
     career.money.cash.team1 = save.cash;
     career.money.cap.team1 = save.caps.0;
     career.money.cap.team2 = save.caps.1;
-    game.manager_mode = save.flags & 1 != 0;
-    (teams, save.initial_dir as u8 as i32)
+    game.manager_mode = save.flags & MANAGER_MODE != 0;
+    Snapshot {
+        teams,
+        initial_dir: save.initial_dir as u8 as i32,
+        progress: save.progress,
+    }
 }
 
 /// Saves name players by their name's offset from `addr::STR_JAMS` in the

@@ -224,6 +224,7 @@ pub(crate) fn bmp(canvas: &Canvas) -> Vec<u8> {
 #[test]
 fn sounds_are_requested_where_the_original_plays_them() {
     use crate::game::events::Sound;
+    use crate::game::medic::InjuryStage;
     let Some(h) = load(Platform::Amiga) else {
         return;
     };
@@ -276,7 +277,7 @@ fn sounds_are_requested_where_the_original_plays_them() {
                         replay_ice_cream += 1;
                     } else {
                         assert!(
-                            game.injury.stage >= 3,
+                            game.injury.stage() >= InjuryStage::CarryingOff,
                             "ice cream only when the medics lift or in a replay"
                         );
                         ice_cream += 1;

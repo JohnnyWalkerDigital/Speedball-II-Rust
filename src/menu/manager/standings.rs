@@ -2,6 +2,7 @@
 //! "TABLE" key and for saving.
 
 use crate::game::cup::Cup;
+use crate::game::geometry::PerTeam;
 use crate::game::league::League;
 use crate::game::save::Progress;
 use crate::menu::saving::Snapshot;
@@ -20,7 +21,7 @@ pub enum Standings<'a> {
         /// Which tie of the round, and its two places in the draw.
         tie_index: usize,
         tie: (usize, usize),
-        aggregate: (i32, i32),
+        aggregate: PerTeam<i32>,
         initial_dir: i32,
     },
 }
@@ -58,7 +59,7 @@ impl Standings<'_> {
                     ties: cup.ties().count() as u16,
                     // The tie's slots are saved as byte offsets into the draw.
                     slots: (tie.0 as u16 * 4, tie.1 as u16 * 4),
-                    aggregate: (aggregate.0 as i16, aggregate.1 as i16),
+                    aggregate: (aggregate.team1 as i16, aggregate.team2 as i16),
                 },
             }),
         }

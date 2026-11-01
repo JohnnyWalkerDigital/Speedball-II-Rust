@@ -74,11 +74,7 @@ impl MenuTables {
         if self.upgrades.iter().any(|u| u.skill >= 8) {
             problems.push("each upgrade's skill must be 0 to 7".to_string());
         }
-        if problems.is_empty() {
-            Ok(())
-        } else {
-            Err(problems.join("\n"))
-        }
+        crate::data::report(problems)
     }
 
     /// The names and faces as `restore_identities` takes them.

@@ -13,3 +13,13 @@ pub mod save_disk;
 
 pub use files::GameFiles;
 pub use rom::AtariRom;
+
+/// The end of a check: fine if nothing was found, otherwise the problems,
+/// one to a line.
+pub fn report(problems: Vec<String>) -> Result<(), String> {
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(problems.join("\n"))
+    }
+}

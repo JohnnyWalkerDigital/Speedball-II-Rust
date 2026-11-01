@@ -2,14 +2,15 @@
 //! Brutal Deluxe's money doubling after each round from the second.
 
 use super::flow::{
-    cup_league_match, display_total_match_result, list_menu, message, win_shared, Game,
+    announce, cup_league_match, display_total_match_result, list_menu, win_shared, Game,
 };
 use super::manager::Standings;
-use super::saving;
+use super::saving::{self, Snapshot};
 use super::ui::{Flow, Ui};
+use crate::game::career::team2_won;
 use crate::game::career::{cash_cap, BRUTAL_DELUXE};
 use crate::game::cup::Cup;
-use crate::game::league::team2_won;
+use crate::game::geometry::PerTeam;
 use crate::game::save::Progress;
 use crate::game::squad::Competition;
 
@@ -27,10 +28,14 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
         // A loaded cup goes straight to the round in progress, its draw as
         // saved.
         let save = saving::load(ui, game, true)?;
-        let (teams, initial_dir) = saving::restore(game, &save);
+        let Snapshot {
+            teams,
+            initial_dir,
+            progress,
+        } = saving::restore(game, save);
         let Progress::Cup {
             round, aggregate, ..
-        } = save.progress
+        } = progress
         else {
             unreachable!("a cup save")
         };
@@ -38,19 +43,19 @@ pub fn cup(ui: &mut Ui, game: &mut Game) -> Flow {
             teams: teams.try_into().expect("sixteen teams"),
             round: usize::from(round),
         };
-        let aggregate = (i32::from(aggregate.0), i32::from(aggregate.1));
+        let aggregate = PerTeam::new(i32::from(aggregate.0), i32::from(aggregate.1));
         (cup, Some((aggregate, initial_dir)))
     };
     loop {
         if resume.is_none() {
             cup.redraw(&mut game.rng);
         }
-        let text = &game.text;
-        let round = &text.messages.cup_rounds[cup.round];
-        message(ui, game, &text.titles.speedball_2, round)?;
+        announce(ui, game, &game.text.messages.cup_rounds[cup.round])?;
         let ties: Vec<_> = cup.ties().collect();
         for (index, tie) in ties.into_iter().enumerate() {
-            let partway = resume.take().filter(|(aggregate, _)| *aggregate != (0, 0));
+            let partway = resume
+                .take()
+                .filter(|(aggregate, _)| *aggregate != PerTeam::new(0, 0));
             if tie_lost_by_brutal_deluxe(ui, game, &mut cup, index, tie, partway)? {
                 return Ok(());
             }
@@ -76,10 +81,10 @@ fn tie_lost_by_brutal_deluxe(
     cup: &mut Cup,
     index: usize,
     tie: (usize, usize),
-    partway: Option<((i32, i32), i32)>,
+    partway: Option<(PerTeam<i32>, i32)>,
 ) -> Flow<bool> {
-    let teams = (cup.teams[tie.0], cup.teams[tie.1]);
-    let playing = teams.0 == BRUTAL_DELUXE;
+    let teams = PerTeam::new(cup.teams[tie.0], cup.teams[tie.1]);
+    let playing = teams.team1 == BRUTAL_DELUXE;
     let standings = |cup, aggregate, initial_dir| Standings::Cup {
         cup,
         tie_index: index,
@@ -89,13 +94,7 @@ fn tie_lost_by_brutal_deluxe(
     };
     let (mut total, mut initial_dir) = match partway {
         Some(partway) => {
-            let text = &game.text;
-            message(
-                ui,
-                game,
-                &text.titles.speedball_2,
-                &text.messages.second_leg,
-            )?;
+            announce(ui, game, &game.text.messages.second_leg)?;
             partway
         }
         None => {
@@ -105,17 +104,11 @@ fn tie_lost_by_brutal_deluxe(
                 Competition::Cup,
                 teams,
                 0,
-                standings(cup, (0, 0), 0),
+                standings(cup, PerTeam::new(0, 0), 0),
             )?;
-            game.career.record_result(teams.into(), first.into());
+            game.career.record_result(teams, first);
             if playing {
-                let text = &game.text;
-                message(
-                    ui,
-                    game,
-                    &text.titles.speedball_2,
-                    &text.messages.second_leg,
-                )?;
+                announce(ui, game, &game.text.messages.second_leg)?;
                 (first, 4)
             } else {
                 (first, 0)
@@ -131,13 +124,13 @@ fn tie_lost_by_brutal_deluxe(
             initial_dir,
             standings(cup, total, initial_dir),
         )?;
-        game.career.record_result(teams.into(), leg.into());
+        game.career.record_result(teams, leg);
         initial_dir ^= 4;
-        total = (total.0 + leg.0, total.1 + leg.1);
+        total = total + leg;
         if playing {
             display_total_match_result(ui, game, teams, total)?;
         }
-        if total.0 != total.1 {
+        if total.team1 != total.team2 {
             break;
         }
     }

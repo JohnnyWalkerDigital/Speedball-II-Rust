@@ -421,10 +421,6 @@ impl MenuText {
                 ));
             }
         }
-        if problems.is_empty() {
-            Ok(())
-        } else {
-            Err(problems.join("\n"))
-        }
+        crate::data::report(problems)
     }
 }

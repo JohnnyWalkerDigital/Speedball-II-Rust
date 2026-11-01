@@ -8,13 +8,13 @@ use super::text::write_digits;
 use super::ui::{Page, PANEL_COLOUR};
 use crate::game::career::{TeamId, TeamRecord, BRUTAL_DELUXE};
 use crate::game::cup::Cup;
-use crate::game::geometry::Side;
+use crate::game::geometry::{PerTeam, Side};
 use crate::game::league::{League, DIVISION_SIZE, MATCHES_PER_ROUND};
 use crate::game::setup::league_team;
 use crate::game::squad::{self, Competition};
 
 /// The two teams' records and skills side by side.
-pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamId)) -> Page {
+pub fn next_fixture(game: &Game, competition: Competition, teams: PerTeam<TeamId>) -> Page {
     let text = &game.text;
     let fixture_lines = &text.panels.next_fixture;
     let mut numbers: Vec<Vec<u8>> = FixtureNumber::ALL
@@ -25,7 +25,7 @@ pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamI
         })
         .collect();
     // Brutal Deluxe's column ends at 0x13, the opponent's at 0x31.
-    for (team, end) in [(teams.0, 0x13), (teams.1, 0x31)] {
+    for (team, end) in [(teams.team1, 0x13), (teams.team2, 0x31)] {
         fill_fixture_column(game, competition, team, end, &mut numbers);
     }
     let lines: Vec<Vec<u8>> = fixture_lines
@@ -40,9 +40,9 @@ pub fn next_fixture(game: &Game, competition: Competition, teams: (TeamId, TeamI
     page.string_list(&game.assets, &lines);
     // "BRUTAL DELUXE  PLAY  OPPONENT" along row 6.
     for (text, x) in [
-        (text.team_name(teams.0), 0x10),
+        (text.team_name(teams.team1), 0x10),
         (text.panels.play.clone(), 0x94),
-        (text.team_name(teams.1), 0xC4),
+        (text.team_name(teams.team2), 0xC4),
     ] {
         page.alt_text(&game.assets, &at(text, x, 6), SmallFont::Orange);
     }
@@ -83,10 +83,7 @@ fn fill_fixture_column(
     }
 
     if league {
-        let within_division = match record.league_placing & 7 {
-            0 => 8,
-            n => n,
-        };
+        let within_division = League::place_in_division(record.league_placing);
         write_digits(placing, end, i16::from(within_division), 2);
         write_digits(points_for, end, record.points_for as i16, 3);
         write_digits(points_against, end, record.points_against as i16, 3);
@@ -188,10 +185,10 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
     page.string_list(&game.assets, &strings.panels.results);
     for (division, first_row) in [(0, 0x0A), (1, 0x1E)] {
         for game_index in 0..MATCHES_PER_ROUND {
-            let (team1, team2) = league.fixture(division, round, game_index);
+            let teams = league.fixture(division, round, game_index);
             let row = (game_index * 4 + first_row) as u8;
-            let (score1, score2) = league.results[division][game_index];
-            for (team, x) in [(team1, 0x10), (team2, 0xA0)] {
+            let scores = league.results[division][game_index];
+            for (team, x) in [(teams.team1, 0x10), (teams.team2, 0xA0)] {
                 page.alt_text(
                     &game.assets,
                     &at(strings.team_name(team), x, row),
@@ -199,8 +196,8 @@ pub fn results(game: &Game, league: &League, round: usize) -> Page {
                 );
             }
             let mut text = strings.panels.result_row.clone();
-            write_digits(&mut text, 0x18, score1 as i16, 3);
-            write_digits(&mut text, 0x31, score2 as i16, 3);
+            write_digits(&mut text, 0x18, scores.team1 as i16, 3);
+            write_digits(&mut text, 0x31, scores.team2 as i16, 3);
             text[1] = row;
             page.alt_text(&game.assets, &text, SmallFont::Orange);
         }

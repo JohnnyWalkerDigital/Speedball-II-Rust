@@ -5,7 +5,7 @@
 //! teams are stored as offsets from fixed addresses in the original's
 //! memory; turning them back into names is the caller's job.
 
-use super::career::TeamId;
+use super::career::{TeamId, TeamRecord};
 
 /// The space between teams' records in the original's memory, which saves
 /// count teams by.
@@ -37,8 +37,39 @@ pub struct SavedTeam {
 }
 
 impl SavedTeam {
+    /// `team`'s record as saved.
+    pub fn new(team: TeamId, record: &TeamRecord) -> Self {
+        Self {
+            team_offset: Self::offset_of(team),
+            played: record.played,
+            won: record.won,
+            drawn: record.drawn,
+            lost: record.lost,
+            points_for: record.points_for,
+            points_against: record.points_against,
+            league_points: record.league_points,
+            league_placing: u16::from(record.league_placing),
+            old_league_placing: u16::from(record.old_league_placing),
+        }
+    }
+
+    /// The record as it was saved.
+    pub fn record(&self) -> TeamRecord {
+        TeamRecord {
+            played: self.played,
+            won: self.won,
+            drawn: self.drawn,
+            lost: self.lost,
+            points_for: self.points_for,
+            points_against: self.points_against,
+            league_points: self.league_points,
+            league_placing: self.league_placing as u8,
+            old_league_placing: self.old_league_placing as u8,
+        }
+    }
+
     /// The offset a league team is saved as. Player 2 is never saved.
-    pub fn offset_of(team: TeamId) -> u32 {
+    fn offset_of(team: TeamId) -> u32 {
         match team {
             TeamId::League(index) => (index * TEAM_RECORD_SIZE) as u32,
             TeamId::PlayerTwo => unreachable!("player 2 is never saved"),

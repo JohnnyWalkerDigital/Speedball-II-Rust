@@ -13,36 +13,52 @@ const FRONT: usize = 0;
 const REAR: usize = 1;
 const MEDIC_SPEED: i32 = 2;
 
-/// Stretcher sequence state while a player is carried off.
-#[derive(Clone, Copy, Debug)]
-pub struct Injury {
-    pub player: Option<PlayerId>,
-    /// Where the front medic stands, relative to the injured player's x.
-    pub front_medic_offset: Point,
-    /// Where the rear medic is heading.
-    pub rear_medic_target: Point,
-    /// -1 before any injury, then 0 approaching, 1 first medic arrived,
-    /// 2 lifting, 3 carrying off.
-    pub stage: i32,
+/// Where the stretcher sequence has got to, in order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InjuryStage {
+    /// No one has been injured yet.
+    #[default]
+    NotStarted,
+    Approaching,
+    /// The first medic has arrived.
+    Arrived,
+    Lifting,
+    CarryingOff,
 }
 
-impl Default for Injury {
-    fn default() -> Self {
-        Self {
-            player: None,
-            front_medic_offset: Point::ZERO,
-            rear_medic_target: Point::ZERO,
-            stage: -1,
+impl InjuryStage {
+    fn next(self) -> Self {
+        match self {
+            InjuryStage::NotStarted => InjuryStage::Approaching,
+            InjuryStage::Approaching => InjuryStage::Arrived,
+            InjuryStage::Arrived => InjuryStage::Lifting,
+            InjuryStage::Lifting | InjuryStage::CarryingOff => InjuryStage::CarryingOff,
         }
     }
 }
 
+/// Stretcher sequence state while a player is carried off.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Injury {
+    pub player: Option<PlayerId>,
+    /// Where the front medic stands, relative to the injured player's x.
+    front_medic_offset: Point,
+    /// Where the rear medic is heading.
+    rear_medic_target: Point,
+    stage: InjuryStage,
+}
+
 impl Injury {
+    #[cfg(test)]
+    pub fn stage(&self) -> InjuryStage {
+        self.stage
+    }
+
     /// Whether the medics are lifting the player or carrying them off. Until
     /// then the panel shows plain "INJURED"; from then, the player's
     /// position too.
     pub fn medics_lifting(&self) -> bool {
-        self.stage > 1
+        self.stage >= InjuryStage::Lifting
     }
 }
 
@@ -80,7 +96,7 @@ impl Match {
             player: Some(p),
             front_medic_offset: Point::new(offset_x, offset_y),
             rear_medic_target: Point::new(pos.x + rear_shift, pos.y),
-            stage: 0,
+            stage: InjuryStage::Approaching,
         };
         let medics = &mut self.props.medics;
         medics[REAR].pos = Point::new(rear_x, pos.y);
@@ -107,11 +123,11 @@ impl Match {
             return;
         };
         match self.injury.stage {
-            0 => self.medics_approach(injured),
-            1 => self.medics_arrive(injured),
-            2 => self.medics_lift(injured),
-            3 => self.medics_carry_off(injured),
-            stage => unreachable!("invalid injury stage {stage}"),
+            InjuryStage::NotStarted => {}
+            InjuryStage::Approaching => self.medics_approach(injured),
+            InjuryStage::Arrived => self.medics_arrive(injured),
+            InjuryStage::Lifting => self.medics_lift(injured),
+            InjuryStage::CarryingOff => self.medics_carry_off(injured),
         }
     }
 
@@ -166,7 +182,7 @@ impl Match {
             injury.front_medic_offset.x = 26;
             injury.rear_medic_target.x += 4;
         }
-        injury.stage += 1;
+        injury.stage = injury.stage.next();
         self.medics_arrive(injured);
     }
 
@@ -191,7 +207,7 @@ impl Match {
         rear.velocity.x = speed;
         rear.script = script;
         self.injury.rear_medic_target.x = exit_x;
-        self.injury.stage += 1;
+        self.injury.stage = self.injury.stage.next();
         self.medics_lift(injured);
     }
 
@@ -228,7 +244,7 @@ impl Match {
         };
         self.props.medics[FRONT].script = front_script;
         self.props.medics[REAR].script = rear_script;
-        self.injury.stage += 1;
+        self.injury.stage = self.injury.stage.next();
         self.medics_carry_off(injured);
     }
 

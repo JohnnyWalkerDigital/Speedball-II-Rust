@@ -5,7 +5,8 @@ use super::draw::{self, Scene};
 use super::standings::Standings;
 use super::view::{BuyMode, Screen, View};
 use crate::game::career::{TeamId, BRUTAL_DELUXE};
-use crate::game::geometry::Side;
+use crate::game::geometry::{PerTeam, Side};
+use crate::game::league::League;
 use crate::game::squad::{self, Context};
 use crate::menu::flow::Game;
 use crate::menu::host::Button;
@@ -16,7 +17,7 @@ pub(super) struct Session<'a> {
     pub side: Side,
     pub context: Context,
     pub competition: squad::Competition,
-    pub teams: (TeamId, TeamId),
+    pub teams: PerTeam<TeamId>,
     pub standings: Standings<'a>,
     pub view: View,
 }
@@ -26,7 +27,7 @@ impl<'a> Session<'a> {
         game: &Game,
         side: Side,
         competition: squad::Competition,
-        teams: (TeamId, TeamId),
+        teams: PerTeam<TeamId>,
         standings: Standings<'a>,
         screen: Screen,
         mode: BuyMode,
@@ -109,6 +110,6 @@ fn context(game: &Game, competition: squad::Competition) -> Context {
     Context {
         competition,
         manager_mode: game.manager_mode,
-        in_division_1: placing <= 8,
+        in_division_1: League::in_division_1(placing),
     }
 }

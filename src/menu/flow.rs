@@ -20,7 +20,9 @@ use super::text::{write_digits, DIGIT_ZERO};
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
 use crate::data::AtariRom;
-use crate::game::career::{cash_cap, compare_scores, Career, LastMatch, TeamId, BRUTAL_DELUXE};
+use crate::game::career::{
+    cash_cap, compare_scores, team2_won, Career, LastMatch, TeamId, BRUTAL_DELUXE,
+};
 use crate::game::events::Sound;
 use crate::game::geometry::{PerTeam, Side};
 use crate::game::league::ScoresTable;
@@ -272,13 +274,7 @@ pub(super) fn list_menu(ui: &mut Ui, game: &Game, menu: &MenuSpec) -> Flow<usize
         ui.clear_input();
         let pressed = loop {
             ui.vblank()?;
-            let wanted = |b| {
-                b == Button::Escape
-                    || [Control::Up, Control::Down, Control::Fire]
-                        .iter()
-                        .any(|&c| b == Button::Joystick(Side::Team1, c))
-            };
-            if let Some(button) = ui.next_press(wanted) {
+            if let Some(button) = ui.next_press(is_menu_press) {
                 break button;
             }
         };
@@ -297,6 +293,20 @@ pub(super) fn list_menu(ui: &mut Ui, game: &Game, menu: &MenuSpec) -> Flow<usize
 
 fn is_player_1(button: Button) -> bool {
     matches!(button, Button::Joystick(Side::Team1, _))
+}
+
+/// Player 1 moving up or down or pressing fire, or Escape: what a menu
+/// listens to.
+pub(super) fn is_menu_press(button: Button) -> bool {
+    button == Button::Escape
+        || [Control::Up, Control::Down, Control::Fire]
+            .iter()
+            .any(|&c| button == Button::Joystick(Side::Team1, c))
+}
+
+/// Player 1's fire button, or Escape.
+pub(super) fn is_fire_or_escape(button: Button) -> bool {
+    button == Button::Joystick(Side::Team1, Control::Fire) || button == Button::Escape
 }
 
 /// Either fire button, Escape, or about five seconds.
@@ -320,8 +330,7 @@ pub(super) fn wait_fire(ui: &mut Ui) -> Flow {
     ui.clear_input();
     loop {
         ui.vblank()?;
-        let fire = |b| b == Button::Joystick(Side::Team1, Control::Fire) || b == Button::Escape;
-        match ui.next_press(fire) {
+        match ui.next_press(is_fire_or_escape) {
             Some(Button::Escape) => return Err(Stop::Abort),
             Some(_) => return Ok(()),
             None => {}
@@ -352,9 +361,8 @@ fn knockout(ui: &mut Ui, game: &mut Game) -> Flow {
     let mut round = 1;
     while round <= KNOCKOUT_ROUNDS {
         let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::League(round));
-        let (score1, score2) =
+        let scores =
             brutal_deluxe_match(ui, game, Competition::Knockout, round, 0, Standings::None)?;
-        let scores = PerTeam::new(score1, score2);
         game.career.record_result(teams, scores);
         match compare_scores(scores.team1, scores.team2) {
             std::cmp::Ordering::Equal => continue,
@@ -416,13 +424,13 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
             gym_two_player(ui, game)?;
             let rules = two_player_rules(game, initial_dir);
             let leg = play_match(ui, game, rules, teams, ResultScreen::Score, false)?;
-            total = PerTeam::new(total.team1 + leg.team1, total.team2 + leg.team2);
+            total = total + leg;
             result_screen(ui, game, total, &game.text.messages.total)?;
             if total.team1 != total.team2 {
                 break;
             }
         }
-        if compare_scores(total.team2, total.team1).is_gt() {
+        if team2_won(total) {
             wins.team2 += 1;
         } else {
             wins.team1 += 1;
@@ -440,7 +448,7 @@ fn two_players(ui: &mut Ui, game: &mut Game) -> Flow {
 
 /// Each player in turn gets the gym, with their own joystick and money.
 fn gym_two_player(ui: &mut Ui, game: &mut Game) -> Flow {
-    let teams = (BRUTAL_DELUXE, TeamId::PlayerTwo);
+    let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::PlayerTwo);
     for (side, player) in [(Side::Team1, 1), (Side::Team2, 2)] {
         let mut text = game.text.messages.player_turn.clone();
         text[9] = DIGIT_ZERO + player;
@@ -465,6 +473,12 @@ pub(super) fn message(ui: &mut Ui, game: &Game, title: &Title, text: &[u8]) -> F
     wait_any_fire(ui)
 }
 
+/// A message under the "SPEEDBALL 2" title, as the league and cup show
+/// their news.
+pub(super) fn announce(ui: &mut Ui, game: &Game, text: &[u8]) -> Flow {
+    message(ui, game, &game.text.titles.speedball_2, text)
+}
+
 // -- Demo ------------------------------------------------------------------------
 
 /// The demo game, then a look at the manager and gym screens.
@@ -486,36 +500,23 @@ pub(super) fn cup_league_match(
     ui: &mut Ui,
     game: &mut Game,
     competition: Competition,
-    teams: (TeamId, TeamId),
+    teams: PerTeam<TeamId>,
     initial_dir: i32,
     standings: Standings,
-) -> Flow<(i32, i32)> {
+) -> Flow<PerTeam<i32>> {
     let opponent = |team: TeamId| match team {
         TeamId::League(index) => index,
         TeamId::PlayerTwo => unreachable!("player 2 only plays two-player games"),
     };
-    let brutal_deluxe = BRUTAL_DELUXE;
-    if teams.0 == brutal_deluxe {
-        brutal_deluxe_match(
-            ui,
-            game,
-            competition,
-            opponent(teams.1),
-            initial_dir,
-            standings,
-        )
-    } else if teams.1 == brutal_deluxe {
-        let (ours, theirs) = brutal_deluxe_match(
-            ui,
-            game,
-            competition,
-            opponent(teams.0),
-            initial_dir,
-            standings,
-        )?;
-        Ok((theirs, ours))
+    if teams.team1 == BRUTAL_DELUXE {
+        let opponent = opponent(teams.team2);
+        brutal_deluxe_match(ui, game, competition, opponent, initial_dir, standings)
+    } else if teams.team2 == BRUTAL_DELUXE {
+        let opponent = opponent(teams.team1);
+        brutal_deluxe_match(ui, game, competition, opponent, initial_dir, standings)
+            .map(PerTeam::swapped)
     } else {
-        Ok(game.scores_table.result(&mut game.rng, teams.0, teams.1))
+        Ok(game.scores_table.result(&mut game.rng, teams))
     }
 }
 
@@ -528,8 +529,8 @@ fn brutal_deluxe_match(
     opponent: usize,
     initial_dir: i32,
     standings: Standings,
-) -> Flow<(i32, i32)> {
-    let teams = (BRUTAL_DELUXE, TeamId::League(opponent));
+) -> Flow<PerTeam<i32>> {
+    let teams = PerTeam::new(BRUTAL_DELUXE, TeamId::League(opponent));
     ui.transition(&panels::next_fixture(game, competition, teams))?;
     wait_fire(ui)?;
     if competition == Competition::Knockout {
@@ -545,11 +546,9 @@ fn brutal_deluxe_match(
         // Coins are worth double in the cup.
         rules.coin_value *= 2;
     }
-    let teams = PerTeam::from(teams);
     let may_speed_up =
         game.manager_mode && matches!(competition, Competition::League | Competition::Cup);
-    let scores = play_match(ui, game, rules, teams, ResultScreen::Pictures, may_speed_up)?;
-    Ok((scores.team1, scores.team2))
+    play_match(ui, game, rules, teams, ResultScreen::Pictures, may_speed_up)
 }
 
 /// Which result screen follows a match.
@@ -627,20 +626,19 @@ fn play_match(
 pub(super) fn display_total_match_result(
     ui: &mut Ui,
     game: &Game,
-    teams: (TeamId, TeamId),
-    total: (i32, i32),
+    teams: PerTeam<TeamId>,
+    total: PerTeam<i32>,
 ) -> Flow {
-    let scores = PerTeam::from(total);
-    let (picture, winner) = match compare_scores(total.0, total.1) {
+    let (picture, winner) = match compare_scores(total.team1, total.team2) {
         std::cmp::Ordering::Equal => {
-            return result_screen(ui, game, scores, &game.text.messages.total)
+            return result_screen(ui, game, total, &game.text.messages.total)
         }
-        std::cmp::Ordering::Greater => (&game.assets.victory, teams.0),
-        std::cmp::Ordering::Less => (&game.assets.defeat, teams.1),
+        std::cmp::Ordering::Greater => (&game.assets.victory, teams.team1),
+        std::cmp::Ordering::Less => (&game.assets.defeat, teams.team2),
     };
-    let page = total_win_picture(game, picture, scores, winner);
+    let page = total_win_picture(game, picture, total, winner);
     ui.transition(&page)?;
-    if winner == teams.0 {
+    if winner == teams.team1 {
         ui.play_sound(VICTORY_CHEER);
         wait_any_fire(ui)?;
         ui.play_sound(VICTORY_AFTER);

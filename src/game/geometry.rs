@@ -148,6 +148,11 @@ impl<T> PerTeam<T> {
         Self { team1, team2 }
     }
 
+    /// Team 1's value as team 2's, and the other way round.
+    pub fn swapped(self) -> Self {
+        Self::new(self.team2, self.team1)
+    }
+
     pub fn get(&self, side: Side) -> &T {
         match side {
             Side::Team1 => &self.team1,
@@ -160,6 +165,14 @@ impl<T> PerTeam<T> {
             Side::Team1 => &mut self.team1,
             Side::Team2 => &mut self.team2,
         }
+    }
+}
+
+impl<T: Add<Output = T>> Add for PerTeam<T> {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.team1 + other.team1, self.team2 + other.team2)
     }
 }
 

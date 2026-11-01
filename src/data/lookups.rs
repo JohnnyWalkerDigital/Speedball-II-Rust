@@ -207,11 +207,7 @@ impl Lookups {
         for path in &self.multiplier_paths {
             expect("each of multiplier_paths", path.len(), PATH_STEPS);
         }
-        if problems.is_empty() {
-            Ok(())
-        } else {
-            Err(problems.join("\n"))
-        }
+        crate::data::report(problems)
     }
 }
 

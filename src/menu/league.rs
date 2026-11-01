@@ -1,15 +1,20 @@
 //! The league: two half-seasons a year, then promotion and the play-off
 //! for a team in division 2, or the title for a team in division 1.
 
-use super::flow::{cup_league_match, list_menu, message, wait_fire, win_shared, Game};
+use super::flow::{
+    announce, cup_league_match, is_menu_press, list_menu, wait_fire, win_shared, Game,
+};
 use super::host::{Button, Control};
 use super::manager::Standings;
 use super::panels;
-use super::saving;
+use super::saving::{self, Snapshot};
 use super::ui::{Flow, Stop, Ui};
-use crate::game::career::{cash_cap, BRUTAL_DELUXE};
-use crate::game::geometry::Side;
-use crate::game::league::{team2_won, League, DIVISION_SIZE, MATCHES_PER_ROUND, ROUNDS};
+use crate::game::career::{cash_cap, team2_won, BRUTAL_DELUXE};
+use crate::game::geometry::PerTeam;
+use crate::game::league::{
+    League, BOTTOM_OF_DIVISION_1, MATCHES_PER_ROUND, PLAYOFF_DIVISION_1, PLAYOFF_DIVISION_2,
+    ROUNDS, TOP_OF_DIVISION_2,
+};
 use crate::game::save::Progress;
 use crate::game::squad::Competition;
 
@@ -38,11 +43,15 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
         }
         _ => {
             let save = saving::load(ui, game, false)?;
-            let (teams, initial_dir) = saving::restore(game, &save);
+            let Snapshot {
+                teams,
+                initial_dir,
+                progress,
+            } = saving::restore(game, save);
             if game.manager_mode {
                 game.career.use_manager_prizes(true);
             }
-            let Progress::League { round, game: index } = save.progress else {
+            let Progress::League { round, game: index } = progress else {
                 unreachable!("a league save")
             };
             let resume = Resume {
@@ -78,7 +87,7 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
                 }
             }
         };
-        if placing(game) <= DIVISION_SIZE as u8 {
+        if League::in_division_1(placing(game)) {
             if placing(game) == 1 {
                 win_shared(ui, &game.assets.league_win)?;
             }
@@ -86,16 +95,10 @@ pub fn league(ui: &mut Ui, game: &mut Game) -> Flow {
         }
         playoffs(ui, game, &mut league, initial_dir)?;
         promote_relegate_announce(ui, game, &mut league)?;
-        if placing(game) > DIVISION_SIZE as u8 {
+        if !League::in_division_1(placing(game)) {
             return Ok(());
         }
-        let text = &game.text;
-        message(
-            ui,
-            game,
-            &text.titles.speedball_2,
-            &text.messages.new_season,
-        )?;
+        announce(ui, game, &game.text.messages.new_season)?;
     }
 }
 
@@ -146,7 +149,7 @@ fn league_round(
             };
             let scores =
                 cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
-            game.career.record_result(teams.into(), scores.into());
+            game.career.record_result(teams, scores);
             league.results[division][game_index] = scores;
         }
     }
@@ -173,13 +176,7 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
         frame += 1;
         // Every 16 frames, switch between the name and the blank.
         ui.show_page(&shown[usize::from(frame / BLINK_VBLANKS % 2 == 1)]);
-        let wanted = |b| {
-            b == Button::Escape
-                || [Control::Up, Control::Down, Control::Fire]
-                    .iter()
-                    .any(|&c| b == Button::Joystick(Side::Team1, c))
-        };
-        match ui.next_press(wanted) {
+        match ui.next_press(is_menu_press) {
             Some(Button::Escape) => return Err(Stop::Abort),
             Some(Button::Joystick(_, Control::Fire)) => return Ok(()),
             Some(Button::Joystick(_, control)) => {
@@ -197,10 +194,9 @@ pub(super) fn show_league_placings(ui: &mut Ui, game: &Game, league: &League) ->
 /// the division 2 team wins, they swap divisions. The ends swap before
 /// each match.
 fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: i32) -> Flow {
-    let teams = (league.tables[0][6], league.tables[1][1]);
-    if teams.0 == BRUTAL_DELUXE || teams.1 == BRUTAL_DELUXE {
-        let text = &game.text;
-        message(ui, game, &text.titles.speedball_2, &text.messages.playoff)?;
+    let teams = PerTeam::new(league.tables[0][6], league.tables[1][1]);
+    if teams.team1 == BRUTAL_DELUXE || teams.team2 == BRUTAL_DELUXE {
+        announce(ui, game, &game.text.messages.playoff)?;
     }
     let scores = loop {
         initial_dir ^= 4;
@@ -213,19 +209,23 @@ fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: 
         };
         let scores =
             cup_league_match(ui, game, Competition::League, teams, initial_dir, standings)?;
-        if scores.0 != scores.1 {
+        if scores.team1 != scores.team2 {
             break scores;
         }
     };
     if !team2_won(scores) {
         return Ok(());
     }
-    league.promote_relegate(teams.0, teams.1, &mut game.career);
+    league.promote_relegate(teams.team1, teams.team2, &mut game.career);
     let record = game.career.record(BRUTAL_DELUXE);
-    if record.league_placing == 7 && record.old_league_placing != 7 {
+    if record.league_placing == PLAYOFF_DIVISION_1
+        && record.old_league_placing != PLAYOFF_DIVISION_1
+    {
         win_shared(ui, &game.assets.promotion)?;
-    } else if record.league_placing == 10 && record.old_league_placing != 10 {
-        relegated(ui, game)?;
+    } else if record.league_placing == PLAYOFF_DIVISION_2
+        && record.old_league_placing != PLAYOFF_DIVISION_2
+    {
+        announce(ui, game, &game.text.messages.relegated)?;
     }
     Ok(())
 }
@@ -234,13 +234,8 @@ fn playoffs(ui: &mut Ui, game: &mut Game, league: &mut League, mut initial_dir: 
 fn promote_relegate_announce(ui: &mut Ui, game: &mut Game, league: &mut League) -> Flow {
     league.promote_relegate(league.tables[0][7], league.tables[1][0], &mut game.career);
     match placing(game) {
-        8 => win_shared(ui, &game.assets.promotion),
-        9 => relegated(ui, game),
+        BOTTOM_OF_DIVISION_1 => win_shared(ui, &game.assets.promotion),
+        TOP_OF_DIVISION_2 => announce(ui, game, &game.text.messages.relegated),
         _ => Ok(()),
     }
-}
-
-fn relegated(ui: &mut Ui, game: &Game) -> Flow {
-    let text = &game.text;
-    message(ui, game, &text.titles.speedball_2, &text.messages.relegated)
 }

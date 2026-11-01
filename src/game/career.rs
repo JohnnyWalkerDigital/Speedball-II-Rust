@@ -249,6 +249,11 @@ pub fn compare_scores(a: i32, b: i32) -> Ordering {
     (a as u16).cmp(&(b as u16))
 }
 
+/// Whether team 2 beat team 1, the way the cup and play-offs decide it.
+pub fn team2_won(scores: PerTeam<i32>) -> bool {
+    compare_scores(scores.team2, scores.team1).is_gt()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

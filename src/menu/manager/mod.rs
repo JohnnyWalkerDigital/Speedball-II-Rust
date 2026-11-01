@@ -27,7 +27,7 @@ use super::flow::{wait_any_fire, Game};
 use super::ui::{Flow, Ui};
 use crate::game::career::{TeamId, BRUTAL_DELUXE};
 use crate::game::events::Sound;
-use crate::game::geometry::Side;
+use crate::game::geometry::{PerTeam, Side};
 use crate::game::squad::Competition;
 use keypad::{keypad, KeypadExit};
 use session::Session;
@@ -56,7 +56,7 @@ pub fn manager_screen(
     ui: &mut Ui,
     game: &mut Game,
     competition: Competition,
-    teams: (TeamId, TeamId),
+    teams: PerTeam<TeamId>,
     standings: Standings,
 ) -> Flow {
     let mut session = Session::new(
@@ -112,7 +112,7 @@ pub fn gym_screen(
     game: &mut Game,
     side: Side,
     competition: Competition,
-    teams: (TeamId, TeamId),
+    teams: PerTeam<TeamId>,
 ) -> Flow {
     let mut session = Session::new(
         game,
@@ -134,7 +134,7 @@ pub fn show_off(ui: &mut Ui, game: &mut Game) -> Flow {
             game,
             Side::Team1,
             Competition::League,
-            (BRUTAL_DELUXE, TeamId::League(1)),
+            PerTeam::new(BRUTAL_DELUXE, TeamId::League(1)),
             Standings::None,
             screen,
             BuyMode::Player,
