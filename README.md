@@ -354,9 +354,6 @@ Design choices:
   original's F does nothing.
 - A sped-up match ran as fast as the Amiga could compute it; the port runs
   eight steps a frame.
-- The intro dump comes from a cracked copy that says "DUAL CREW PRESENT";
-  the port shows the original's "IMAGEWORKS PRESENTS" (the same number of
-  bytes).
 - A saved replay's buffer holds zeros where the replay doesn't reach; the
   original's held whatever earlier matches had left there.
 
