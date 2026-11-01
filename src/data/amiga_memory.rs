@@ -18,11 +18,16 @@ use crate::game::sprites::{AmigaSprite, Bank};
 
 /// The blocks of the ST's addresses the Amiga has, and how far on it has
 /// them.
-const BLOCKS: [(Range<i32>, i32); 9] = [
+const BLOCKS: [(Range<i32>, i32); 11] = [
     // The joystick directions.
     (0x04B0..0x04D2, -0x33E),
     // The skill curves and tackling.
     (0x04D2..0x0673, -0x338),
+    // The panel's messages and the position names, which the port keeps
+    // in code (`game/text.rs`): "REPLAY", then the rest, after a byte the
+    // Amiga leaves out.
+    (0x0EB8..0x0EC3, 0x1712),
+    (0x0EC3..0x1000, 0x1713),
     // The status lights and the ball's offsets.
     (0x247C..SPRITE_ORIGINS.start, 0x1556),
     // The ramp paths, the support grid and the equipment's skills.

@@ -242,12 +242,11 @@ mod tests {
     #[test]
     fn messages_are_the_originals() {
         let config = crate::config::Config::default();
-        let Ok(disk) = crate::data::files::read_atari_disk(&config.data_dir) else {
+        let Ok(dump) = crate::data::files::read_amiga_intro_dump(&config.data_dir) else {
             eprintln!("skipping: no originals");
             return;
         };
-        // As the ST held them.
-        let rom = Rom::atari(disk);
+        let rom = Rom::new(&dump);
         for id in TextId::ALL {
             assert_eq!(id.bytes(), Text::read(&rom, id as i32).bytes(), "{id:?}");
         }
