@@ -6,7 +6,7 @@ use super::palette::{ColorModel, Palette};
 use super::planar::{decode_sprites, Layout, Mask, SpriteFormat};
 use crate::config::Platform;
 use crate::data::files::AmigaFiles;
-use crate::data::{addr, AtariRom};
+use crate::data::addr;
 
 /// The sprite sheets entities draw from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,11 +66,11 @@ impl Assets {
         }
     }
 
-    pub fn load_atari(rom: &AtariRom) -> Self {
-        let disk = rom.disk();
+    /// Decodes them from the ST disk.
+    pub fn load_atari(disk: &[u8]) -> Self {
         let palette = Palette::read(
             disk,
-            AtariRom::ram_to_disk(addr::PALETTE_MATCH),
+            addr::st_disk_offset(addr::PALETTE_MATCH),
             16,
             ColorModel::AtariSt,
         );

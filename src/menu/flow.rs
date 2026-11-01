@@ -19,7 +19,7 @@ use super::tables::MenuTables;
 use super::text::{write_digits, DIGIT_ZERO};
 use super::ui::{Flow, Page, Stop, Ui};
 use crate::data::save_disk::SaveDisk;
-use crate::data::AtariRom;
+use crate::data::Rom;
 use crate::game::career::{
     cash_cap, compare_scores, team2_won, Career, LastMatch, TeamId, BRUTAL_DELUXE,
 };
@@ -67,7 +67,7 @@ const WIN_AFTER: Sound = Sound {
 
 /// Everything the front end works with.
 pub struct Game {
-    pub rom: Rc<AtariRom>,
+    pub rom: Rc<Rom>,
     /// How saves name players.
     pub saved_names: SavedNames,
     pub text: MenuText,
@@ -109,7 +109,7 @@ pub struct MenuContent {
 
 impl Game {
     pub fn new(
-        rom: Rc<AtariRom>,
+        rom: Rc<Rom>,
         ram: MenuRam,
         content: MenuContent,
         renderer: MatchRenderer,

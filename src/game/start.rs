@@ -14,7 +14,7 @@ use super::geometry::Point;
 use super::player::{MatchStats, Player};
 use super::roster::{Attributes, AttributesRef, Roster, Skills};
 use crate::data::animations::{snake_case, Animations, ScriptRef};
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 /// Players on the pitch, both teams.
 const PLAYERS: usize = 18;
@@ -27,7 +27,7 @@ pub struct MatchStart {
 }
 
 impl MatchStart {
-    pub fn read(rom: &AtariRom) -> Self {
+    pub fn read(rom: &Rom) -> Self {
         let mut players = Vec::new();
         let mut entities = Vec::new();
         for (id, address) in EntityId::records() {

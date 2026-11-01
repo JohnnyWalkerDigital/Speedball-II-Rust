@@ -12,10 +12,12 @@ use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 use crate::config::{Config, Platform};
 use crate::content::{self, ContentSource, OriginalFiles, Originals, Pack};
 use crate::data::animations::Animations;
-use crate::data::files::{read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump};
+use crate::data::files::{
+    read_amiga_files, read_amiga_intro_dump, read_amiga_match_dump, read_atari_disk,
+};
 use crate::data::lookups::Lookups;
 use crate::data::save_disk::SaveDisk;
-use crate::data::{AtariRom, GameFiles};
+use crate::data::{Rom, GameFiles};
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::game::roster::Teams;
@@ -81,39 +83,30 @@ pub fn export_sounds(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-/// The originals the game needs: the ST disk always; the Amiga files for
-/// Amiga graphics and for the menus (unless `--mode` skips them); the
-/// Amiga match dump for sound otherwise.
+/// The originals the game needs: the Amiga intro dump always; the
+/// selected platform's files for its graphics; the Amiga files for the
+/// menus (unless `--mode` skips them); the Amiga match dump for sound
+/// otherwise.
 fn load_originals(config: &Config) -> Result<OriginalFiles, Box<dyn Error>> {
-    let files = GameFiles::load(&config.data_dir, config.platform)?;
+    let mut files = GameFiles::load(&config.data_dir, config.platform)?;
     let with_menus = config.mode.is_none();
-    let amiga = match files.amiga {
+    files.amiga = match files.amiga {
         Some(amiga) => Some(amiga),
         None if with_menus => Some(read_amiga_files(&config.data_dir).map_err(|e| {
             format!("the menus need the Amiga files ({e}); use --mode to skip them")
         })?),
         None => None,
     };
-    let intro_dump = if with_menus {
-        read_amiga_intro_dump(&config.data_dir)
-            .map_err(|error| eprintln!("no intro: {error}"))
-            .ok()
-    } else {
-        None
-    };
     // The sound driver runs on the Amiga data, whichever graphics are
     // shown. Without it the game is silent.
-    let sound_dump = if amiga.is_none() && !config.mute {
+    let sound_dump = if files.amiga.is_none() && !config.mute {
         read_amiga_match_dump(&config.data_dir)
             .map_err(|error| eprintln!("sound off: {error}"))
             .ok()
     } else {
         None
     };
-    let rom = AtariRom::new(files.atari_disk);
-    Ok(OriginalFiles::new(
-        rom, amiga, with_menus, sound_dump, intro_dump,
-    )?)
+    Ok(OriginalFiles::new(files, with_menus, sound_dump)?)
 }
 
 /// The graphics, text and tables a game needs, from the originals or
@@ -188,7 +181,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         content.sound.as_ref(),
         originals.match_dump(),
         originals.menu_ram.as_ref().map(MenuRam::bytes),
-        originals.intro_dump.as_deref(),
+        Some(&originals.intro_dump),
     );
     let OriginalFiles {
         mut rom, menu_ram, ..
@@ -206,18 +199,19 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     }
 }
 
-/// `--extract`: writes the graphics as an asset pack.
+/// `--extract`: writes the tables and graphics as an asset pack.
 pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
-    // Whatever originals there are: the Amiga ones are optional.
-    let files = GameFiles::load(&config.data_dir, Platform::Atari)?;
-    let rom = AtariRom::new(files.atari_disk);
-    let amiga = read_amiga_files(&config.data_dir)
-        .map_err(|error| eprintln!("no Amiga graphics or menus: {error}"))
-        .ok();
-    let intro_dump = read_amiga_intro_dump(&config.data_dir)
-        .map_err(|error| eprintln!("no intro: {error}"))
-        .ok();
-    let originals = OriginalFiles::new(rom, amiga, true, None, intro_dump)?;
+    // The intro dump, and whichever graphics there are.
+    let files = GameFiles {
+        intro_dump: read_amiga_intro_dump(&config.data_dir)?,
+        atari_disk: read_atari_disk(&config.data_dir)
+            .map_err(|error| eprintln!("no ST graphics: {error}"))
+            .ok(),
+        amiga: read_amiga_files(&config.data_dir)
+            .map_err(|error| eprintln!("no Amiga graphics or menus: {error}"))
+            .ok(),
+    };
+    let originals = OriginalFiles::new(files, true, None)?;
     let extracted = content::extract(&originals.originals(), dir)?;
     let platforms: Vec<_> = extracted
         .platforms
@@ -238,7 +232,7 @@ pub fn extract(config: &Config, dir: &Path) -> Result<(), Box<dyn Error>> {
 /// `--mode`: one match, as before the menus existed.
 fn play_one_match(
     config: &Config,
-    rom: Rc<AtariRom>,
+    rom: Rc<Rom>,
     renderer: MatchRenderer,
     sound: Option<SoundBanks>,
 ) -> Result<(), Box<dyn Error>> {
@@ -266,7 +260,7 @@ fn play_one_match(
 
 fn play_with_menus(
     config: &Config,
-    rom: Rc<AtariRom>,
+    rom: Rc<Rom>,
     renderer: MatchRenderer,
     ram: MenuRam,
     menus: MenuContent,

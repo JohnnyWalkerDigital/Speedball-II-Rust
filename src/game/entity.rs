@@ -3,7 +3,7 @@
 
 use super::geometry::{bit_accessors, DirBits, Point};
 use crate::data::animations::{Animation, ScriptRef};
-use crate::data::{addr, AtariRom};
+use crate::data::{addr, Rom};
 
 /// What an entity does each frame. The game data stores this as a code
 /// pointer, which [`Think::from_address`] decodes.
@@ -254,7 +254,7 @@ pub struct Entity {
 impl Entity {
     pub const SIZE: i32 = 0x28;
 
-    pub fn read(rom: &AtariRom, address: i32) -> Self {
+    pub fn read(rom: &Rom, address: i32) -> Self {
         Self {
             id: EntityId::at(address),
             gfx: Gfx::from_pointer(rom.u32(address) as u32),
@@ -321,7 +321,7 @@ impl Entity {
     // -- Animation -------------------------------------------------------------
 
     /// Advances the animation script by one frame.
-    pub fn advance_script(&mut self, rom: &AtariRom) -> ScriptEvent {
+    pub fn advance_script(&mut self, rom: &Rom) -> ScriptEvent {
         if self.flags.invisible() {
             return ScriptEvent::None;
         }
@@ -361,7 +361,7 @@ impl Entity {
 
     /// Selects the script for the current direction from a per-direction
     /// list and sets the matching velocity.
-    pub fn set_animation(&mut self, rom: &AtariRom, animation: Animation, speed: i32) {
+    pub fn set_animation(&mut self, rom: &Rom, animation: Animation, speed: i32) {
         self.script = rom.script_for_dir(animation, self.dir);
         debug_assert_ne!(
             self.script,
@@ -376,7 +376,7 @@ impl Entity {
 
     /// Applies velocity, clamping to the pitch walls; the ball bounces off
     /// them, and reports which walls it bounced off.
-    pub fn move_within_walls(&mut self, rom: &AtariRom, margin: i32) -> WallBounces {
+    pub fn move_within_walls(&mut self, rom: &Rom, margin: i32) -> WallBounces {
         let mut bounces_off = WallBounces::default();
         if self.flags.invisible() {
             return bounces_off;

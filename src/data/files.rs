@@ -25,12 +25,12 @@ const AMIGA_INTRO_DUMP: &str = "Intro - Amiga.dmp";
 const AMIGA_DUMP_SIZE: usize = 524_288;
 
 /// Raw bytes of every file the selected platform needs.
-///
-/// The match logic always runs off the Atari ST disk (that is where the
-/// original port found its lookup tables); the Amiga files are used for
-/// graphics, sound and the menus.
 pub struct GameFiles {
-    pub atari_disk: Vec<u8>,
+    /// The Amiga's memory during the intro: the match's data, and the
+    /// intro's pictures, text and music.
+    pub intro_dump: Vec<u8>,
+    /// The Atari ST disk, for the ST's graphics.
+    pub atari_disk: Option<Vec<u8>>,
     pub amiga: Option<AmigaFiles>,
 }
 
@@ -102,14 +102,25 @@ impl fmt::Display for LoadError {
 impl std::error::Error for LoadError {}
 
 impl GameFiles {
+    /// The intro dump, and the files for `platform`'s graphics.
     pub fn load(data_dir: &Path, platform: Platform) -> Result<Self, LoadError> {
-        let atari_disk = read_disk_image(data_dir, ATARI_DISK)?;
-        let amiga = match platform {
-            Platform::Atari => None,
-            Platform::Amiga => Some(read_amiga_files(data_dir)?),
-        };
-        Ok(Self { atari_disk, amiga })
+        Ok(Self {
+            intro_dump: read_amiga_intro_dump(data_dir)?,
+            atari_disk: match platform {
+                Platform::Atari => Some(read_atari_disk(data_dir)?),
+                Platform::Amiga => None,
+            },
+            amiga: match platform {
+                Platform::Atari => None,
+                Platform::Amiga => Some(read_amiga_files(data_dir)?),
+            },
+        })
     }
+}
+
+/// The Atari ST disk on its own.
+pub fn read_atari_disk(data_dir: &Path) -> Result<Vec<u8>, LoadError> {
+    read_disk_image(data_dir, ATARI_DISK)
 }
 
 /// The Amiga disk and match dump.
@@ -125,8 +136,7 @@ pub fn read_amiga_match_dump(data_dir: &Path) -> Result<Vec<u8>, LoadError> {
     read_exact_size(&data_dir.join(AMIGA_MATCH_DUMP), AMIGA_DUMP_SIZE)
 }
 
-/// The Amiga RAM dump taken during the intro: its pictures, font, text and
-/// music.
+/// The Amiga RAM dump taken during the intro, before any match.
 pub fn read_amiga_intro_dump(data_dir: &Path) -> Result<Vec<u8>, LoadError> {
     read_exact_size(&data_dir.join(AMIGA_INTRO_DUMP), AMIGA_DUMP_SIZE)
 }

@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::addr;
 use super::lookups::DIRECTIONS;
-use super::rom::AtariRom;
+use super::rom::Rom;
 use crate::game::entity::EntityId;
 
 /// The scripts' block of memory.
@@ -254,7 +254,7 @@ impl PartialEq for Animations {
 }
 
 impl AnimationTable {
-    pub fn read(rom: &AtariRom) -> Self {
+    pub fn read(rom: &Rom) -> Self {
         let in_block = |address: i32| (BLOCK_START..BLOCK_END).contains(&address);
         // Every place a script starts, and what starts it there.
         let mut starts: BTreeMap<i32, Vec<String>> = BTreeMap::new();
@@ -380,7 +380,7 @@ impl AnimationTable {
 }
 
 impl Animations {
-    pub fn read(rom: &AtariRom) -> Self {
+    pub fn read(rom: &Rom) -> Self {
         AnimationTable::read(rom)
             .lay_out()
             .expect("the original's scripts lay out")

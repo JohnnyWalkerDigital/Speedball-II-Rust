@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 use super::entity::Entity;
 use super::geometry::{DirBits, Point};
 use super::roster::{Attributes, AttributesRef, Skill, Skills};
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 /// Index into `Match::players`: 0..=8 is team 1, 9..=17 is team 2.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -139,7 +139,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn read(rom: &AtariRom, address: i32, index: usize) -> Self {
+    pub fn read(rom: &Rom, address: i32, index: usize) -> Self {
         let p = address + Entity::SIZE;
         let point = |offset: i32| Point::new(rom.u16(p + offset), rom.u16(p + offset + 2));
         let byte = |offset: i32| rom.u8(p + offset);
@@ -216,11 +216,11 @@ impl Player {
     }
 
     /// Sets the delay before the next AI decision.
-    pub fn reset_think_delay(&mut self, rom: &AtariRom) {
+    pub fn reset_think_delay(&mut self, rom: &Rom) {
         self.entity.timer = rom.think_delay(self.skills().int);
     }
 
-    pub fn speed_jump_bonus(&self, rom: &AtariRom) -> i32 {
+    pub fn speed_jump_bonus(&self, rom: &Rom) -> i32 {
         rom.jump_bonus(self.skills().spd)
     }
 
@@ -234,7 +234,7 @@ impl Player {
 
     /// Where `other` will be in a few frames; smarter players look further
     /// ahead. Results are reflected back off the walls.
-    pub fn predict(&self, rom: &AtariRom, other: &Entity) -> Point {
+    pub fn predict(&self, rom: &Rom, other: &Entity) -> Point {
         let shift = rom.prediction_shift(self.skills().int);
         let mut target = Point::new(
             other.pos.x + (other.velocity.x << shift),
@@ -246,7 +246,7 @@ impl Player {
 
     /// Leads `other` like [`predict`](Self::predict) but shortens the
     /// look-ahead until the vertical estimate stays inside this player's zone.
-    pub fn lead_within_zone(&self, rom: &AtariRom, other: &Entity) -> Point {
+    pub fn lead_within_zone(&self, rom: &Rom, other: &Entity) -> Point {
         let mut target = other.pos;
         let mut shift = rom.prediction_shift(self.skills().int);
         loop {
@@ -294,7 +294,7 @@ impl Player {
 
     /// The direction to face `target`, or the way the team attacks when
     /// already there.
-    pub fn dir_towards(&self, rom: &AtariRom, target: Point) -> i32 {
+    pub fn dir_towards(&self, rom: &Rom, target: Point) -> i32 {
         let bits = self.entity.dir_bits_towards(target);
         if bits.has_direction() {
             rom.dir_from_bits(bits)

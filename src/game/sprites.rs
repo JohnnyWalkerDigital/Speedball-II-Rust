@@ -40,6 +40,22 @@ const DOME_HIT_FRAME: i32 = 0x88;
 pub const BIG_BALL_FIRST: i32 = 130;
 pub const LAUNCHER_FIRST: i32 = 135;
 
+impl AmigaSprite {
+    /// The port's number for the sprite.
+    pub fn port_index(self) -> i32 {
+        let index = self.index;
+        match self.bank {
+            Bank::Entities if index >= UNUSED_TOKEN => index + 1,
+            Bank::Entities | Bank::Players | Bank::BigBall => index,
+            Bank::Launcher => match index {
+                0 | 1 => 0,
+                2 => DOME_HIT_FRAME,
+                _ => LAUNCHER_FIRST + index - 1,
+            },
+        }
+    }
+}
+
 /// The Amiga sprite `e` is drawn with, or `None` if the Amiga draws no
 /// sprite for it.
 pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
@@ -86,25 +102,15 @@ pub fn amiga_sprite(e: &Entity) -> Option<AmigaSprite> {
 /// players' bank.
 pub fn entity_for(sprite: AmigaSprite, team1: bool, top_left: Point, size: i32) -> Entity {
     let index = sprite.index;
-    let (id, gfx, st_index) = match sprite.bank {
-        Bank::Entities => {
-            let st_index = if index >= UNUSED_TOKEN {
-                index + 1
-            } else {
-                index
-            };
-            (EntityId::Unattached, Gfx::Entities, st_index)
-        }
-        Bank::Players => {
-            // Each team's first player.
-            let first = if team1 { 0 } else { 9 };
-            (EntityId::Player(first), Gfx::Players, index)
-        }
-        Bank::BigBall => (EntityId::BigBall, Gfx::BigBall, index),
+    let (id, gfx) = match sprite.bank {
+        Bank::Entities => (EntityId::Unattached, Gfx::Entities),
+        // Each team's first player.
+        Bank::Players => (EntityId::Player(if team1 { 0 } else { 9 }), Gfx::Players),
+        Bank::BigBall => (EntityId::BigBall, Gfx::BigBall),
         Bank::Launcher => match index {
-            0 | 1 => (EntityId::Electrobounce(index as u8), Gfx::Players, 0),
-            2 => (EntityId::BounceDome(0), Gfx::Players, DOME_HIT_FRAME),
-            _ => (EntityId::Launcher, Gfx::Players, LAUNCHER_FIRST + index - 1),
+            0 | 1 => (EntityId::Electrobounce(index as u8), Gfx::Players),
+            2 => (EntityId::BounceDome(0), Gfx::Players),
+            _ => (EntityId::Launcher, Gfx::Players),
         },
     };
     let mut flags = Flags::default();
@@ -121,7 +127,7 @@ pub fn entity_for(sprite: AmigaSprite, team1: bool, top_left: Point, size: i32) 
         script_index: 0,
         dir: 0,
         timer: 0,
-        sprite: st_index,
+        sprite: sprite.port_index(),
         flags,
         origin: Point::new(size / 2, size / 2),
     }

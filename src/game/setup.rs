@@ -9,7 +9,7 @@ use super::roster::{Attributes, Person, Roster, Skills, Team};
 use super::squad;
 use super::text::{TextId, TextPanel};
 use crate::config::{Config, GameMode, TEAM_COUNT};
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 /// Everything `Match::new` needs.
 pub struct MatchSetup {
@@ -104,7 +104,7 @@ pub enum SquadSkills {
 impl MatchRules {
     /// Team 1 is Brutal Deluxe on 100 in every skill, as `main_menu` sets
     /// them up for one player; team 2 plays itself.
-    pub fn one_player(rom: &AtariRom, opponent: usize) -> Self {
+    pub fn one_player(rom: &Rom, opponent: usize) -> Self {
         Self {
             kind: MatchKind::KNOCKOUT,
             team1: Lineup {
@@ -125,7 +125,7 @@ impl MatchRules {
     }
 
     /// Practice: Brutal Deluxe alone on the pitch.
-    pub fn practice(rom: &AtariRom) -> Self {
+    pub fn practice(rom: &Rom) -> Self {
         Self {
             kind: MatchKind::PRACTICE,
             team1: Lineup {
@@ -146,7 +146,7 @@ impl MatchRules {
     }
 
     /// Two players: "PLAYER 1" against "PLAYER 2", all skills 170.
-    pub fn two_players(rom: &AtariRom, initial_dir_team1: i32) -> Self {
+    pub fn two_players(rom: &Rom, initial_dir_team1: i32) -> Self {
         let texts = TextPanel::new();
         let mut team1 = league_team(rom, BRUTAL_DELUXE_INDEX);
         team1.full_name = texts.text(TextId::Player1Full).clone();
@@ -171,7 +171,7 @@ impl MatchRules {
     }
 
     /// The demo game: Fatal Justice against Turbo Hammers, 20 second halves.
-    pub fn demo(rom: &AtariRom) -> Self {
+    pub fn demo(rom: &Rom) -> Self {
         Self {
             kind: MatchKind::DEMO,
             team1: Lineup {
@@ -195,20 +195,20 @@ impl MatchRules {
 const HALF_LENGTH_SECONDS: i32 = 90;
 
 /// One of the 16 league teams, in the original's order.
-pub fn league_team(rom: &AtariRom, index: usize) -> Team {
+pub fn league_team(rom: &Rom, index: usize) -> Team {
     rom.teams().league(index)
 }
 
 impl MatchSetup {
     /// A match from the menus, seeded with `seed`.
-    pub fn new(rom: &AtariRom, rules: MatchRules, seed: u64) -> Self {
+    pub fn new(rom: &Rom, rules: MatchRules, seed: u64) -> Self {
         let mut seeds = SplitMix64(seed);
         let rng = Rng::new(seeds.next_u31(), seeds.next_u31());
         Self::assemble(rom, rules, rng)
     }
 
     /// A match straight from the command line (`--mode` and friends).
-    pub fn from_config(rom: &AtariRom, config: &Config) -> Self {
+    pub fn from_config(rom: &Rom, config: &Config) -> Self {
         let mut seeds = SplitMix64(config.seed);
         let rng = Rng::new(seeds.next_u31(), seeds.next_u31());
         let rules = match config.mode.unwrap_or(GameMode::Knockout) {
@@ -220,7 +220,7 @@ impl MatchSetup {
         Self::assemble(rom, rules, rng)
     }
 
-    fn assemble(rom: &AtariRom, rules: MatchRules, rng: Rng) -> Self {
+    fn assemble(rom: &Rom, rules: MatchRules, rng: Rng) -> Self {
         let mut players = rom.start().players();
         let mut roster = rom.start().roster();
         set_skills(
@@ -279,7 +279,7 @@ fn set_skills(lineup: &Lineup, attributes: &mut [Attributes], persons: &mut [Per
 
 /// Two random teams, both on the computer until someone touches the
 /// controls.
-fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRules {
+fn knockout(rom: &Rom, seeds: &mut SplitMix64, config: &Config) -> MatchRules {
     let (team1, team2) = random_distinct_teams(seeds, config);
     MatchRules {
         kind: MatchKind::KNOCKOUT,
@@ -300,7 +300,7 @@ fn knockout(rom: &AtariRom, seeds: &mut SplitMix64, config: &Config) -> MatchRul
     }
 }
 
-fn practice(rom: &AtariRom, config: &Config) -> MatchRules {
+fn practice(rom: &Rom, config: &Config) -> MatchRules {
     MatchRules {
         team1: Lineup {
             team: league_team(rom, config.team1.unwrap_or(0)),
@@ -315,7 +315,7 @@ fn practice(rom: &AtariRom, config: &Config) -> MatchRules {
     }
 }
 
-fn two_players(rom: &AtariRom, config: &Config) -> MatchRules {
+fn two_players(rom: &Rom, config: &Config) -> MatchRules {
     // Team 1 is always "PLAYER 1" on 170s, so `--team1` changes nothing.
     let mut rules = MatchRules::two_players(rom, 0);
     if let Some(team2) = config.team2 {
@@ -324,7 +324,7 @@ fn two_players(rom: &AtariRom, config: &Config) -> MatchRules {
     rules
 }
 
-fn demo(rom: &AtariRom, config: &Config) -> MatchRules {
+fn demo(rom: &Rom, config: &Config) -> MatchRules {
     let mut rules = MatchRules::demo(rom);
     if let Some(team1) = config.team1 {
         rules.team1.team = league_team(rom, team1);

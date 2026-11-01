@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::addr;
-use super::rom::AtariRom;
+use super::rom::Rom;
 
 /// Directions are 0 (up) to 7, clockwise.
 pub const DIRECTIONS: usize = 8;
@@ -100,8 +100,8 @@ pub struct Lookups {
 }
 
 impl Lookups {
-    pub fn read(rom: &AtariRom) -> Self {
-        let bytes = |base: i32, count: usize, read: fn(&AtariRom, i32) -> i32| {
+    pub fn read(rom: &Rom) -> Self {
+        let bytes = |base: i32, count: usize, read: fn(&Rom, i32) -> i32| {
             (0..count as i32).map(|i| read(rom, base + i)).collect()
         };
         let pairs = |base: i32, count: usize| {
@@ -130,20 +130,20 @@ impl Lookups {
                         .collect()
                 })
                 .collect(),
-            direction_from_joystick: bytes(addr::DIR_FROM_DIR_BITS, 16, AtariRom::i8),
-            mirror_x: bytes(addr::MIRROR_X_DIR, DIRECTIONS, AtariRom::u8),
-            mirror_y: bytes(addr::MIRROR_Y_DIR, DIRECTIONS, AtariRom::u8),
+            direction_from_joystick: bytes(addr::DIR_FROM_DIR_BITS, 16, Rom::i8),
+            mirror_x: bytes(addr::MIRROR_X_DIR, DIRECTIONS, Rom::u8),
+            mirror_y: bytes(addr::MIRROR_Y_DIR, DIRECTIONS, Rom::u8),
             goalie_deflect: [0, 8]
-                .map(|side| bytes(addr::GOALIE_DEFLECT_DIR + side, DIRECTIONS, AtariRom::u8)),
-            think_delay: bytes(addr::THINK_DELAY_BY_INT, SKILL_STEPS, AtariRom::u8),
-            prediction_shift: bytes(addr::PREDICTION_SHIFT_BY_INT, SKILL_STEPS, AtariRom::u8),
-            jump_bonus: bytes(addr::JUMP_BONUS_BY_SPD, SKILL_STEPS, AtariRom::u8),
+                .map(|side| bytes(addr::GOALIE_DEFLECT_DIR + side, DIRECTIONS, Rom::u8)),
+            think_delay: bytes(addr::THINK_DELAY_BY_INT, SKILL_STEPS, Rom::u8),
+            prediction_shift: bytes(addr::PREDICTION_SHIFT_BY_INT, SKILL_STEPS, Rom::u8),
+            jump_bonus: bytes(addr::JUMP_BONUS_BY_SPD, SKILL_STEPS, Rom::u8),
             tackle_defence_penalty: bytes(
                 addr::TACKLE_DEF_MALUS_BY_ANGLE,
                 DIRECTIONS,
-                AtariRom::u8,
+                Rom::u8,
             ),
-            equipment_skill: bytes(addr::EQUIPMENT_SKILL, EQUIPMENT, AtariRom::u8),
+            equipment_skill: bytes(addr::EQUIPMENT_SKILL, EQUIPMENT, Rom::u8),
             support_positions: grid(addr::SUPPORT_POSITIONS),
             support_positions_forward: grid(addr::SUPPORT_POSITIONS_FORWARD),
             status_leds: (0..STATUS_LEDS as i32)

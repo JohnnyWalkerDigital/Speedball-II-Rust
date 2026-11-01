@@ -7,7 +7,7 @@ use super::geometry::{PerTeam, Point, Side};
 use super::state::Match;
 use crate::data::animations::Script;
 use crate::data::lookups::MultiplierPath;
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 pub struct Arena {
     pub stars: Stars,
@@ -17,7 +17,7 @@ pub struct Arena {
 }
 
 impl Arena {
-    pub fn new(rom: &AtariRom) -> Self {
+    pub fn new(rom: &Rom) -> Self {
         Self {
             stars: Stars::default(),
             multipliers: ScoreMultipliers::new(rom),
@@ -139,7 +139,7 @@ impl ScoreMultipliers {
     const MAX_LEVEL: i32 = 2;
     const LIGHTS_UP_AT_STEP: i32 = 22;
 
-    fn new(rom: &AtariRom) -> Self {
+    fn new(rom: &Rom) -> Self {
         let sprites = [41, 39, 37, 35];
         let lights = std::array::from_fn(|i| {
             let mut light = rom.start().entity(EntityId::ScoreMultiplier(i as u8));
@@ -218,13 +218,10 @@ pub struct Electrobounces {
 }
 
 impl Electrobounces {
-    fn new(rom: &AtariRom) -> Self {
+    fn new(rom: &Rom) -> Self {
         let pads = std::array::from_fn(|i| {
             let mut pad = rom.start().entity(EntityId::Electrobounce(i as u8));
             pad.flags.set_invisible(true);
-            pad.width = 32;
-            pad.height = 32;
-            pad.origin.x = if i == 0 { -4 } else { 4 };
             pad
         });
         Self {
@@ -398,6 +395,8 @@ impl Match {
         if delta.y.abs() > 16 || delta.x.abs() > 16 || entity.distance_to(ball) > 16 {
             return;
         }
+        // The dome shows again, and plays its hit from the start.
+        entity.flags.set_invisible(false);
         entity.script_index = 0;
         let bits = entity.dir_bits_towards(ball);
         if !bits.has_direction() {

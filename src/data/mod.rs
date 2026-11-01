@@ -3,8 +3,7 @@
 
 pub mod addr;
 pub mod amiga;
-#[cfg(test)]
-mod amiga_layout;
+mod amiga_memory;
 pub mod animations;
 pub mod bytes;
 pub mod files;
@@ -14,7 +13,7 @@ pub mod rom;
 pub mod save_disk;
 
 pub use files::GameFiles;
-pub use rom::AtariRom;
+pub use rom::Rom;
 
 /// The end of a check: fine if nothing was found, otherwise the problems,
 /// one to a line.

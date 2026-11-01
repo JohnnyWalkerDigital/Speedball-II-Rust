@@ -6,7 +6,7 @@
 //! free of drawing code.
 
 use crate::config::Platform;
-use crate::data::AtariRom;
+use crate::data::Rom;
 use crate::game::entity::{Entity, EntityId, Gfx};
 use crate::game::geometry::{Point, Side};
 use crate::game::replay::ReplayFrame;
@@ -22,8 +22,8 @@ use crate::graphics::{Assets, Canvas, Sheet};
 pub struct MatchRenderer {
     assets: Assets,
     status_led: Entity,
-    /// The domes as the ST draws them between hits. The Amiga's are pitch
-    /// tiles, so replays (recorded the Amiga's way) leave them out.
+    /// The domes as the ST draws them between hits, under the hit frames.
+    /// The Amiga's are pitch tiles.
     idle_domes: [Entity; 2],
 }
 
@@ -32,12 +32,19 @@ impl MatchRenderer {
     const STATUS_Y: i32 = VIEW_HEIGHT;
     /// The panel without "GOAL" or "INJURED".
     const PLAIN_PANEL: usize = 2;
+    /// The ST's dome between hits.
+    const IDLE_DOME: i32 = 0x87;
 
-    pub fn new(assets: Assets, rom: &AtariRom) -> Self {
+    pub fn new(assets: Assets, rom: &Rom) -> Self {
         Self {
             assets,
             status_led: rom.start().entity(EntityId::StatusLed),
-            idle_domes: [0, 1].map(|i| rom.start().entity(EntityId::BounceDome(i))),
+            idle_domes: [0, 1].map(|i| {
+                let mut dome = rom.start().entity(EntityId::BounceDome(i));
+                dome.sprite = Self::IDLE_DOME;
+                dome.flags.set_invisible(false);
+                dome
+            }),
         }
     }
 
@@ -49,9 +56,7 @@ impl MatchRenderer {
         canvas.draw(&self.assets.pitch, -m.scroll().x, -m.scroll().y);
         // The wall stars are pitch tiles in the original, under every sprite.
         self.draw_stars(m, canvas);
-        if m.is_replaying() {
-            self.draw_idle_domes(canvas, m.scroll());
-        }
+        self.draw_idle_domes(canvas, m.scroll());
         self.draw_sprites(&m.scene, m.scroll(), canvas);
         if m.clock_paused {
             self.draw_panel(m, canvas);

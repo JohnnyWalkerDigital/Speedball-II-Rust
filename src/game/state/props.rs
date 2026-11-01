@@ -2,7 +2,7 @@
 //! handles the logic uses to refer to any entity.
 
 use super::Match;
-use crate::data::AtariRom;
+use crate::data::Rom;
 use crate::game::entity::{Entity, EntityId};
 use crate::game::player::PlayerId;
 
@@ -37,7 +37,7 @@ pub struct Props {
 }
 
 impl Props {
-    pub(super) fn read(rom: &AtariRom) -> Self {
+    pub(super) fn read(rom: &Rom) -> Self {
         let read = |id| rom.start().entity(id);
         Self {
             ball: read(EntityId::Ball),

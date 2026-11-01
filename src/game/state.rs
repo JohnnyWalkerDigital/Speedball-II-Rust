@@ -32,7 +32,7 @@ use super::setup::MatchKind;
 use super::setup::MatchSetup;
 use super::text::TextPanel;
 use super::token::HeldToken;
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 pub use camera::{Camera, KICK_OFF_SCROLL_Y, VIEW_HEIGHT};
 pub use clock::Clock;
@@ -42,7 +42,7 @@ pub use scoring::Scoreboard;
 pub const PITCH_CENTER: Point = Point::new(320, 576);
 
 pub struct Match {
-    pub(crate) rom: Rc<AtariRom>,
+    pub(crate) rom: Rc<Rom>,
     pub(crate) rng: Rng,
     pub(crate) kind: MatchKind,
     pub(crate) players: Players,
@@ -109,7 +109,7 @@ pub struct Match {
 }
 
 impl Match {
-    pub fn new(setup: MatchSetup, rom: Rc<AtariRom>) -> Self {
+    pub fn new(setup: MatchSetup, rom: Rc<Rom>) -> Self {
         let players = Players::new(setup.players);
         let presentation = std::array::from_fn(|i| players[PlayerId(i)].entity.pos);
         let kick_off = PlayerId::of(true, 8);

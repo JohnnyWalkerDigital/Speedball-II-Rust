@@ -1,9 +1,9 @@
-//! The Atari ST disk viewed as the game's RAM image, with typed accessors
-//! for every lookup table the match engine uses.
+//! The game's memory before a match, with typed accessors for every
+//! lookup table the match engine uses.
 
 use super::addr;
+use super::amiga_memory::AmigaMemory;
 use super::animations::{self, Animation, Animations, Script, ScriptRef};
-use super::bytes::BigEndian;
 use super::lookups::{
     entry, in_run, Lookups, MultiplierPath, DIRECTIONS, PATH_STEPS, SUPPORT_COLUMNS,
 };
@@ -11,26 +11,40 @@ use crate::game::geometry::{DirBits, Point};
 use crate::game::roster::Teams;
 use crate::game::start::MatchStart;
 
-/// The ST disk image, addressed by original RAM address, and the lookup
-/// tables the match uses (read from it, or replaced by an asset pack's).
-///
-/// The game's data segment sits at a fixed disk offset, so a RAM address maps
-/// to `ram - 0x400 + 0x4D600` on disk.
-pub struct AtariRom {
-    disk: Vec<u8>,
+/// The match's data, addressed by the ST's RAM addresses ([`addr`]), and
+/// the lookup tables the match uses (read from it, or replaced by an asset
+/// pack's).
+pub struct Rom {
+    memory: Memory,
     lookups: Lookups,
     teams: Teams,
     animations: Animations,
     start: MatchStart,
 }
 
-impl AtariRom {
-    const RAM_BASE: i32 = 0x400;
-    const DISK_BASE: i32 = 0x4D600;
+/// Where the data is read from.
+enum Memory {
+    Amiga(AmigaMemory),
+    /// The ST disk, to check the Amiga's data against.
+    #[cfg(test)]
+    Atari(Vec<u8>),
+}
 
-    pub fn new(disk: Vec<u8>) -> Self {
+impl Rom {
+    /// The data from the Amiga's memory during the intro.
+    pub fn new(intro_dump: &[u8]) -> Self {
+        Self::read(Memory::Amiga(AmigaMemory::new(intro_dump)))
+    }
+
+    /// The data from the ST disk.
+    #[cfg(test)]
+    pub fn atari(disk: Vec<u8>) -> Self {
+        Self::read(Memory::Atari(disk))
+    }
+
+    fn read(memory: Memory) -> Self {
         let mut rom = Self {
-            disk,
+            memory,
             lookups: Lookups::default(),
             teams: Teams::default(),
             animations: Animations::default(),
@@ -75,39 +89,53 @@ impl AtariRom {
         self.lookups = lookups;
     }
 
-    /// The raw disk image (graphics live outside the data segment).
-    pub fn disk(&self) -> &[u8] {
-        &self.disk
-    }
-
-    pub fn ram_to_disk(ram: i32) -> usize {
-        usize::try_from(ram - Self::RAM_BASE + Self::DISK_BASE)
-            .expect("RAM address below the data segment")
-    }
-
     pub fn u8(&self, ram: i32) -> i32 {
-        i32::from(self.disk.u8_at(Self::ram_to_disk(ram)))
+        i32::from(self.byte(ram))
     }
 
     pub fn i8(&self, ram: i32) -> i32 {
-        i32::from(self.disk.i8_at(Self::ram_to_disk(ram)))
+        i32::from(self.byte(ram) as i8)
     }
 
     pub fn u16(&self, ram: i32) -> i32 {
-        i32::from(self.disk.u16_at(Self::ram_to_disk(ram)))
+        i32::from(self.word(ram))
     }
 
     pub fn i16(&self, ram: i32) -> i32 {
-        i32::from(self.disk.i16_at(Self::ram_to_disk(ram)))
+        i32::from(self.word(ram) as i16)
     }
 
     /// A 32-bit value, used for pointers (all of which fit in an `i32`).
     pub fn u32(&self, ram: i32) -> i32 {
-        self.disk.u32_at(Self::ram_to_disk(ram)) as i32
+        match &self.memory {
+            Memory::Amiga(memory) => memory.long(ram) as i32,
+            #[cfg(test)]
+            Memory::Atari(_) => (self.u16(ram) << 16) | self.u16(ram + 2),
+        }
     }
 
     pub fn c_string(&self, ram: i32) -> String {
-        self.disk.c_string_at(Self::ram_to_disk(ram))
+        (ram..)
+            .map(|at| self.byte(at))
+            .take_while(|&b| b != 0)
+            .map(char::from)
+            .collect()
+    }
+
+    fn byte(&self, ram: i32) -> u8 {
+        match &self.memory {
+            Memory::Amiga(memory) => memory.byte(ram),
+            #[cfg(test)]
+            Memory::Atari(disk) => disk[addr::st_disk_offset(ram)],
+        }
+    }
+
+    fn word(&self, ram: i32) -> u16 {
+        match &self.memory {
+            Memory::Amiga(memory) => memory.word(ram),
+            #[cfg(test)]
+            Memory::Atari(_) => u16::from_be_bytes([self.byte(ram), self.byte(ram + 1)]),
+        }
     }
 
     fn signed_pair(&self, ram: i32) -> Point {
@@ -173,8 +201,14 @@ impl AtariRom {
 
     /// Offset from a player's position to its sprite's visual centre.
     pub fn sprite_origin(&self, sprite: i32) -> Point {
-        entry(&self.lookups.sprite_origin, sprite)
-            .map_or_else(|| self.signed_pair(addr::SPRITE_ORIGIN + sprite * 2), pair)
+        entry(&self.lookups.sprite_origin, sprite).map_or_else(
+            || match &self.memory {
+                Memory::Amiga(memory) => memory.sprite_origin(sprite),
+                #[cfg(test)]
+                Memory::Atari(_) => self.signed_pair(addr::SPRITE_ORIGIN + sprite * 2),
+            },
+            pair,
+        )
     }
 
     /// Where a carried ball sits relative to the carrier, per carrier sprite.
@@ -279,11 +313,11 @@ mod tests {
     #[test]
     fn lookups_read_what_the_memory_holds() {
         let config = Config::default();
-        let Ok(files) = GameFiles::load(&config.data_dir, Platform::Atari) else {
+        let Ok(files) = GameFiles::load(&config.data_dir, Platform::Amiga) else {
             eprintln!("skipping: no originals");
             return;
         };
-        let rom = AtariRom::new(files.atari_disk);
+        let rom = Rom::new(&files.intro_dump);
         let raw_pair = |ram: i32| Point::new(rom.i8(ram), rom.i8(ram + 1));
         for dir in -10..20 {
             for speed in -2..12 {
@@ -336,6 +370,9 @@ mod tests {
                 rom.ball_offset(sprite),
                 raw_pair(addr::BALL_OFFSET_BY_SPRITE + sprite * 2)
             );
+        }
+        // Past the sprite origins, the Amiga reads its own table's layout.
+        for sprite in 0..120 {
             assert_eq!(
                 rom.sprite_origin(sprite),
                 raw_pair(addr::SPRITE_ORIGIN + sprite * 2)

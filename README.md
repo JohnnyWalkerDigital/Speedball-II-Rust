@@ -17,10 +17,10 @@ these files from the original game:
 
 | File | What it is | Needed for |
 | --- | --- | --- |
-| A `.st` file of 819,200 bytes | The Atari ST disk image | Always: the match runs on its tables |
+| `Intro - Amiga.dmp` | The Amiga's 512 KB of memory, saved from an emulator during the intro | Always: the match's tables, teams and starting positions, and the intro |
+| `Amiga.dmp` | The same, saved during a match | The Amiga graphics, the menus and all sound |
 | A `.adf` file of 901,120 bytes | The Amiga disk image | The Amiga graphics and the menus |
-| `Amiga.dmp` | The Amiga's 512 KB of memory, saved from an emulator during a match | The Amiga graphics, the menus and all sound |
-| `Intro - Amiga.dmp` | The same, saved during the intro | The intro (optional) |
+| A `.st` file of 819,200 bytes | The Atari ST disk image | The Atari ST graphics (`--atari`) only |
 
 The two disk images can have any names: the game finds them by their
 extension and size, so there must be only one of each. The memory dumps
@@ -48,11 +48,10 @@ message naming the file it couldn't find, and the tests that need them are
 skipped.
 
 What works without some of the files:
-- **No Amiga files:** only single matches with the Atari ST graphics
-  (`--mode ... --atari`), silent.
-- **`Amiga.dmp` but no `.adf`:** the same, with sound.
-- **No `Intro - Amiga.dmp`:** everything except the intro; the game starts
-  at the main menu.
+- **No `.st`:** everything except the Atari ST graphics.
+- **Only `Intro - Amiga.dmp` and the `.st`:** single matches with the
+  Atari ST graphics (`--mode ... --atari`), silent.
+- **The same and `Amiga.dmp`:** the same, with sound.
 
 ## Running
 
@@ -123,7 +122,7 @@ editing.
   sprite offsets. A lookup outside an edited table reads the original
   memory around it, as the original game did, so out-of-range indices behave
   exactly as before; a test checks every lookup, in range and out,
-  against the raw ROM.
+  against that memory.
 - `teams.json`: the league teams' skill templates and match-panel names.
 - `squads.json`: the starting squads, the transfer market, the gym's
   upgrades and prices, and the results table for matches without Brutal
@@ -184,6 +183,32 @@ memory the sound banks are laid over still comes from the originals, so
 they are still needed. `/assets`
 is in `.gitignore`: an extracted pack is the game's own art, so it should
 not be shared.
+
+## The match's data
+
+The match's tables, teams, animation scripts and starting records are read
+from the Amiga's memory before any match is played (`Intro - Amiga.dmp`).
+The port names them by where the Atari ST keeps them (`data/addr.rs`), and
+`data/amiga_memory.rs` finds each where the Amiga has it: the same data, in
+blocks the Amiga keeps elsewhere, with pointers to its own code, graphics
+banks and scripts, and some sprites numbered by its own banks. Tests check
+that the two platforms' data read the same, but for the handful of values
+the Amiga really has different, which the port follows:
+
+- The domes start out on their hit frame, which their script shows three
+  times and then hides them. A hit shows a dome again and restarts its
+  script. (The ST's held its idle frame between hits.)
+- The player indicators are 16 pixels tall rather than 10, drawn a pixel
+  higher. Near the screen's edge that puts them on screen for longer, so
+  goal replays, which record what is on screen, can be a few frames
+  shorter.
+- The lights of the two right-hand score-multiplier ramps sit a pixel
+  further right.
+- The electrobounces are 32 by 32, drawn 4 pixels outwards.
+- A sprite origin past the end of its table reads the memory after the
+  Amiga's table, which holds them as words rather than bytes.
+
+The Amiga has no goal indicators; their records are the ST's.
 
 ## Menus
 
@@ -289,8 +314,7 @@ team 1 reaches its cap (in two-player games, once both teams have).
 - The intro (`menu/intro.rs`): "IMAGEWORKS PRESENTS", "A BITMAP BROTHERS
   GAME", then the title with its music, the story and the credits typed out
   letter by letter over the arena, round and round until fire or space is
-  held, and "LOADING GAME". It comes from `Intro - Amiga.dmp`; without that
-  file the game starts at the main menu.
+  held, and "LOADING GAME". It comes from `Intro - Amiga.dmp`.
 
 There is no team selection in the original: one-player games are always
 Brutal Deluxe.
@@ -362,7 +386,7 @@ match, menu and result frames as BMPs.
 
 | Module | Role |
 | --- | --- |
-| `data/` | Finding and loading the original files, big-endian reads, named RAM addresses and lookup tables |
+| `data/` | Finding and loading the original files, the Amiga's memory read by the ST's addresses, big-endian reads and lookup tables |
 | `content/` | Where graphics, words, tables and sound come from: the originals or an asset pack |
 | `game/state.rs`, `state/` | `Match`: state and the per-frame update; the clock, camera, scoreboard, kick-off, ball, goals and message panel |
 | `game/actions.rs` | Running, tackling, jumping, catching, throwing |
@@ -480,8 +504,8 @@ Menus and results:
 Replays and the intro:
 
 - The domes are pitch tiles on the Amiga except for the frame when one is
-  hit, so only that frame is recorded, and on ST graphics the replayed domes
-  are drawn idle under it.
+  hit, so only that frame is recorded. On ST graphics, the domes are drawn
+  idle under it, in play and in replays.
 - A 32x32 sprite records whether it came from the launcher's bank, but
   not which of the others, so the big ball (its own bank) replays as the
   player frame with the same index.

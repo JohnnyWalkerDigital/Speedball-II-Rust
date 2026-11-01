@@ -6,14 +6,14 @@
 use std::rc::Rc;
 
 use crate::config::{Config, GameMode, Platform};
-use crate::data::{addr, AtariRom, GameFiles};
+use crate::data::{addr, Rom, GameFiles};
 use crate::game::entity::Entity;
 use crate::game::{Match, MatchSetup};
 use crate::graphics::{Assets, Canvas};
 use crate::render::MatchRenderer;
 
 struct Harness {
-    rom: Rc<AtariRom>,
+    rom: Rc<Rom>,
     files: GameFiles,
 }
 
@@ -21,7 +21,7 @@ impl Harness {
     /// The match graphics for `platform`, which `load` loaded the files for.
     fn assets(&self, platform: Platform) -> Assets {
         match platform {
-            Platform::Atari => Assets::load_atari(&self.rom),
+            Platform::Atari => Assets::load_atari(self.files.atari_disk.as_ref().expect("loaded")),
             Platform::Amiga => Assets::load_amiga(self.files.amiga.as_ref().expect("loaded")),
         }
     }
@@ -30,8 +30,8 @@ impl Harness {
 fn load(platform: Platform) -> Option<Harness> {
     let config = Config::default();
     match GameFiles::load(&config.data_dir, platform) {
-        Ok(mut files) => {
-            let mut rom = AtariRom::new(std::mem::take(&mut files.atari_disk));
+        Ok(files) => {
+            let mut rom = Rom::new(&files.intro_dump);
             // `SPEEDBALL_PACK` plays from an asset pack's tables instead.
             if let Ok(dir) = std::env::var("SPEEDBALL_PACK") {
                 use crate::content::{ContentSource, Pack};

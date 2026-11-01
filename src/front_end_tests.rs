@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::config::{Config, Platform};
 use crate::content::{self, ContentSource, OriginalFiles};
 use crate::data::save_disk::SaveDisk;
-use crate::data::{AtariRom, GameFiles};
+use crate::data::GameFiles;
 use crate::game::events::Sound;
 use crate::game::geometry::Side;
 use crate::graphics::Canvas;
@@ -34,8 +34,7 @@ fn load_game_with_disk(save_disk: SaveDisk) -> Option<Game> {
             return None;
         }
     };
-    let rom = AtariRom::new(files.atari_disk);
-    let originals = OriginalFiles::new(rom, files.amiga, true, None, None).expect("loaded");
+    let originals = OriginalFiles::new(files, true, None).expect("loaded");
     let source = originals.originals();
     let content = content::menu_content(&source).expect("the menus load");
     let matches = source.match_graphics(Platform::Amiga).expect("loaded");

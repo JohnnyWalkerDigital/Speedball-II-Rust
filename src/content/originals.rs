@@ -5,9 +5,9 @@ use super::{ContentError, ContentSource};
 use crate::config::Platform;
 use crate::data::amiga::{menu_ram, Overlays};
 use crate::data::animations::AnimationTable;
-use crate::data::files::AmigaFiles;
+use crate::data::files::{AmigaFiles, GameFiles};
 use crate::data::lookups::Lookups;
-use crate::data::AtariRom;
+use crate::data::Rom;
 use crate::game::roster::Teams;
 use crate::game::start::StartTable;
 use crate::graphics::Assets;
@@ -22,24 +22,31 @@ use crate::sound::data::{SoundContent, SoundData, SoundTables};
 /// The original files, loaded, with the menus' memory rebuilt from the
 /// Amiga ones. Which files are loaded is the caller's choice.
 pub struct OriginalFiles {
-    pub rom: AtariRom,
+    /// The match's data, from the intro dump.
+    pub rom: Rom,
+    /// The Atari ST disk, for the ST's graphics.
+    pub atari_disk: Option<Vec<u8>>,
     pub amiga: Option<AmigaFiles>,
     /// The menus' memory, if they are wanted (and there are Amiga files).
     pub menu_ram: Option<MenuRam>,
     /// The Amiga match dump for sound, when the rest of the Amiga files
     /// were not loaded.
     pub sound_dump: Option<Vec<u8>>,
-    pub intro_dump: Option<Vec<u8>>,
+    /// The Amiga's memory during the intro.
+    pub intro_dump: Vec<u8>,
 }
 
 impl OriginalFiles {
     pub fn new(
-        rom: AtariRom,
-        amiga: Option<AmigaFiles>,
+        files: GameFiles,
         with_menus: bool,
         sound_dump: Option<Vec<u8>>,
-        intro_dump: Option<Vec<u8>>,
     ) -> Result<Self, ContentError> {
+        let GameFiles {
+            intro_dump,
+            atari_disk,
+            amiga,
+        } = files;
         let menu_ram = match &amiga {
             Some(files) if with_menus => {
                 let overlays = Self::overlays(files)?;
@@ -48,7 +55,8 @@ impl OriginalFiles {
             _ => None,
         };
         Ok(Self {
-            rom,
+            rom: Rom::new(&intro_dump),
+            atari_disk,
             amiga,
             menu_ram,
             sound_dump,
@@ -74,6 +82,7 @@ impl OriginalFiles {
     pub fn originals(&self) -> Originals<'_> {
         Originals {
             rom: &self.rom,
+            atari_disk: self.atari_disk.as_deref(),
             amiga: self
                 .amiga
                 .as_ref()
@@ -84,18 +93,19 @@ impl OriginalFiles {
                     menu_ram,
                 }),
             match_dump: self.match_dump(),
-            intro_dump: self.intro_dump.as_deref(),
+            intro_dump: &self.intro_dump,
         }
     }
 }
 
 /// The original files, as a [`ContentSource`].
 pub struct Originals<'a> {
-    pub rom: &'a AtariRom,
+    pub rom: &'a Rom,
+    pub atari_disk: Option<&'a [u8]>,
     pub amiga: Option<AmigaOriginals<'a>>,
     /// The Amiga match dump, which holds the sound.
     pub match_dump: Option<&'a [u8]>,
-    pub intro_dump: Option<&'a [u8]>,
+    pub intro_dump: &'a [u8],
 }
 
 /// The Amiga disk and dump, and the menus' memory rebuilt from them.
@@ -105,6 +115,7 @@ pub struct AmigaOriginals<'a> {
     pub menu_ram: &'a MenuRam,
 }
 
+const ATARI_DISK: &str = "the Atari ST disk";
 const AMIGA_FILES: &str = "the Amiga disk and dump";
 const AMIGA_DUMP: &str = "the Amiga dump";
 
@@ -119,7 +130,10 @@ impl Originals<'_> {
 impl ContentSource for Originals<'_> {
     fn match_graphics(&self, platform: Platform) -> Result<Assets, ContentError> {
         match platform {
-            Platform::Atari => Ok(Assets::load_atari(self.rom)),
+            Platform::Atari => {
+                let disk = self.atari_disk.ok_or(ContentError::Unavailable(ATARI_DISK))?;
+                Ok(Assets::load_atari(disk))
+            }
             Platform::Amiga => {
                 let amiga = self.amiga()?;
                 Ok(Assets::load_amiga(amiga.files))
@@ -133,7 +147,7 @@ impl ContentSource for Originals<'_> {
     }
 
     fn intro_graphics(&self) -> Result<Option<IntroGraphics>, ContentError> {
-        Ok(self.intro_dump.map(IntroGraphics::load).transpose()?)
+        Ok(Some(IntroGraphics::load(self.intro_dump)?))
     }
 
     fn menu_text(&self) -> Result<MenuText, ContentError> {
@@ -141,7 +155,7 @@ impl ContentSource for Originals<'_> {
     }
 
     fn intro_text(&self) -> Result<Option<IntroText>, ContentError> {
-        Ok(self.intro_dump.map(IntroText::read))
+        Ok(Some(IntroText::read(self.intro_dump)))
     }
 
     fn lookups(&self) -> Result<Lookups, ContentError> {
@@ -184,7 +198,7 @@ impl ContentSource for Originals<'_> {
                 .as_ref()
                 .map(|amiga| read(amiga.menu_ram.bytes()))
                 .transpose()?,
-            intro: self.intro_dump.map(read).transpose()?,
+            intro: Some(read(self.intro_dump)?),
         })
     }
 }

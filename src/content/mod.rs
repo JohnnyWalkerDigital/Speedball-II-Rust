@@ -267,8 +267,7 @@ impl ContentSource for Pack {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::data::files::{read_amiga_intro_dump, GameFiles};
-    use crate::data::AtariRom;
+    use crate::data::files::{read_atari_disk, GameFiles};
 
     #[test]
     fn a_pack_loads_back_exactly_what_was_extracted() {
@@ -277,16 +276,9 @@ mod tests {
             eprintln!("skipping: no originals");
             return;
         };
-        let intro_dump = read_amiga_intro_dump(&config.data_dir).ok();
-        let has_intro = intro_dump.is_some();
-        let files = OriginalFiles::new(
-            AtariRom::new(files.atari_disk),
-            files.amiga,
-            true,
-            None,
-            intro_dump,
-        )
-        .expect("the originals load");
+        let mut files = files;
+        files.atari_disk = read_atari_disk(&config.data_dir).ok();
+        let files = OriginalFiles::new(files, true, None).expect("the originals load");
         let originals = files.originals();
         let dir = std::env::temp_dir().join(format!("sb2-pack-{}", std::process::id()));
         let extracted = extract(&originals, &dir).expect("the pack is written");
@@ -322,7 +314,7 @@ mod tests {
             originals.manager_tables().unwrap()
         );
         assert_eq!(pack.sound().unwrap(), originals.sound().unwrap());
-        assert_eq!(pack.intro_graphics().unwrap().is_some(), has_intro);
+        assert!(pack.intro_graphics().unwrap().is_some());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

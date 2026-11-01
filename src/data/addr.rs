@@ -1,8 +1,8 @@
 //! Atari ST RAM addresses of the game's data.
 //!
-//! The engine reads its initial state and lookup tables straight out of the
-//! ST disk image, so these addresses are part of the data format. Names
-//! describe how the code uses each table.
+//! The port names the match's data by where the ST has it, whichever
+//! platform's memory it is read from. Names describe how the code uses
+//! each table.
 
 // ---------------------------------------------------------------------------
 // Entity records (40 bytes each, 42 apart for the pitch furniture).
@@ -44,6 +44,12 @@ pub const TEAMS: i32 = 0x63D4;
 pub const TEAM_PLAYER2: i32 = 0x6394;
 
 pub const PALETTE_MATCH: i32 = 0x44E;
+
+/// Where the ST disk holds what the ST has at `ram`: the data segment sits
+/// at a fixed place on the disk.
+pub fn st_disk_offset(ram: i32) -> usize {
+    usize::try_from(ram - 0x400 + 0x4D600).expect("RAM address below the data segment")
+}
 
 // ---------------------------------------------------------------------------
 // Lookup tables.

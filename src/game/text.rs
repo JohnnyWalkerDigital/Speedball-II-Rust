@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::data::readable;
-use crate::data::AtariRom;
+use crate::data::Rom;
 
 /// A message in the game's own encoding: a run of letters where bytes below
 /// `' '` move the cursor (`x`, then `y` as the next byte).
@@ -34,7 +34,7 @@ impl Text {
         Self { bytes }
     }
 
-    pub fn read(rom: &AtariRom, address: i32) -> Self {
+    pub fn read(rom: &Rom, address: i32) -> Self {
         // The first two bytes are the initial cursor; the string ends at NUL.
         let mut length = 2;
         while rom.u8(address + length) != 0 {
@@ -242,13 +242,12 @@ mod tests {
     #[test]
     fn messages_are_the_originals() {
         let config = crate::config::Config::default();
-        let Ok(files) =
-            crate::data::GameFiles::load(&config.data_dir, crate::config::Platform::Atari)
-        else {
+        let Ok(disk) = crate::data::files::read_atari_disk(&config.data_dir) else {
             eprintln!("skipping: no originals");
             return;
         };
-        let rom = AtariRom::new(files.atari_disk);
+        // As the ST held them.
+        let rom = Rom::atari(disk);
         for id in TextId::ALL {
             assert_eq!(id.bytes(), Text::read(&rom, id as i32).bytes(), "{id:?}");
         }

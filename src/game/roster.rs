@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::text::Text;
 use crate::config::TEAM_COUNT;
-use crate::data::{addr, AtariRom};
+use crate::data::{addr, Rom};
 
 /// One of the eight player skills, in the order the game stores them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,7 +122,7 @@ pub struct Attributes {
 impl Attributes {
     pub const SIZE: i32 = 0xB;
 
-    pub fn read(rom: &AtariRom, address: i32) -> Self {
+    pub fn read(rom: &Rom, address: i32) -> Self {
         let skill = |i: i32| rom.u8(address + 3 + i);
         Self {
             health: rom.u8(address),
@@ -190,7 +190,7 @@ pub struct Person {
 impl Person {
     pub const SIZE: i32 = 0xE;
 
-    pub fn read(rom: &AtariRom, address: i32) -> Self {
+    pub fn read(rom: &Rom, address: i32) -> Self {
         Self {
             attributes: AttributesRef::from_address(rom.u32(address)),
             name: rom.c_string(rom.u32(address + 4)),
@@ -229,7 +229,7 @@ pub struct Teams {
 }
 
 impl Teams {
-    pub fn read(rom: &AtariRom) -> Self {
+    pub fn read(rom: &Rom) -> Self {
         Self {
             league: (0..TEAM_COUNT as i32)
                 .map(|i| Team::read(rom, addr::TEAMS + i * Team::SIZE))
@@ -260,7 +260,7 @@ impl Teams {
 impl Team {
     pub const SIZE: i32 = 0x40;
 
-    pub fn read(rom: &AtariRom, address: i32) -> Self {
+    pub fn read(rom: &Rom, address: i32) -> Self {
         // Played/won/drawn/lost/points and league placing (24 bytes) are
         // league bookkeeping the match engine never reads.
         let group = |offset: i32| std::array::from_fn(|i| rom.u8(address + offset + i as i32));
@@ -307,7 +307,7 @@ impl Roster {
     pub const SQUAD_SIZE: usize = 12;
     const MARKET_SIZE: usize = 18;
 
-    pub fn read(rom: &AtariRom) -> Self {
+    pub fn read(rom: &Rom) -> Self {
         let attributes = |base: i32, count: usize| -> Vec<Attributes> {
             (0..count as i32)
                 .map(|i| Attributes::read(rom, base + i * Attributes::SIZE))
