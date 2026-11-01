@@ -1,3 +1,13 @@
+# Build output.
 /target
+
+# The save disk the game writes (saves/save-disk.adf).
 /saves
+
+# Asset packs and sounds exported from the originals (--extract,
+# --export-sounds): the game's own art and audio, not to be shared.
 /assets
+/sounds
+
+# macOS folder metadata.
+.DS_Store
