@@ -30,8 +30,7 @@ mod addr {
     pub const LOADING_GAME: usize = 0x49E4E;
 }
 
-/// The dump comes from a cracked copy, which says "DUAL CREW PRESENT"
-/// where the original says this, in as many bytes.
+/// The intro's first screen, shown whatever the dump holds there.
 const ORIGINAL_PRESENTS: &[u8] = b"\x0a\x14IMAGEWORKS\x0c\x19PRESENTS";
 
 /// The title font's letters; then the cursor and a blank.
