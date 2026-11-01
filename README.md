@@ -4,7 +4,7 @@ A faithful port of the Bitmap Brothers' *Speedball 2: Brutal Deluxe* to
 Rust: the matches, the computer players, the intro, the menus (knockout,
 league, cup, practice and two-player games, the manager screens, saving and
 loading), goal replays and the original sound. It looks and plays like the
-original, with the Amiga's graphics or the Atari ST's.
+original Amiga game.
 
 The game's graphics, tables, words and sound are not included. It reads
 them from your own copy of the original game, so you need its files before
@@ -13,34 +13,28 @@ it will run.
 ## Getting started
 
 You need [Rust](https://www.rust-lang.org/tools/install) 1.80 or later, and
-disk images of your own copy of the original game:
-
-| File | What it is | Needed for |
-| --- | --- | --- |
-| A `.ipf` file | The Amiga disk, imaged by the Software Preservation Society (SPS) | Always: the match's data, the Amiga graphics, the menus, the intro and all sound |
-| A `.st` file of 819,200 bytes | The Atari ST disk image | The Atari ST graphics (`--atari`) only |
+an image of your own copy of the original Amiga disk as a `.ipf` file, as
+imaged by the Software Preservation Society (SPS).
 
 The port reads SPS releases 180, 1876 and 2897 of the Amiga disk. Release
 2006 is a different build of the game, laid out differently, and is not
-supported yet. The files can have any names: the game finds them by their
-extension (and the `.st` by its size). If there are several `.ipf` files, it
-uses the first it can read.
+supported yet. The file can have any name: the game finds it by its
+extension. If there are several `.ipf` files, it uses the first it can
+read.
 
-Put them in the `originals` folder of this project (git ignores them there):
+Put it in the `originals` folder of this project (git ignores it there):
 
 ```
 speedball2-rs/
 └── originals/
-    ├── Speedball2.ipf
-    └── Speedball 2.st
+    └── Speedball2.ipf
 ```
 
 To keep them somewhere else, run the game with `--data <folder>`. The tests
 always look in `originals`.
 
-The project builds without these files. Without them the game stops with a
-message naming the file it couldn't find, and the tests that need them are
-skipped. Without the `.st`, everything but the Atari ST graphics works.
+The project builds without the disk image. Without it the game stops with a
+message saying so, and the tests that need it are skipped.
 
 ## Running
 
@@ -52,13 +46,12 @@ starts with the intro (fire or space skips it), then the main menu.
 `--mode` skips both and plays one match:
 
 ```bash
-cargo run --release -- --atari --mode two-players --team2 5
+cargo run --release -- --mode two-players --team2 5
 ```
 
-Options (`--help` lists them all): `--atari`/`--amiga` (match graphics),
-`--mode knockout|two-players|practice|demo`, `--team1/--team2 <0-15>` (with
-`--mode`), `--seed <n>` (same seed, same matches), `--scale 1|2|4|8`,
-`--data <dir>`, `--mute`.
+Options (`--help` lists them all): `--mode knockout|two-players|practice|demo`,
+`--team1/--team2 <0-15>` (with `--mode`), `--seed <n>` (same seed, same
+matches), `--scale 1|2|4|8`, `--data <dir>`, `--mute`.
 
 | Keys | Action |
 | --- | --- |
@@ -88,7 +81,7 @@ cargo run --release -- --assets assets
 
 `content/` is the seam: the game asks a `ContentSource`, which is either
 `Originals` (decoding the disk images as before) or a `Pack`. A
-pack holds the match graphics for both platforms as RGBA PNGs (pitch,
+pack holds the match graphics as RGBA PNGs (pitch,
 tiles, sprites, panels, fonts, status bar), and the menu and intro
 pictures, fonts and manager-screen sheets as indexed PNGs, since the menus
 fade by palette. `pack.json` lists each sprite sheet's cell size and count
@@ -332,8 +325,8 @@ plus a small emulation of the Amiga's sound chip. It plays the original sequence
 instruments, envelopes and effects from the memory they were in
 (the match's, with the sound data laid back over it from the originals or
 a pack), ticking at 50 Hz like the original's vertical-blank interrupt. Channels 0 and 3 play on
-the left and 1 and 2 on the right, as on the Amiga. It plays with `--atari`
-graphics too; with `--mute` the game is silent.
+the left and 1 and 2 on the right, as on the Amiga. With `--mute` the game is
+silent.
 
 The match requests sounds (`game/events.rs`) wherever the original plays one
 in a match, with the same sound ID and priority: kick-off, the ball
@@ -379,7 +372,7 @@ cargo test
 
 Unit tests cover the decoders, the RNG and the
 geometry. `simulation_tests.rs` plays whole matches headlessly against the
-real disk images on both platforms, rendering every frame, and checks that a
+real disk image, rendering every frame, and checks that a
 seed always replays identically. `front_end_tests.rs` drives the menus with
 a scripted player: the demo after 30 idle seconds, Escape leaving a match,
 two-player legs, the league, cup and manager screens, saving and loading,
@@ -510,8 +503,7 @@ Menus and results:
 Replays and the intro:
 
 - The domes are pitch tiles on the Amiga except for the frame when one is
-  hit, so only that frame is recorded. On ST graphics, the domes are drawn
-  idle under it, in play and in replays.
+  hit, so only that frame is recorded.
 - A 32x32 sprite records whether it came from the launcher's bank, but
   not which of the others, so the big ball (its own bank) replays as the
   player frame with the same index.

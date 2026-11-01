@@ -54,7 +54,6 @@ USAGE:
     speedball2 [OPTIONS]
 
 OPTIONS:
-    --atari | --amiga      Graphics to use (default: amiga)
     --mode <MODE>          Skip the menus and play one match:
                            knockout | two-players | practice | demo
     --team1 <0-15>         With --mode: team for player 1 (default: random)
